@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Dueris <duerismc@gmail.com>
+Date: Fri, 11 Sep 2026 15:52:13 -0700
+Subject: [PATCH] Extended View Distance
+
+
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+index c025890747134b86141b020ab5547e06a142a019..60723c4afaeba44a7e1f4ab4f3f4b185b62ddb4c 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+@@ -3370,6 +3370,18 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+     public void setSendViewDistance(final int viewDistance) {
+         FeatureHooks.setSendViewDistance(this.getHandle(), viewDistance); // Paper - chunk system
+     }
++    // Canvas start - extended view distance
++
++    @Override
++    public int getVisualViewDistance() {
++        return ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.getAPIVisualViewDistance(getHandle());
++    }
++
++    @Override
++    public void setVisualViewDistance(final int viewDistance) {
++        getHandle().moonrise$getViewDistanceHolder().setVisualViewDistance(viewDistance);
++    }
++    // Canvas end - extended view distance
+ 
+     // Paper start - entity effect API
+     @Override
