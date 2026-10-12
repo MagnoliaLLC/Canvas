@@ -1,0 +1,22 @@
+--- a/net/minecraft/world/waypoints/WaypointTransmitter.java
++++ b/net/minecraft/world/waypoints/WaypointTransmitter.java
+@@ -100,8 +_,7 @@
+             this.source = source;
+             this.icon = icon;
+             this.receiver = receiver;
+-            Vec3 direction = receiver.position().subtract(source.position()).rotateClockwise90();
+-            this.lastAngle = (float)Mth.atan2(direction.z(), direction.x());
++            this.lastAngle = (float)Mth.atan2(receiver.getX() - source.getX(), -(receiver.getZ() - source.getZ())); // Canvas - calculate the azimuth without vector allocations
+         }
+ 
+         @Override
+@@ -123,8 +_,7 @@
+ 
+         @Override
+         public void update() {
+-            Vec3 direction = this.receiver.position().subtract(this.source.position()).rotateClockwise90();
+-            float currentAngle = (float)Mth.atan2(direction.z(), direction.x());
++            float currentAngle = (float)Mth.atan2(this.receiver.getX() - this.source.getX(), -(this.receiver.getZ() - this.source.getZ())); // Canvas - calculate the azimuth without vector allocations
+             if (Mth.abs(currentAngle - this.lastAngle) > 0.008726646F) {
+                 this.receiver.connection.send(ClientboundTrackedWaypointPacket.updateWaypointAzimuth(this.source.getUUID(), this.icon, currentAngle));
+                 this.lastAngle = currentAngle;
