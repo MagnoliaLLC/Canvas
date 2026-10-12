@@ -1,0 +1,133 @@
+--- a/net/minecraft/world/level/chunk/storage/SerializableChunkData.java
++++ b/net/minecraft/world/level/chunk/storage/SerializableChunkData.java
+@@ -137,6 +_,88 @@
+     private static final boolean JUST_CORRUPT_IT = Boolean.getBoolean("Paper.ignoreWorldDataVersion");
+     // Paper end - Do not let the server load chunks from newer versions
+ 
++    // Canvas start - cache anti-xray codecs
++    private static final java.util.concurrent.ConcurrentMap<BlockState[], Codec<PalettedContainer<BlockState>>> ANTI_XRAY_CODECS = new com.google.common.collect.MapMaker().weakKeys().makeMap();
++
++    private static Codec<PalettedContainer<BlockState>> antiXrayCodec(final PalettedContainerFactory containerFactory, final BlockState[] presetBlockStates) {
++        Codec<PalettedContainer<BlockState>> codec = ANTI_XRAY_CODECS.get(presetBlockStates);
++        if (codec == null) {
++            codec = PalettedContainer.codecRW(BlockState.CODEC, containerFactory.blockStatesStrategy(), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), presetBlockStates);
++            ANTI_XRAY_CODECS.putIfAbsent(presetBlockStates, codec);
++        }
++        return codec;
++    }
++    // Canvas end - cache anti-xray codecs
++
++    // Canvas start - read section palettes without codecs
++    private static <T> @Nullable PalettedContainer<T> readContainer(
++        final CompoundTag container, final net.minecraft.world.level.chunk.Strategy<T> strategy, final T defaultValue, final T @Nullable [] presetValues,
++        final java.util.function.Function<net.minecraft.nbt.Tag, @Nullable T> entryReader
++    ) {
++        if (!(container.get("palette") instanceof ListTag paletteTag) || paletteTag.isEmpty()) {
++            return null;
++        }
++        final net.minecraft.nbt.Tag dataTag = container.get("data");
++        if (dataTag != null && !(dataTag instanceof LongArrayTag)) {
++            return null;
++        }
++        final List<T> palette = new ArrayList<>(paletteTag.size());
++        for (final net.minecraft.nbt.Tag entry : paletteTag) {
++            final T value = entryReader.apply(entry);
++            if (value == null) {
++                return null;
++            }
++            palette.add(value);
++        }
++        final Optional<java.util.stream.LongStream> storage = dataTag == null ? Optional.empty() : Optional.of(java.util.Arrays.stream(((LongArrayTag) dataTag).getAsLongArray()));
++        return PalettedContainer.unpack(strategy, new PalettedContainerRO.PackedData<>(palette, storage), defaultValue, presetValues).result().orElse(null);
++    }
++
++    private static @Nullable BlockState readBlockState(final net.minecraft.nbt.Tag entry) {
++        if (entry instanceof net.minecraft.nbt.StringTag(String name)) {
++            final Block block = readBlock(name);
++            return block == null ? null : block.defaultBlockState();
++        }
++        if (!(entry instanceof CompoundTag compound) || !(compound.get("id") instanceof net.minecraft.nbt.StringTag(String name))) {
++            return null;
++        }
++        final Block block = readBlock(name);
++        if (block == null) {
++            return null;
++        }
++        BlockState state = block.defaultBlockState();
++        if (block.getStateDefinition().isSingletonState() || !(compound.get("properties") instanceof CompoundTag properties)) {
++            return state;
++        }
++        for (final net.minecraft.world.level.block.state.properties.Property<?> property : block.getStateDefinition().getProperties()) {
++            final net.minecraft.nbt.Tag value = properties.get(property.getName());
++            if (value == null) {
++                continue;
++            }
++            if (!(value instanceof net.minecraft.nbt.StringTag(String string))) {
++                return null;
++            }
++            state = withValue(state, property, string);
++        }
++        return state;
++    }
++
++    private static <V extends Comparable<V>> BlockState withValue(final BlockState state, final net.minecraft.world.level.block.state.properties.Property<V> property, final String value) {
++        final Optional<V> parsed = property.getValue(value);
++        return parsed.isPresent() ? state.setValue(property, parsed.get()) : state;
++    }
++
++    private static @Nullable Block readBlock(final String name) {
++        final Identifier id = Identifier.tryParse(name);
++        return id == null ? null : net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(id).map(Holder.Reference::value).orElse(null);
++    }
++
++    private static <T> @Nullable Holder<T> readHolder(final Registry<T> registry, final net.minecraft.nbt.Tag entry) {
++        final Identifier id = entry instanceof net.minecraft.nbt.StringTag(String name) ? Identifier.tryParse(name) : null;
++        return id == null ? null : registry.get(id).orElse(null);
++    }
++    // Canvas end - read section palettes without codecs
++
+     public static SerializableChunkData parse(
+         final LevelHeightAccessor levelHeight, final PalettedContainerFactory containerFactory, final CompoundTag chunkData
+     ) {
+@@ -193,6 +_,8 @@
+         List<SerializableChunkData.SectionData> sectionData = new ArrayList<>(sectionTags.size());
+         Codec<PalettedContainer<Holder<Biome>>> biomesCodec = containerFactory.biomeContainerRWCodec(); // CraftBukkit - read/write
+         Codec<PalettedContainer<BlockState>> blockStatesCodec = containerFactory.blockStatesContainerCodec();
++        final Registry<Biome> biomeRegistry = serverLevel.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BIOME); // Canvas - read section palettes without codecs
++        final java.util.function.Function<net.minecraft.nbt.Tag, @Nullable Holder<Biome>> biomeReader = entry -> readHolder(biomeRegistry, entry); // Canvas - read section palettes without codecs
+ 
+         for (int i = 0; i < sectionTags.size(); i++) {
+             Optional<CompoundTag> maybeSectionTag = sectionTags.getCompound(i);
+@@ -202,19 +_,25 @@
+                 LevelChunkSection section;
+                 if (y >= levelHeight.getMinSectionY() && y <= levelHeight.getMaxSectionY()) {
+                     final BlockState[] presetBlockStates = serverLevel.chunkPacketBlockController.getPresetBlockStates(serverLevel, chunkPos, y); // Paper - Anti-Xray - Add preset block states
+-                    final Codec<PalettedContainer<BlockState>> antiXrayBlockStateCodec = presetBlockStates == null ? blockStatesCodec : PalettedContainer.codecRW(BlockState.CODEC, containerFactory.blockStatesStrategy(), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), presetBlockStates); // Paper - Anti-Xray
++                    final Codec<PalettedContainer<BlockState>> antiXrayBlockStateCodec = presetBlockStates == null ? blockStatesCodec : antiXrayCodec(containerFactory, presetBlockStates); // Paper - Anti-Xray // Canvas - cache anti-xray codecs
+                     PalettedContainer<BlockState> blocks = sectionTag.getCompound("block_states")
+                         .map(
+-                            container -> antiXrayBlockStateCodec.parse(NbtOps.INSTANCE, container) // Paper - Anti-Xray
+-                                .promotePartial(msg -> logErrors(chunkPos, y, msg))
+-                                .getOrThrow(SerializableChunkData.ChunkReadException::new)
++                            container -> {
++                                final PalettedContainer<BlockState> read = readContainer(container, containerFactory.blockStatesStrategy(), containerFactory.defaultBlockState(), presetBlockStates, SerializableChunkData::readBlockState); // Canvas - read section palettes without codecs
++                                return read != null ? read : antiXrayBlockStateCodec.parse(NbtOps.INSTANCE, container) // Paper - Anti-Xray // Canvas - read section palettes without codecs
++                                    .promotePartial(msg -> logErrors(chunkPos, y, msg))
++                                    .getOrThrow(SerializableChunkData.ChunkReadException::new);
++                            }
+                         )
+                         .orElseGet(containerFactory::createForBlockStates);
+                     PalettedContainer<Holder<Biome>> biomes = sectionTag.getCompound("biomes") // CraftBukkit - read/write
+                         .map(
+-                            container -> biomesCodec.parse(NbtOps.INSTANCE, container)
+-                                .promotePartial(msg -> logErrors(chunkPos, y, msg))
+-                                .getOrThrow(SerializableChunkData.ChunkReadException::new)
++                            container -> {
++                                final PalettedContainer<Holder<Biome>> read = readContainer(container, containerFactory.biomeStrategy(), containerFactory.defaultBiome(), null, biomeReader); // Canvas - read section palettes without codecs
++                                return read != null ? read : biomesCodec.parse(NbtOps.INSTANCE, container) // Canvas - read section palettes without codecs
++                                    .promotePartial(msg -> logErrors(chunkPos, y, msg))
++                                    .getOrThrow(SerializableChunkData.ChunkReadException::new);
++                            }
+                         )
+                         .orElseGet(containerFactory::createForBiomes);
+                     section = new LevelChunkSection(blocks, biomes);
