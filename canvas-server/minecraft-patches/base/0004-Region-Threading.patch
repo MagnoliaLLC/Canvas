@@ -14407,28 +14407,31 @@ index e02d76293dfc5891ef4aa0c86a350fe476022fb4..34bdf85264665bdaa1bce1d578731a8b
          if (!this.haveTestsStarted()) {
              this.startTests(level);
 diff --git a/net/minecraft/network/Connection.java b/net/minecraft/network/Connection.java
-index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..9c83ad4d41a8b97331c94e3ea260e04096caca5b 100644
+index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..6c363fd189210b93d9ab317bcdc26bb2308e1114 100644
 --- a/net/minecraft/network/Connection.java
 +++ b/net/minecraft/network/Connection.java
-@@ -64,7 +64,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -64,7 +64,8 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
      private static final ProtocolInfo<ServerHandshakePacketListener> INITIAL_PROTOCOL = HandshakeProtocols.SERVERBOUND;
      private final PacketFlow receiving;
      private volatile boolean sendLoginDisconnect = true;
 -    private final Queue<WrappedConsumer> pendingActions = Queues.newConcurrentLinkedQueue(); // Paper - Optimize network
++    private volatile boolean canvas$switchingOutbound; // Canvas - region threading
 +    private final Queue<WrappedConsumer> pendingActions = new ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue<>(); // Paper - Optimize network // Folia - region threading - connection fixes
      public Channel channel;
      public SocketAddress address;
      // Spigot start
-@@ -75,7 +75,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -74,8 +75,8 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+     // Spigot end
      private volatile @Nullable PacketListener disconnectListener;
      private volatile @Nullable PacketListener packetListener;
-     private @Nullable DisconnectionDetails disconnectionDetails;
+-    private @Nullable DisconnectionDetails disconnectionDetails;
 -    private boolean disconnectionHandled;
++    private volatile @Nullable DisconnectionDetails disconnectionDetails; // Canvas - region threading
 +    private final java.util.concurrent.atomic.AtomicBoolean disconnectionHandled = new java.util.concurrent.atomic.AtomicBoolean(false); // Folia - region threading - may be called concurrently during configuration stage
      private int receivedPackets;
      private int sentPackets;
      private float averageReceivedPackets;
-@@ -131,6 +131,41 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -131,6 +132,41 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
          this.receiving = receiving;
      }
  
@@ -14470,7 +14473,7 @@ index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..9c83ad4d41a8b97331c94e3ea260e040
      @Override
      public void channelActive(final ChannelHandlerContext ctx) throws Exception {
          super.channelActive(ctx);
-@@ -140,6 +175,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -140,6 +176,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
          if (this.delayedDisconnect != null) {
              this.disconnect(this.delayedDisconnect);
          }
@@ -14478,7 +14481,64 @@ index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..9c83ad4d41a8b97331c94e3ea260e040
      }
  
      @Override
-@@ -415,7 +451,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -339,7 +376,14 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+             configMessage = configMessage.andThen(ctx -> ctx.pipeline().addAfter(HandlerNames.DECODER, HandlerNames.BUNDLER, newBundler));
+         }
+ 
+-        syncAfterConfigurationChange(this.channel.writeAndFlush(configMessage));
++        // Canvas start - region threading
++        final ChannelFuture future = this.channel.writeAndFlush(configMessage);
++        if (!this.channel.eventLoop().inEventLoop()) {
++            future.addListener((ChannelFutureListener) this::canvas$afterConfigurationChange);
++            return;
++        }
++        syncAfterConfigurationChange(future);
++        // Canvas end - region threading
+     }
+ 
+     public void setupOutboundProtocol(final ProtocolInfo<?> protocol) {
+@@ -355,8 +399,39 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+         }
+ 
+         boolean isLoginProtocol = protocol.id() == ConnectionProtocol.LOGIN;
+-        syncAfterConfigurationChange(this.channel.writeAndFlush(configMessage.andThen(ctx -> this.sendLoginDisconnect = isLoginProtocol)));
++        // Canvas start - region threading
++        final UnconfiguredPipelineHandler.OutboundConfigurationTask switchTask = configMessage.andThen(ctx -> this.sendLoginDisconnect = isLoginProtocol);
++        if (!this.channel.eventLoop().inEventLoop()) {
++            this.pendingActions.add(new WrappedConsumer(connection -> connection.canvas$switchOutbound(switchTask)));
++            this.flushQueue();
++            return;
++        }
++        syncAfterConfigurationChange(this.channel.writeAndFlush(switchTask));
++        // Canvas end - region threading
++    }
++
++    // Canvas start - region threading
++    private void canvas$switchOutbound(final UnconfiguredPipelineHandler.OutboundConfigurationTask switchTask) {
++        this.canvas$switchingOutbound = true;
++        this.channel.writeAndFlush(switchTask).addListener((ChannelFutureListener) future -> {
++            this.canvas$switchingOutbound = false;
++            this.canvas$afterConfigurationChange(future);
++            this.flushQueue();
++        });
++    }
++
++    private void canvas$afterConfigurationChange(final ChannelFuture future) {
++        if (future.isSuccess()) {
++            return;
++        }
++
++        if (future.cause() instanceof ClosedChannelException) {
++            LOGGER.info("Connection closed during protocol change");
++        } else {
++            this.channel.pipeline().fireExceptionCaught(future.cause());
++        }
+     }
++    // Canvas end - region threading
+ 
+     public void setListenerForServerboundHandshake(final PacketListener packetListener) {
+         if (this.packetListener != null) {
+@@ -415,7 +490,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
          }
  
          packet.onPacketDispatch(this.getPlayer());
@@ -14487,7 +14547,7 @@ index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..9c83ad4d41a8b97331c94e3ea260e040
              || (io.papermc.paper.util.MCUtil.isMainThread() && packet.isReady() && this.pendingActions.isEmpty()
              && (packet.getExtraPackets() == null || packet.getExtraPackets().isEmpty())))) {
              this.sendPacket(packet, listener, flush);
-@@ -444,11 +480,12 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -444,11 +519,12 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
      }
  
      public void runOnceConnected(final Consumer<Connection> action) {
@@ -14501,7 +14561,7 @@ index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..9c83ad4d41a8b97331c94e3ea260e040
          }
      }
  
-@@ -467,7 +504,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -467,7 +543,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
              return;
          }
  
@@ -14510,7 +14570,7 @@ index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..9c83ad4d41a8b97331c94e3ea260e040
              this.channel.eventLoop().execute(task);
          } else {
              this.pendingActions.add(new WrappedConsumer(connection -> connection.channel.eventLoop().execute(task)));
-@@ -535,10 +572,11 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -535,10 +611,11 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
      }
  
      public void flushChannel() {
@@ -14523,7 +14583,7 @@ index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..9c83ad4d41a8b97331c94e3ea260e040
          }
      }
  
-@@ -552,53 +590,62 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -552,53 +629,62 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
  
      // Paper start - Optimize network: Rewrite this to be safer if ran off main thread
      private boolean flushQueue() {
@@ -14552,7 +14612,7 @@ index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..9c83ad4d41a8b97331c94e3ea260e040
      }
  
 +    private boolean canWritePackets() {
-+        return canWrite(this.pendingActions.peek());
++        return !this.canvas$switchingOutbound && canWrite(this.pendingActions.peek()); // Canvas - region threading
 +    }
 +
 +    // Folia end - region threading - connection fixes
@@ -14590,7 +14650,7 @@ index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..9c83ad4d41a8b97331c94e3ea260e040
 +                for (;;) {
 +                    // synchronise so that queue clears appear atomic
 +                    synchronized (queue) {
-+                        holder = queue.pollIf(Connection::canWrite);
++                        holder = this.canvas$switchingOutbound ? null : queue.pollIf(Connection::canWrite); // Canvas - region threading
 +                    }
 +                    if (holder == null) {
 +                        break;
@@ -14619,7 +14679,7 @@ index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..9c83ad4d41a8b97331c94e3ea260e040
      }
      // Paper end - Optimize network
  
-@@ -607,22 +654,48 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -607,22 +693,48 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
      private static int currTick; // Paper - Buffer joins to world
      public void tick() {
          this.flushQueue();
@@ -14677,15 +14737,20 @@ index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..9c83ad4d41a8b97331c94e3ea260e040
              this.handleDisconnection();
          }
  
-@@ -673,6 +746,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
-             this.channel.close().awaitUninterruptibly();
-             this.disconnectionDetails = details;
+@@ -670,9 +782,10 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+         }
+ 
+         if (this.isConnected()) {
+-            this.channel.close().awaitUninterruptibly();
+-            this.disconnectionDetails = details;
++            this.disconnectionDetails = details; // Canvas - region threading
++            this.channel.close(); // Canvas - region threading
          }
 +        this.becomeActive = true; // Folia - region threading
      }
  
      public boolean isMemoryConnection() {
-@@ -868,10 +942,10 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -868,10 +981,10 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
  
      public void handleDisconnection() {
          if (this.channel != null && !this.channel.isOpen()) {
@@ -14698,7 +14763,7 @@ index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..9c83ad4d41a8b97331c94e3ea260e040
                  PacketListener packetListener = this.getPacketListener();
                  PacketListener disconnectListener = packetListener != null ? packetListener : this.disconnectListener;
                  if (disconnectListener != null) {
-@@ -900,6 +974,21 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -900,6 +1013,21 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
                      }
                  }
                  // Paper end - Add PlayerConnectionCloseEvent
@@ -14720,7 +14785,7 @@ index e33ccb8d80c8e51596d107142e5d3aa1f353c8d7..9c83ad4d41a8b97331c94e3ea260e040
              }
          }
      }
-@@ -919,15 +1008,26 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -919,15 +1047,26 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
      // Paper start - Optimize network
      public void clearPacketQueue() {
          final net.minecraft.server.level.ServerPlayer player = getPlayer();
