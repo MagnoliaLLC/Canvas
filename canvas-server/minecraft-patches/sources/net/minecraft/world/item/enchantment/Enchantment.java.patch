@@ -17,3 +17,67 @@
      }
  
      public boolean isPrimaryItem(final ItemStack item) {
+@@ -191,6 +_,7 @@
+     }
+ 
+     public boolean isImmuneToDamage(final ServerLevel serverLevel, final int enchantmentLevel, final Entity victim, final DamageSource source) {
++        if (!this.effects.has(EnchantmentEffectComponents.DAMAGE_IMMUNITY)) return false; // Canvas - only build loot contexts for effects the enchantment has
+         LootContext context = damageContext(serverLevel, enchantmentLevel, victim, source);
+ 
+         for (ConditionalEffect<DamageImmunity> filteredEffect : this.getEffects(EnchantmentEffectComponents.DAMAGE_IMMUNITY)) {
+@@ -210,6 +_,7 @@
+         final DamageSource source,
+         final MutableFloat protection
+     ) {
++        if (!this.effects.has(EnchantmentEffectComponents.DAMAGE_PROTECTION)) return; // Canvas - only build loot contexts for effects the enchantment has
+         applyEffects(
+             this.getEffects(EnchantmentEffectComponents.DAMAGE_PROTECTION),
+             damageContext(serverLevel, enchantmentLevel, victim, source),
+@@ -348,6 +_,7 @@
+     }
+ 
+     public void doPostPiercingAttack(final ServerLevel serverLevel, final int enchantmentLevel, final EnchantedItemInUse item, final Entity user) {
++        if (!this.effects.has(EnchantmentEffectComponents.POST_PIERCING_ATTACK)) return; // Canvas - only build loot contexts for effects the enchantment has
+         applyEffects(
+             this.getEffects(EnchantmentEffectComponents.POST_PIERCING_ATTACK),
+             entityContext(serverLevel, enchantmentLevel, user, user.position()),
+@@ -403,6 +_,7 @@
+     }
+ 
+     public void onProjectileSpawned(final ServerLevel serverLevel, final int enchantmentLevel, final EnchantedItemInUse weapon, final Entity projectile) {
++        if (!this.effects.has(EnchantmentEffectComponents.PROJECTILE_SPAWNED)) return; // Canvas - only build loot contexts for effects the enchantment has
+         applyEffects(
+             this.getEffects(EnchantmentEffectComponents.PROJECTILE_SPAWNED),
+             entityContext(serverLevel, enchantmentLevel, projectile, projectile.position()),
+@@ -418,6 +_,7 @@
+         final Vec3 position,
+         final BlockState hitBlock
+     ) {
++        if (!this.effects.has(EnchantmentEffectComponents.HIT_BLOCK)) return; // Canvas - only build loot contexts for effects the enchantment has
+         applyEffects(
+             this.getEffects(EnchantmentEffectComponents.HIT_BLOCK),
+             blockHitContext(serverLevel, enchantmentLevel, projectile, position, hitBlock),
+@@ -432,6 +_,7 @@
+         final ItemInstance itemStack,
+         final MutableFloat value
+     ) {
++        if (!this.effects.has(effectType)) return; // Canvas - only build loot contexts for effects the enchantment has
+         applyEffects(
+             this.getEffects(effectType),
+             itemContext(serverLevel, enchantmentLevel, itemStack),
+@@ -448,6 +_,7 @@
+         final Entity entity,
+         final MutableFloat value
+     ) {
++        if (!this.effects.has(effectType)) return; // Canvas - only build loot contexts for effects the enchantment has
+         applyEffects(
+             this.getEffects(effectType),
+             entityContext(serverLevel, enchantmentLevel, entity, entity.position()),
+@@ -465,6 +_,7 @@
+         final DamageSource damageSource,
+         final MutableFloat value
+     ) {
++        if (!this.effects.has(effectType)) return; // Canvas - only build loot contexts for effects the enchantment has
+         applyEffects(
+             this.getEffects(effectType),
+             damageContext(serverLevel, enchantmentLevel, victim, damageSource),
