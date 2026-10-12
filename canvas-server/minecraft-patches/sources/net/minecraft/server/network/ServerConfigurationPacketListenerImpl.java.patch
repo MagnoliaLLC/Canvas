@@ -1,0 +1,23 @@
+--- a/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
++++ b/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
+@@ -54,6 +_,7 @@
+     private @Nullable PrepareSpawnTask prepareSpawnTask;
+     public io.papermc.paper.connection.PaperPlayerConfigurationConnection paperConnection; // Paper
+     public net.minecraft.server.level.ServerPlayer switchToMain; // Folia - region threading - rewrite login process
++    private int canvas$ticksAwaitingClient; // Canvas - configuration timeout
+ 
+     public ServerConfigurationPacketListenerImpl(final MinecraftServer server, final Connection connection, final CommonListenerCookie cookie) {
+         super(server, connection, cookie);
+@@ -255,6 +_,12 @@
+     public void tick() {
+         this.keepConnectionAlive();
+         ConfigurationTask task = this.currentTask;
++        // Canvas start - configuration timeout
++        if ((task instanceof SynchronizeRegistriesTask || task instanceof JoinWorldTask) && this.canvas$ticksAwaitingClient++ == 600) {
++            this.disconnect(Component.translatable("multiplayer.disconnect.slow_login"), io.papermc.paper.connection.DisconnectionReason.TIMEOUT);
++            return;
++        }
++        // Canvas end - configuration timeout
+         if (task != null) {
+             try {
+                 if (task.tick()) {
