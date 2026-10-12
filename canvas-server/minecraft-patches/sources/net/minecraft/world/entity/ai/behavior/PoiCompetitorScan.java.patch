@@ -1,0 +1,40 @@
+--- a/net/minecraft/world/entity/ai/behavior/PoiCompetitorScan.java
++++ b/net/minecraft/world/entity/ai/behavior/PoiCompetitorScan.java
+@@ -24,6 +_,11 @@
+                             return true;
+                         }
+                         // Folia end - region threading
++                        // Canvas start - skip the job site lookup without a competitor
++                        if (!claimedByAnother(pos, body, i.get(nearestEntities))) {
++                            return true;
++                        }
++                        // Canvas end - skip the job site lookup without a competitor
+                         level.getPoiManager()
+                             .getType(pos.pos())
+                             .ifPresent(
+@@ -83,4 +_,25 @@
+     private static boolean hasMatchingProfession(final Holder<PoiType> poiType, final Holder<VillagerProfession> profession) {
+         return profession.value().heldJobSite().test(poiType);
+     }
++
++    // Canvas start - skip the job site lookup without a competitor
++    private static boolean claimedByAnother(final GlobalPos pos, final Villager body, final List<LivingEntity> livingEntities) {
++        for (final LivingEntity other : livingEntities) {
++            if (other == body) {
++                continue;
++            }
++            if (!(other instanceof final Villager otherVillager)) {
++                continue;
++            }
++            if (!other.isAlive()) {
++                continue;
++            }
++            final Optional<GlobalPos> jobSite = otherVillager.getBrain().getMemory(MemoryModuleType.JOB_SITE);
++            if (jobSite.isPresent() && pos.equals(jobSite.get())) {
++                return true;
++            }
++        }
++        return false;
++    }
++    // Canvas end - skip the job site lookup without a competitor
+ }
