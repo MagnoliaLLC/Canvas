@@ -167,3 +167,28 @@
      }
  
      public static boolean canHoldSpecificFluid(final BlockGetter level, final BlockPos pos, final BlockState state, final Fluid newFluid) {
+@@ -599,12 +_,18 @@
+         }
+ 
+         public boolean isHole(final BlockPos pos) {
+-            return this.holeCache.computeIfAbsent(this.getCacheKey(pos), key -> {
+-                BlockState state = this.getBlockState(pos, key);
+-                BlockPos below = pos.below();
+-                BlockState belowState = this.level.getBlockState(below);
+-                return FlowingFluid.this.isWaterHole(this.level, pos, state, below, belowState);
+-            });
++            // Canvas start - avoid allocating a lambda per hole check
++            final short key = this.getCacheKey(pos);
++            if (this.holeCache.containsKey(key)) {
++                return this.holeCache.get(key);
++            }
++            BlockState state = this.getBlockState(pos, key);
++            BlockPos below = pos.below();
++            BlockState belowState = this.level.getBlockState(below);
++            final boolean hole = FlowingFluid.this.isWaterHole(this.level, pos, state, below, belowState);
++            this.holeCache.put(key, hole);
++            return hole;
++            // Canvas end - avoid allocating a lambda per hole check
+         }
+ 
+         private short getCacheKey(final BlockPos pos) {
