@@ -1,0 +1,106 @@
+--- a/net/minecraft/network/Connection.java
++++ b/net/minecraft/network/Connection.java
+@@ -64,6 +_,7 @@
+     private static final ProtocolInfo<ServerHandshakePacketListener> INITIAL_PROTOCOL = HandshakeProtocols.SERVERBOUND;
+     private final PacketFlow receiving;
+     private volatile boolean sendLoginDisconnect = true;
++    private volatile boolean canvas$switchingOutbound; // Canvas - async protocol switch
+     private final Queue<WrappedConsumer> pendingActions = new ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue<>(); // Paper - Optimize network // Folia - region threading - connection fixes
+     public Channel channel;
+     public SocketAddress address;
+@@ -74,7 +_,7 @@
+     // Spigot end
+     private volatile @Nullable PacketListener disconnectListener;
+     private volatile @Nullable PacketListener packetListener;
+-    private @Nullable DisconnectionDetails disconnectionDetails;
++    private volatile @Nullable DisconnectionDetails disconnectionDetails; // Canvas - close connections without waiting
+     private final java.util.concurrent.atomic.AtomicBoolean disconnectionHandled = new java.util.concurrent.atomic.AtomicBoolean(false); // Folia - region threading - may be called concurrently during configuration stage
+     private int receivedPackets;
+     private int sentPackets;
+@@ -375,7 +_,14 @@
+             configMessage = configMessage.andThen(ctx -> ctx.pipeline().addAfter(HandlerNames.DECODER, HandlerNames.BUNDLER, newBundler));
+         }
+ 
+-        syncAfterConfigurationChange(this.channel.writeAndFlush(configMessage));
++        // Canvas start - async protocol switch
++        final ChannelFuture future = this.channel.writeAndFlush(configMessage);
++        if (!this.channel.eventLoop().inEventLoop()) {
++            future.addListener((ChannelFutureListener) this::canvas$afterConfigurationChange);
++            return;
++        }
++        syncAfterConfigurationChange(future);
++        // Canvas end - async protocol switch
+     }
+ 
+     public void setupOutboundProtocol(final ProtocolInfo<?> protocol) {
+@@ -391,8 +_,39 @@
+         }
+ 
+         boolean isLoginProtocol = protocol.id() == ConnectionProtocol.LOGIN;
+-        syncAfterConfigurationChange(this.channel.writeAndFlush(configMessage.andThen(ctx -> this.sendLoginDisconnect = isLoginProtocol)));
+-    }
++        // Canvas start - async protocol switch
++        final UnconfiguredPipelineHandler.OutboundConfigurationTask switchTask = configMessage.andThen(ctx -> this.sendLoginDisconnect = isLoginProtocol);
++        if (!this.channel.eventLoop().inEventLoop()) {
++            this.pendingActions.add(new WrappedConsumer(connection -> connection.canvas$switchOutbound(switchTask)));
++            this.flushQueue();
++            return;
++        }
++        syncAfterConfigurationChange(this.channel.writeAndFlush(switchTask));
++        // Canvas end - async protocol switch
++    }
++
++    // Canvas start - async protocol switch
++    private void canvas$switchOutbound(final UnconfiguredPipelineHandler.OutboundConfigurationTask switchTask) {
++        this.canvas$switchingOutbound = true;
++        this.channel.writeAndFlush(switchTask).addListener((ChannelFutureListener) future -> {
++            this.canvas$switchingOutbound = false;
++            this.canvas$afterConfigurationChange(future);
++            this.flushQueue();
++        });
++    }
++
++    private void canvas$afterConfigurationChange(final ChannelFuture future) {
++        if (future.isSuccess()) {
++            return;
++        }
++
++        if (future.cause() instanceof ClosedChannelException) {
++            LOGGER.info("Connection closed during protocol change");
++        } else {
++            this.channel.pipeline().fireExceptionCaught(future.cause());
++        }
++    }
++    // Canvas end - async protocol switch
+ 
+     public void setListenerForServerboundHandshake(final PacketListener packetListener) {
+         if (this.packetListener != null) {
+@@ -603,7 +_,7 @@
+     }
+ 
+     private boolean canWritePackets() {
+-        return canWrite(this.pendingActions.peek());
++        return !this.canvas$switchingOutbound && canWrite(this.pendingActions.peek()); // Canvas - async protocol switch
+     }
+ 
+     // Folia end - region threading - connection fixes
+@@ -628,7 +_,7 @@
+                 for (;;) {
+                     // synchronise so that queue clears appear atomic
+                     synchronized (queue) {
+-                        holder = queue.pollIf(Connection::canWrite);
++                        holder = this.canvas$switchingOutbound ? null : queue.pollIf(Connection::canWrite); // Canvas - async protocol switch
+                     }
+                     if (holder == null) {
+                         break;
+@@ -743,8 +_,8 @@
+         }
+ 
+         if (this.isConnected()) {
+-            this.channel.close().awaitUninterruptibly();
+-            this.disconnectionDetails = details;
++            this.disconnectionDetails = details; // Canvas - close connections without waiting
++            this.channel.close(); // Canvas - close connections without waiting
+         }
+         this.becomeActive = true; // Folia - region threading
+     }
