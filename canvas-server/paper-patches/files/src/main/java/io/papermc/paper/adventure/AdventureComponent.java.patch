@@ -1,0 +1,10 @@
+--- a/src/main/java/io/papermc/paper/adventure/AdventureComponent.java
++++ b/src/main/java/io/papermc/paper/adventure/AdventureComponent.java
+@@ -83,6 +_,7 @@
+ 
+     @Override
+     public boolean equals(final Object obj) {
++        if (obj instanceof AdventureComponent other && this.adventure.equals(other.adventure)) return true; // Canvas - compare adventure components without converting them
+         return this.deepConverted().equals(obj);
+     }
+ }
