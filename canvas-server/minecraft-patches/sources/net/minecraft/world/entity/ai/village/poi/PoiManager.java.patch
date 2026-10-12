@@ -1,0 +1,20 @@
+--- a/net/minecraft/world/entity/ai/village/poi/PoiManager.java
++++ b/net/minecraft/world/entity/ai/village/poi/PoiManager.java
+@@ -104,6 +_,17 @@
+         return Optional.empty();
+     }
+ 
++    // Canvas start - optimize poi searches
++    public ca.spottedleaf.moonrise.patches.chunk_system.level.poi.@Nullable PoiChunk canvas$getPoiChunk(final int chunkX, final int chunkZ, final boolean load) {
++        ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(this.world, chunkX, chunkZ, "Accessing poi chunk off-main");
++
++        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkHolderManager manager = ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)this.world).moonrise$getChunkTaskScheduler().chunkHolderManager;
++        final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk ret = manager.getPoiChunkIfLoaded(chunkX, chunkZ, true);
++
++        return ret != null || !load ? ret : manager.loadPoiChunk(chunkX, chunkZ);
++    }
++    // Canvas end - optimize poi searches
++
+     @Override
+     protected PoiSection getOrCreate(final long pos) {
+         final int chunkX = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkSectionX(pos);

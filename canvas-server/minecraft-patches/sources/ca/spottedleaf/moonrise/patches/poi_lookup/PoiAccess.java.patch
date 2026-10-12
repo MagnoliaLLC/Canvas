@@ -1,0 +1,64 @@
+--- a/ca/spottedleaf/moonrise/patches/poi_lookup/PoiAccess.java
++++ b/ca/spottedleaf/moonrise/patches/poi_lookup/PoiAccess.java
+@@ -360,8 +_,13 @@
+         final long centerKey = CoordinateUtils.getChunkSectionKey(centerX, centerY, centerZ);
+ 
+         final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
+-        final LongOpenHashSet seen = new LongOpenHashSet();
+-        seen.add(centerKey);
++        // Canvas start - optimize poi searches
++        final int lengthY = upperY - lowerY + 1;
++        final int lengthZ = upperZ - lowerZ + 1;
++        final java.util.BitSet seen = new java.util.BitSet((upperX - lowerX + 1) * lengthY * lengthZ);
++        final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk[] poiChunks = new ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk[(upperX - lowerX + 1) * lengthZ];
++        seen.set(((centerX - lowerX) * lengthY + (centerY - lowerY)) * lengthZ + (centerZ - lowerZ));
++        // Canvas end - optimize poi searches
+         queue.enqueue(centerKey);
+ 
+         while (!queue.isEmpty()) {
+@@ -370,11 +_,6 @@
+             final int sectionY = CoordinateUtils.getChunkSectionY(key);
+             final int sectionZ = CoordinateUtils.getChunkSectionZ(key);
+ 
+-            if (sectionX < lowerX || sectionX > upperX || sectionY < lowerY || sectionY > upperY || sectionZ < lowerZ || sectionZ > upperZ) {
+-                // out of bound chunk
+-                continue;
+-            }
+-
+             final double sectionDistanceSquared = getSmallestDistanceSquared(
+                     (double)(sectionX << 4),
+                     (double)(sectionY << 4),
+@@ -403,15 +_,28 @@
+                         final int neighbourY = sectionY + dy;
+                         final int neighbourZ = sectionZ + dz;
+ 
+-                        final long neighbourKey = CoordinateUtils.getChunkSectionKey(neighbourX, neighbourY, neighbourZ);
+-                        if (seen.add(neighbourKey)) {
+-                            queue.enqueue(neighbourKey);
+-                        }
++                        // Canvas start - optimize poi searches
++                        if (neighbourX < lowerX || neighbourX > upperX || neighbourY < lowerY || neighbourY > upperY || neighbourZ < lowerZ || neighbourZ > upperZ) {
++                            continue;
++                        }
++
++                        final int neighbourIndex = ((neighbourX - lowerX) * lengthY + (neighbourY - lowerY)) * lengthZ + (neighbourZ - lowerZ);
++                        if (!seen.get(neighbourIndex)) {
++                            seen.set(neighbourIndex);
++                            queue.enqueue(CoordinateUtils.getChunkSectionKey(neighbourX, neighbourY, neighbourZ));
++                        }
++                        // Canvas end - optimize poi searches
+                     }
+                 }
+             }
+ 
+-            final Optional<PoiSection> poiSectionOptional = load ? poiStorage.getOrLoad(key) : poiStorage.get(key);
++            // Canvas start - optimize poi searches
++            final int column = (sectionX - lowerX) * lengthZ + (sectionZ - lowerZ);
++            if (poiChunks[column] == null) {
++                poiChunks[column] = poiStorage.canvas$getPoiChunk(sectionX, sectionZ, load);
++            }
++            final Optional<PoiSection> poiSectionOptional = poiChunks[column] == null ? Optional.empty() : poiChunks[column].getSectionForVanilla(sectionY);
++            // Canvas end - optimize poi searches
+ 
+             if (poiSectionOptional == null || !poiSectionOptional.isPresent()) {
+                 continue;
