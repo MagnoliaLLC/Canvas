@@ -1,0 +1,167 @@
+--- a/net/minecraft/world/level/BlockGetter.java
++++ b/net/minecraft/world/level/BlockGetter.java
+@@ -209,22 +_,46 @@
+     static boolean forEachBlockIntersectedBetween(final Vec3 from, final Vec3 to, final AABB aabbAtTarget, final BlockGetter.BlockStepVisitor visitor) {
+         Vec3 travel = to.subtract(from);
+         if (travel.lengthSqr() < Mth.square(1.0E-5F)) {
+-            for (BlockPos blockPos : BlockPos.betweenClosed(aabbAtTarget)) {
+-                if (!visitor.visit(blockPos, 0)) {
+-                    return false;
++            // Canvas start - iterate intersected blocks without allocating
++            BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
++            int minX = Mth.floor(aabbAtTarget.minX);
++            int minY = Mth.floor(aabbAtTarget.minY);
++            int minZ = Mth.floor(aabbAtTarget.minZ);
++            int maxX = Mth.floor(aabbAtTarget.maxX);
++            int maxY = Mth.floor(aabbAtTarget.maxY);
++            int maxZ = Mth.floor(aabbAtTarget.maxZ);
++
++            for (int z = minZ; z <= maxZ; z++) {
++                for (int y = minY; y <= maxY; y++) {
++                    for (int x = minX; x <= maxX; x++) {
++                        if (!visitor.visit(cursor.set(x, y, z), 0)) {
++                            return false;
++                        }
++                    }
+                 }
+             }
++            // Canvas end - iterate intersected blocks without allocating
+ 
+             return true;
+         } else {
+-            LongSet visitedBlocks = new LongOpenHashSet();
+-
+-            for (BlockPos blockPos : BlockPos.betweenCornersInDirection(aabbAtTarget.move(travel.scale(-1.0)), travel)) {
+-                if (!visitor.visit(blockPos, 0)) {
+-                    return false;
+-                }
+-
+-                visitedBlocks.add(blockPos.asLong());
++            // Canvas start - iterate intersected blocks without allocating
++            AABB aabbAtStart = aabbAtTarget.move(travel.scale(-1.0));
++            int startMinX = Mth.floor(aabbAtStart.minX);
++            int startMinY = Mth.floor(aabbAtStart.minY);
++            int startMinZ = Mth.floor(aabbAtStart.minZ);
++            int startMaxX = Mth.floor(aabbAtStart.maxX);
++            int startMaxY = Mth.floor(aabbAtStart.maxY);
++            int startMaxZ = Mth.floor(aabbAtStart.maxZ);
++            int targetMinX = Mth.floor(aabbAtTarget.minX);
++            int targetMinY = Mth.floor(aabbAtTarget.minY);
++            int targetMinZ = Mth.floor(aabbAtTarget.minZ);
++            int targetMaxX = Mth.floor(aabbAtTarget.maxX);
++            int targetMaxY = Mth.floor(aabbAtTarget.maxY);
++            int targetMaxZ = Mth.floor(aabbAtTarget.maxZ);
++            boolean sameBlocks = startMinX == targetMinX && startMinY == targetMinY && startMinZ == targetMinZ && startMaxX == targetMaxX && startMaxY == targetMaxY && startMaxZ == targetMaxZ;
++            LongSet visitedBlocks = sameBlocks ? null : new LongOpenHashSet();
++            if (!visitBetweenCornersInDirection(startMinX, startMinY, startMinZ, startMaxX, startMaxY, startMaxZ, travel, visitedBlocks, visitor, 0)) {
++                return false;
+             }
+ 
+             int iterations = addCollisionsAlongTravel(visitedBlocks, travel, aabbAtTarget, visitor);
+@@ -232,18 +_,13 @@
+                 return false;
+             }
+ 
+-            for (BlockPos blockPos : BlockPos.betweenCornersInDirection(aabbAtTarget, travel)) {
+-                if (visitedBlocks.add(blockPos.asLong()) && !visitor.visit(blockPos, iterations + 1)) {
+-                    return false;
+-                }
+-            }
+-
+-            return true;
++            return sameBlocks || visitBetweenCornersInDirection(targetMinX, targetMinY, targetMinZ, targetMaxX, targetMaxY, targetMaxZ, travel, visitedBlocks, visitor, iterations + 1);
++            // Canvas end - iterate intersected blocks without allocating
+         }
+     }
+ 
+     private static int addCollisionsAlongTravel(
+-        final LongSet visitedBlocks, final Vec3 deltaMove, final AABB aabbAtTarget, final BlockGetter.BlockStepVisitor visitor
++        @Nullable LongSet visitedBlocks, final Vec3 deltaMove, final AABB aabbAtTarget, final BlockGetter.BlockStepVisitor visitor // Canvas - iterate intersected blocks without allocating
+     ) {
+         double boxSizeX = aabbAtTarget.getXsize();
+         double boxSizeY = aabbAtTarget.getYsize();
+@@ -306,20 +_,77 @@
+                 int oppositeCornerX = Mth.floor(cornerHitX - boxSizeX * cornerDir.getX());
+                 int oppositeCornerY = Mth.floor(cornerHitY - boxSizeY * cornerDir.getY());
+                 int oppositeCornerZ = Mth.floor(cornerHitZ - boxSizeZ * cornerDir.getZ());
+-                int currentIteration = iterations;
++                // Canvas start - iterate intersected blocks without allocating
++                if (visitedBlocks == null) {
++                    visitedBlocks = new LongOpenHashSet();
++                    visitBetweenCornersInDirection(Mth.floor(aabbAtTarget.minX), Mth.floor(aabbAtTarget.minY), Mth.floor(aabbAtTarget.minZ), Mth.floor(aabbAtTarget.maxX), Mth.floor(aabbAtTarget.maxY), Mth.floor(aabbAtTarget.maxZ), deltaMove, visitedBlocks, (pos, iteration) -> true, 0);
++                }
+ 
+-                for (BlockPos pos : BlockPos.betweenCornersInDirection(
+-                    cornerVisitedBlockX, cornerVisitedBlockY, cornerVisitedBlockZ, oppositeCornerX, oppositeCornerY, oppositeCornerZ, deltaMove
+-                )) {
+-                    if (visitedBlocks.add(pos.asLong()) && !visitor.visit(pos, currentIteration)) {
+-                        return -1;
+-                    }
++                if (!visitBetweenCornersInDirection(cornerVisitedBlockX, cornerVisitedBlockY, cornerVisitedBlockZ, oppositeCornerX, oppositeCornerY, oppositeCornerZ, deltaMove, visitedBlocks, visitor, iterations)) {
++                    return -1;
+                 }
++                // Canvas end - iterate intersected blocks without allocating
+             }
+         }
+ 
+         return iterations;
+     }
++
++    // Canvas start - iterate intersected blocks without allocating
++    private static boolean visitBetweenCornersInDirection(
++        final int firstCornerX,
++        final int firstCornerY,
++        final int firstCornerZ,
++        final int secondCornerX,
++        final int secondCornerY,
++        final int secondCornerZ,
++        final Vec3 direction,
++        final @Nullable LongSet visitedBlocks,
++        final BlockGetter.BlockStepVisitor visitor,
++        final int iteration
++    ) {
++        int minCornerX = Math.min(firstCornerX, secondCornerX);
++        int minCornerY = Math.min(firstCornerY, secondCornerY);
++        int minCornerZ = Math.min(firstCornerZ, secondCornerZ);
++        int maxCornerX = Math.max(firstCornerX, secondCornerX);
++        int maxCornerY = Math.max(firstCornerY, secondCornerY);
++        int maxCornerZ = Math.max(firstCornerZ, secondCornerZ);
++        int diffX = maxCornerX - minCornerX;
++        int diffY = maxCornerY - minCornerY;
++        int diffZ = maxCornerZ - minCornerZ;
++        int startCornerX = direction.x >= 0.0 ? minCornerX : maxCornerX;
++        int startCornerY = direction.y >= 0.0 ? minCornerY : maxCornerY;
++        int startCornerZ = direction.z >= 0.0 ? minCornerZ : maxCornerZ;
++        java.util.List<Direction.Axis> axes = Direction.axisStepOrder(direction);
++        Direction.Axis firstVisitAxis = axes.get(0);
++        Direction.Axis secondVisitAxis = axes.get(1);
++        Direction.Axis thirdVisitAxis = axes.get(2);
++        Direction firstVisitDir = direction.get(firstVisitAxis) >= 0.0 ? firstVisitAxis.getPositive() : firstVisitAxis.getNegative();
++        Direction secondVisitDir = direction.get(secondVisitAxis) >= 0.0 ? secondVisitAxis.getPositive() : secondVisitAxis.getNegative();
++        Direction thirdVisitDir = direction.get(thirdVisitAxis) >= 0.0 ? thirdVisitAxis.getPositive() : thirdVisitAxis.getNegative();
++        int firstMax = firstVisitAxis.choose(diffX, diffY, diffZ);
++        int secondMax = secondVisitAxis.choose(diffX, diffY, diffZ);
++        int thirdMax = thirdVisitAxis.choose(diffX, diffY, diffZ);
++        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
++
++        for (int firstIndex = 0; firstIndex <= firstMax; firstIndex++) {
++            for (int secondIndex = 0; secondIndex <= secondMax; secondIndex++) {
++                for (int thirdIndex = 0; thirdIndex <= thirdMax; thirdIndex++) {
++                    cursor.set(
++                        startCornerX + firstVisitDir.getStepX() * firstIndex + secondVisitDir.getStepX() * secondIndex + thirdVisitDir.getStepX() * thirdIndex,
++                        startCornerY + firstVisitDir.getStepY() * firstIndex + secondVisitDir.getStepY() * secondIndex + thirdVisitDir.getStepY() * thirdIndex,
++                        startCornerZ + firstVisitDir.getStepZ() * firstIndex + secondVisitDir.getStepZ() * secondIndex + thirdVisitDir.getStepZ() * thirdIndex
++                    );
++                    if ((visitedBlocks == null || visitedBlocks.add(cursor.asLong())) && !visitor.visit(cursor, iteration)) {
++                        return false;
++                    }
++                }
++            }
++        }
++
++        return true;
++    }
++    // Canvas end - iterate intersected blocks without allocating
+ 
+     private static Vec3i getFurthestCorner(final Vec3 direction) {
+         double xDot = Math.abs(Vec3.X_AXIS.dot(direction));
