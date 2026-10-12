@@ -1,0 +1,11 @@
+--- a/net/minecraft/network/protocol/game/ClientboundLightUpdatePacketData.java
++++ b/net/minecraft/network/protocol/game/ClientboundLightUpdatePacketData.java
+@@ -67,7 +_,7 @@
+                 emptyMask.set(sectionIndex);
+             } else {
+                 mask.set(sectionIndex);
+-                updates.add(data.copy().getData());
++                updates.add(data.getData()); // Canvas - the starlight layer listeners already return copies
+             }
+         }
+     }
