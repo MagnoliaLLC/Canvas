@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/NaturalSpawner.java
 +++ b/net/minecraft/world/level/NaturalSpawner.java
-@@ -67,25 +_,52 @@
+@@ -67,56 +_,96 @@
          final int spawnableChunkCount, final ServerLevel level, final NaturalSpawner.ChunkGetter chunkGetter, final LocalMobCapCalculator localMobCapCalculator
      ) {
          // Paper start - Optional per player mob spawns
@@ -40,51 +40,61 @@
 +        int[] limits = calculateLimits(worldData, spawnableChunkCount); // Canvas - optimize natural spawning
          Object2IntOpenHashMap<MobCategory> mobCounts = new Object2IntOpenHashMap<>();
  
--        for (Entity entity : entities) {
--            if (!(entity instanceof Mob mob && (mob.isPersistenceRequired() || mob.requiresCustomPersistence()))) {
 +        // Canvas start - optimize natural spawning
 +        final boolean perPlayerMobSpawning = worldData.world.paperConfig().entities.spawning.perPlayerMobSpawns;
-+        // optimized iteration path, go by chunks
-+        for (LevelChunk chunk : worldData.getChunks().getRawDataUnchecked()) {
-+            if (chunk == null) continue; // unlikely, but check to be sure
-+            for (Entity entity : chunk.moonrise$getChunkHolder().getEntityChunk().getEntityArr()) {
-+                if (entity == null) continue; // very likely, must check
-                 MobCategory category = entity.getType().getCategory();
+         for (Entity entity : entities) {
++            MobCategory category = entity.getType().getCategory();
++            // if we skip because we hit the limit, it won't change the outcome, since if it skips because
++            // of the limit hit, the category will be filtered anyway later
++            if (category == MobCategory.MISC) continue;
++            final boolean shouldSkipBecauseOfLimit = limits[category.ordinal()] <= mobCounts.getInt(category);
++            if (!perPlayerMobSpawning && shouldSkipBecauseOfLimit) continue;
+             if (!(entity instanceof Mob mob && (mob.isPersistenceRequired() || mob.requiresCustomPersistence()))) {
+-                MobCategory category = entity.getType().getCategory();
 -                if (category != MobCategory.MISC) {
-+                // if we skip because we hit the limit, it won't change the outcome, since if it skips because
-+                // of the limit hit, the category will be filtered anyway later
-+                if (category == MobCategory.MISC) continue;
-+                final boolean shouldSkipBecauseOfLimit = limits[category.ordinal()] <= mobCounts.getInt(category);
-+                if (!perPlayerMobSpawning && shouldSkipBecauseOfLimit) continue;
-+                if (!(entity instanceof Mob mob && (mob.isPersistenceRequired() || mob.requiresCustomPersistence()))) {
-                     // Paper start - Only count natural spawns
-                     if (!entity.level().paperConfig().entities.spawning.countAllMobsForSpawning &&
-                         !(entity.spawnReason == org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.NATURAL ||
-@@ -94,29 +_,45 @@
+-                    // Paper start - Only count natural spawns
+-                    if (!entity.level().paperConfig().entities.spawning.countAllMobsForSpawning &&
+-                        !(entity.spawnReason == org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.NATURAL ||
+-                            entity.spawnReason == org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.CHUNK_GEN)) {
+-                        continue;
++                // Paper start - Only count natural spawns
++                if (!entity.level().paperConfig().entities.spawning.countAllMobsForSpawning &&
++                    !(entity.spawnReason == org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.NATURAL ||
++                        entity.spawnReason == org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.CHUNK_GEN)) {
++                    continue;
++                }
++                // Paper end - Only count natural spawns
++                BlockPos pos = entity.blockPosition();
++                final LevelChunk chunk = level.getChunkSource().moonrise$getFullChunkIfLoaded(pos.getX() >> 4, pos.getZ() >> 4);
++                if (chunk == null) continue;
++
++                // getting the rough biome is expensive, if we are skipping because of
++                // the limit, why tf are we gonna do this, since there is no impact by skipping this anyway
++
++                // the only real reason we don't skip the full thing with per-player mob spawns is because
++                // per-player mob spawns require 'updatePlayerMobTypeMap' to be called for accurate spawning
++
++                // as a result, if we are doing per-player spawning, we try and skip as much as possible to
++                // reduce expensive CPU time without costing vanilla mob spawning functionality
++
++                // Note: this should be safe, this only effects the rate of spawning, and specifically for a
++                // few mobs for a few nether biomes, so farms shouldn't be impacted
++                if (!perPlayerMobSpawning || !shouldSkipBecauseOfLimit) {
++                    // only do this lookup if we aren't using per-player spawns(since we skip above), and
++                    // if we are doing per-player mob spawning and not over the limit yet
++                    MobSpawnSettings naturalMobSpawns = level.environmentAttributes().getValue(EnvironmentAttributes.NATURAL_MOB_SPAWNS, pos);
++                    MobSpawnSettings.MobSpawnCost mobSpawnCost = naturalMobSpawns.getMobSpawnCost(entity.getType());
++                    if (mobSpawnCost != null) {
++                        spawnPotential.addCharge(entity.blockPosition(), mobSpawnCost.charge());
                      }
-                     // Paper end - Only count natural spawns
-                     BlockPos pos = entity.blockPosition();
+-                    // Paper end - Only count natural spawns
+-                    BlockPos pos = entity.blockPosition();
 -                    chunkGetter.query(ChunkPos.pack(pos), chunk -> {
-+
-+                    // getting the rough biome is expensive, if we are skipping because of
-+                    // the limit, why tf are we gonna do this, since there is no impact by skipping this anyway
-+
-+                    // the only real reason we don't skip the full thing with per-player mob spawns is because
-+                    // per-player mob spawns require 'updatePlayerMobTypeMap' to be called for accurate spawning
-+
-+                    // as a result, if we are doing per-player spawning, we try and skip as much as possible to
-+                    // reduce expensive CPU time without costing vanilla mob spawning functionality
-+
-+                    // Note: this should be safe, this only effects the rate of spawning, and specifically for a
-+                    // few mobs for a few nether biomes, so farms shouldn't be impacted
-+                    if (!perPlayerMobSpawning || !shouldSkipBecauseOfLimit) {
-+                        // only do this lookup if we aren't using per-player spawns(since we skip above), and
-+                        // if we are doing per-player mob spawning and not over the limit yet
-                         MobSpawnSettings naturalMobSpawns = level.environmentAttributes().getValue(EnvironmentAttributes.NATURAL_MOB_SPAWNS, pos);
-                         MobSpawnSettings.MobSpawnCost mobSpawnCost = naturalMobSpawns.getMobSpawnCost(entity.getType());
-                         if (mobSpawnCost != null) {
-                             spawnPotential.addCharge(entity.blockPosition(), mobSpawnCost.charge());
-                         }
+-                        MobSpawnSettings naturalMobSpawns = level.environmentAttributes().getValue(EnvironmentAttributes.NATURAL_MOB_SPAWNS, pos);
+-                        MobSpawnSettings.MobSpawnCost mobSpawnCost = naturalMobSpawns.getMobSpawnCost(entity.getType());
+-                        if (mobSpawnCost != null) {
+-                            spawnPotential.addCharge(entity.blockPosition(), mobSpawnCost.charge());
+-                        }
 -
 -                        if (localMobCapCalculator != null && entity instanceof Mob) { // Paper - Optional per player mob spawns
 -                            localMobCapCalculator.addMob(chunk.getPos(), category);
@@ -97,20 +107,20 @@
 -                        }
 -                        // Paper end - Optional per player mob spawns
 -                    });
-+                    }
+-                }
++                }
 +
-+                    // only runs if we are not doing per-player
-+                    if (localMobCapCalculator != null && entity instanceof Mob) {
-+                        localMobCapCalculator.addMob(chunk.getPos(), category);
-+                    }
++                // only runs if we are not doing per-player
++                if (localMobCapCalculator != null && entity instanceof Mob) {
++                    localMobCapCalculator.addMob(chunk.getPos(), category);
++                }
 +
-+                    mobCounts.addTo(category, 1);
-+                    // Paper start - Optional per player mob spawns
-+                    if (countMobs) {
-+                        ((ServerLevel) chunk.getLevel()).getChunkSource().chunkMap.updatePlayerMobTypeMap(entity);
-+                    }
-+                    // Paper end - Optional per player mob spawns
-                 }
++                mobCounts.addTo(category, 1);
++                // Paper start - Optional per player mob spawns
++                if (countMobs) {
++                    ((ServerLevel) chunk.getLevel()).getChunkSource().chunkMap.updatePlayerMobTypeMap(entity);
++                }
++                // Paper end - Optional per player mob spawns
              }
          }
 +        // Canvas end - optimize natural spawning
