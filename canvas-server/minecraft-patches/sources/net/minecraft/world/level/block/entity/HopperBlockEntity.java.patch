@@ -47,7 +47,17 @@
  
      @Override
      protected Component getDefaultName() {
-@@ -156,8 +_,17 @@
+@@ -144,7 +_,8 @@
+         if (!entity.isOnCooldown()) {
+             entity.setCooldown(0);
+             // Spigot start
+-            boolean result = tryMoveItems(level, pos, state, entity, () -> suckInItems(level, entity));
++            if (entity.suckInAction == null) entity.suckInAction = () -> suckInItems(level, entity); // Canvas - reuse the hopper's suck-in action
++            boolean result = tryMoveItems(level, pos, state, entity, entity.suckInAction); // Canvas - reuse the hopper's suck-in action
+             if (!result && entity.level.spigotConfig.hopperCheck > 1) {
+                 entity.setCooldown(entity.level.spigotConfig.hopperCheck);
+             }
+@@ -156,8 +_,18 @@
      private static final int HOPPER_EMPTY = 0;
      private static final int HOPPER_HAS_ITEMS = 1;
      private static final int HOPPER_IS_FULL = 2;
@@ -55,6 +65,7 @@
 -    private static int getFullState(final HopperBlockEntity hopper) {
 +    // Canvas start - optimize hoppers
 +    private int fullState = -1;
++    private @Nullable BooleanSupplier suckInAction; // Canvas - reuse the hopper's suck-in action
 +
 +    @Override
 +    public void setChanged() {
