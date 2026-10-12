@@ -28,6 +28,15 @@
  
      @Override
      public final BlockState moonrise$getBlock(final int x, final int y, final int z) {
+@@ -160,7 +_,7 @@
+         final LevelChunk.@Nullable PostLoadProcessor postLoad,
+         final @Nullable BlendingData blendingData
+     ) {
+-        super(pos, upgradeData, level, PalettedContainerFactory.create(net.minecraft.server.MinecraftServer.getServer().registryAccess()), inhabitedTime, sections, blendingData); // Paper - Anti-Xray - The world isn't ready yet, use server singleton for registry
++        super(pos, upgradeData, level, level.palettedContainerFactory() != null ? level.palettedContainerFactory() : PalettedContainerFactory.create(net.minecraft.server.MinecraftServer.getServer().registryAccess()), inhabitedTime, sections, blendingData); // Paper - Anti-Xray - The world isn't ready yet, use server singleton for registry // Canvas - reuse the level's palette factory
+         this.level = (ServerLevel) level; // CraftBukkit - type
+         this.gameEventListenerRegistrySections = new Int2ObjectOpenHashMap<>();
+ 
 @@ -181,6 +_,7 @@
          this.debug = !empty && this.level.isDebug();
          this.defaultBlockState = empty ? VOID_AIR_BLOCKSTATE : AIR_BLOCKSTATE;
