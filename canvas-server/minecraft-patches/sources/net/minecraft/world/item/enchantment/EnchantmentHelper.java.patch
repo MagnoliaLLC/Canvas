@@ -1,0 +1,27 @@
+--- a/net/minecraft/world/item/enchantment/EnchantmentHelper.java
++++ b/net/minecraft/world/item/enchantment/EnchantmentHelper.java
+@@ -285,7 +_,23 @@
+     }
+ 
+     public static void tickEffects(final ServerLevel serverLevel, final LivingEntity entity) {
+-        runIterationOnEquipment(entity, (enchantment, level, item) -> enchantment.value().tick(serverLevel, level, item, entity));
++        // Canvas start - skip enchantments without tick effects
++        for (EquipmentSlot slot : EquipmentSlot.VALUES) {
++            ItemStack piece = entity.getItemBySlot(slot);
++            if (piece.isEmpty()) continue;
++            ItemEnchantments itemEnchantments = piece.get(DataComponents.ENCHANTMENTS);
++            if (itemEnchantments == null || itemEnchantments.isEmpty()) continue;
++            EnchantedItemInUse itemInUse = null;
++
++            for (Entry<Holder<Enchantment>> entry : itemEnchantments.entrySet()) {
++                Enchantment enchantment = entry.getKey().value();
++                if (enchantment.matchingSlot(slot) && enchantment.effects().has(EnchantmentEffectComponents.TICK)) {
++                    if (itemInUse == null) itemInUse = new EnchantedItemInUse(piece, slot, entity);
++                    enchantment.tick(serverLevel, entry.getIntValue(), itemInUse, entity);
++                }
++            }
++        }
++        // Canvas end - skip enchantments without tick effects
+     }
+ 
+     public static int getEnchantmentLevel(final Holder<Enchantment> enchantment, final LivingEntity entity) {
