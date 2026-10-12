@@ -19,7 +19,20 @@
  
              // call mid-tick tasks for chunk system
              if ((i & 7) == 0) {
-@@ -548,9 +_,9 @@
+@@ -533,6 +_,12 @@
+         int chunkCount = this.distanceManager.getNaturalSpawnChunkCount();
+         // Paper start - Optional per player mob spawns
+         NaturalSpawner.SpawnState spawnCookie;
++        // Canvas start - optimize natural spawning
++        final boolean mobSpawning = this.level.getGameRules().get(GameRules.SPAWN_MOBS) && !this.level.getLocalPlayers().isEmpty();
++        if (!(this.spawnFriendlies || this.spawnEnemies) || !mobSpawning) {
++            spawnCookie = null;
++        } else
++        // Canvas end - optimize natural spawning
+         if ((this.spawnFriendlies || this.spawnEnemies) && this.level.paperConfig().entities.spawning.perPlayerMobSpawns) { // don't count mobs when animals and monsters are disabled
+             // re-set mob counts
+             for (ServerPlayer player : this.level.getLocalPlayers()) { // Folia - region threading
+@@ -548,22 +_,23 @@
                  }
                  // Paper end - per player mob spawning backoff
              }
@@ -31,7 +44,14 @@
          }
          // Paper end - Optional per player mob spawns
          regionizedWorldData.lastSpawnState = spawnCookie; // Folia - region threading
-@@ -564,6 +_,7 @@
+         boolean doMobSpawning = this.level.getGameRules().get(GameRules.SPAWN_MOBS) && !this.level.getLocalPlayers().isEmpty(); // CraftBukkit // Folia - region threading
+         int tickSpeed = this.level.getGameRules().get(GameRules.RANDOM_TICK_SPEED);
+         List<MobCategory> spawningCategories;
+-        if (doMobSpawning && (this.spawnEnemies || this.spawnFriendlies)) { // Paper
++        if (mobSpawning && (this.spawnEnemies || this.spawnFriendlies)) { // Paper // Canvas - optimize natural spawning
+             // Paper start - PlayerNaturallySpawnCreaturesEvent
+             for (ServerPlayer player : this.level.getLocalPlayers()) { // Folia - region threading
+                 int chunkRange = Math.min(level.spigotConfig.mobSpawnRange, player.getBukkitEntity().getViewDistance());
                  chunkRange = Math.min(chunkRange, 8);
                  player.playerNaturallySpawnedEvent = new com.destroystokyo.paper.event.entity.PlayerNaturallySpawnCreaturesEvent(player.getBukkitEntity(), (byte) chunkRange);
                  player.playerNaturallySpawnedEvent.callEvent();
