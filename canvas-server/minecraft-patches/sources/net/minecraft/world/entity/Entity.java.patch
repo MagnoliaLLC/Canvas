@@ -121,3 +121,11 @@
          if (level instanceof ServerLevel serverLevel) {
              RandomSource random = level.getRandom();
  
+@@ -6019,6 +_,7 @@
+ 
+     public void placePortalTicket(final BlockPos ticketPosition) {
+         if (this.level() instanceof ServerLevel serverLevel) {
++            if (!(this instanceof Player) && !this.moonrise$hasAnyPlayerPassengers() && serverLevel.moonrise$getNearbyPlayers().getPlayers(ticketPosition, ca.spottedleaf.moonrise.common.misc.NearbyPlayers.NearbyMapType.VIEW_DISTANCE) == null) return; // Canvas - optimize portal destinations
+             serverLevel.getChunkSource().addTicketWithRadius(TicketType.PORTAL, ChunkPos.containing(ticketPosition), 3);
+         }
+     }
