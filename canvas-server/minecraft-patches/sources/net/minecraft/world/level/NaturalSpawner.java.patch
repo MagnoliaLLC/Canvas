@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/NaturalSpawner.java
 +++ b/net/minecraft/world/level/NaturalSpawner.java
-@@ -67,56 +_,96 @@
+@@ -67,57 +_,136 @@
          final int spawnableChunkCount, final ServerLevel level, final NaturalSpawner.ChunkGetter chunkGetter, final LocalMobCapCalculator localMobCapCalculator
      ) {
          // Paper start - Optional per player mob spawns
@@ -79,7 +79,7 @@
 +
 +                // Note: this should be safe, this only effects the rate of spawning, and specifically for a
 +                // few mobs for a few nether biomes, so farms shouldn't be impacted
-+                if (!perPlayerMobSpawning || !shouldSkipBecauseOfLimit) {
++                if ((!perPlayerMobSpawning || !shouldSkipBecauseOfLimit) && level.canvas$mayHaveSpawnCost(entity.getType())) { // Canvas - skip spawn cost lookups no layer can answer
 +                    // only do this lookup if we aren't using per-player spawns(since we skip above), and
 +                    // if we are doing per-player mob spawning and not over the limit yet
 +                    MobSpawnSettings naturalMobSpawns = level.environmentAttributes().getValue(EnvironmentAttributes.NATURAL_MOB_SPAWNS, pos);
@@ -108,6 +108,11 @@
 -                        // Paper end - Optional per player mob spawns
 -                    });
 -                }
+-            }
+-        }
+-
+-        return new NaturalSpawner.SpawnState(spawnableChunkCount, mobCounts, spawnPotential, localMobCapCalculator);
+-    }
 +                }
 +
 +                // only runs if we are not doing per-player
@@ -121,15 +126,54 @@
 +                    ((ServerLevel) chunk.getLevel()).getChunkSource().chunkMap.updatePlayerMobTypeMap(entity);
 +                }
 +                // Paper end - Optional per player mob spawns
-             }
-         }
++            }
++        }
 +        // Canvas end - optimize natural spawning
- 
--        return new NaturalSpawner.SpawnState(spawnableChunkCount, mobCounts, spawnPotential, localMobCapCalculator);
++
 +        return new NaturalSpawner.SpawnState(spawnableChunkCount, mobCounts, spawnPotential, localMobCapCalculator, worldData, limits); // Canvas - optimize natural spawning
-     }
++    }
++
++    // Canvas start - skip spawn cost lookups no layer can answer
++    public static java.util.function.Predicate<EntityType<?>> canvas$spawnCostTypes(
++        final net.minecraft.world.level.dimension.DimensionType dimensionType, final net.minecraft.core.HolderLookup<Biome> biomes
++    ) {
++        for (final Holder<net.minecraft.world.timeline.Timeline> timeline : dimensionType.timelines()) {
++            if (timeline.value().attributes().contains(EnvironmentAttributes.NATURAL_MOB_SPAWNS)) {
++                return type -> true;
++            }
++        }
++
++        final java.util.Set<EntityType<?>> types = new java.util.HashSet<>(EnvironmentAttributes.NATURAL_MOB_SPAWNS.defaultValue().allSpawnCosts().keySet());
++        if (!canvas$addSpawnCostTypes(types, dimensionType.attributes())) {
++            return type -> true;
++        }
++
++        for (final Holder<Biome> biome : biomes.listElements().toList()) {
++            if (!canvas$addSpawnCostTypes(types, biome.value().getAttributes())) {
++                return type -> true;
++            }
++        }
++
++        return java.util.Set.copyOf(types)::contains;
++    }
++
++    private static boolean canvas$addSpawnCostTypes(final java.util.Set<EntityType<?>> types, final net.minecraft.world.attribute.EnvironmentAttributeMap attributes) {
++        final net.minecraft.world.attribute.EnvironmentAttributeMap.Entry<MobSpawnSettings, ?> entry = attributes.get(EnvironmentAttributes.NATURAL_MOB_SPAWNS);
++        if (entry == null) {
++            return true;
++        }
++
++        if (!(entry.argument() instanceof MobSpawnSettings settings)) {
++            return false;
++        }
++
++        types.addAll(settings.allSpawnCosts().keySet());
++        return true;
++    }
++    // Canvas end - skip spawn cost lookups no layer can answer
  
      public static List<MobCategory> getFilteredSpawningCategories(
+         final NaturalSpawner.SpawnState state, final boolean spawnFriendlies, final boolean spawnEnemies, final boolean spawnPersistent, final ServerLevel level // CraftBukkit - add level/spawnFriendlies
 @@ -151,6 +_,11 @@
      public static void spawnForChunk(
          final ServerLevel level, final LevelChunk chunk, final NaturalSpawner.SpawnState state, final List<MobCategory> spawningCategories
