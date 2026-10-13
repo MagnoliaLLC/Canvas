@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/block/entity/RandomizableContainerBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/RandomizableContainerBlockEntity.java
+@@ -53,7 +_,7 @@
+ 
+     @Override
+     public ItemStack getItem(final int slot) {
+-        if (slot == 0) this.unpackLootTable(null); // Paper - Perf: Optimize Hoppers
++        if (slot == 0 && this.lootTable != null) this.unpackLootTable(null); // Paper - Perf: Optimize Hoppers // Canvas - skip unpacking without a loot table
+         return super.getItem(slot);
+     }
+ 
