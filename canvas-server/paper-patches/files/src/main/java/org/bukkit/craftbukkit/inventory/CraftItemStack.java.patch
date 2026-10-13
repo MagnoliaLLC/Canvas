@@ -1,0 +1,45 @@
+--- a/src/main/java/org/bukkit/craftbukkit/inventory/CraftItemStack.java
++++ b/src/main/java/org/bukkit/craftbukkit/inventory/CraftItemStack.java
+@@ -520,8 +_,40 @@
+ 
+     @Override
+     public boolean hasItemMeta() {
+-        return CraftItemStack.hasItemMeta(this.handle) && !CraftItemFactory.instance().equals(this.getItemMeta(), null);
+-    }
++        // Canvas start - answer from the component patch where it settles the question
++        if (this.handle == null) {
++            return false;
++        }
++
++        final DataComponentPatch patch = this.handle.getComponentsPatch();
++        if (patch.isEmpty()) {
++            return false;
++        }
++
++        for (final it.unimi.dsi.fastutil.objects.Reference2ObjectMap.Entry<DataComponentType<?>, Object> entry : patch.map.reference2ObjectEntrySet()) {
++            if (CraftItemStack.canvas$alwaysMeta(entry.getKey(), entry.getValue())) {
++                return true;
++            }
++        }
++
++        return !CraftItemFactory.instance().equals(this.getItemMeta(), null);
++        // Canvas end - answer from the component patch where it settles the question
++    }
++
++    // Canvas start - answer from the component patch where it settles the question
++    private static final Set<DataComponentType<?>> CANVAS_ALWAYS_META = Set.of(
++        DataComponents.DAMAGE, DataComponents.MAX_DAMAGE, DataComponents.CUSTOM_NAME, DataComponents.ITEM_NAME, DataComponents.LORE,
++        DataComponents.ITEM_MODEL, DataComponents.CUSTOM_MODEL_DATA, DataComponents.UNBREAKABLE, DataComponents.RARITY,
++        DataComponents.MAX_STACK_SIZE, DataComponents.ENCHANTMENT_GLINT_OVERRIDE, DataComponents.TOOLTIP_STYLE
++    );
++
++    private static boolean canvas$alwaysMeta(final DataComponentType<?> type, final Object value) {
++        return net.minecraft.core.component.Removed.isRemoved(value)
++            || CANVAS_ALWAYS_META.contains(type)
++            || (type == DataComponents.ENCHANTMENTS && !((net.minecraft.world.item.enchantment.ItemEnchantments) value).isEmpty())
++            || (type == DataComponents.REPAIR_COST && (Integer) value > 0);
++    }
++    // Canvas end - answer from the component patch where it settles the question
+ 
+     static boolean hasItemMeta(net.minecraft.world.item.ItemStack item) {
+         return !(item == null || item.getComponentsPatch().isEmpty());
