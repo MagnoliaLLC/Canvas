@@ -14,6 +14,26 @@
      }
  
      // Folia start - region threading
+@@ -859,6 +_,19 @@
+         return this.environmentAttributes;
+     }
+ 
++    // Canvas start - skip spawn cost lookups no layer can answer
++    private java.util.function.@Nullable Predicate<net.minecraft.world.entity.EntityType<?>> canvas$spawnCostTypes;
++
++    public boolean canvas$mayHaveSpawnCost(final net.minecraft.world.entity.EntityType<?> type) {
++        java.util.function.Predicate<net.minecraft.world.entity.EntityType<?>> spawnCostTypes = this.canvas$spawnCostTypes;
++        if (spawnCostTypes == null) {
++            spawnCostTypes = net.minecraft.world.level.NaturalSpawner.canvas$spawnCostTypes(this.dimensionType(), this.registryAccess().lookupOrThrow(Registries.BIOME));
++            this.canvas$spawnCostTypes = spawnCostTypes;
++        }
++        return spawnCostTypes.test(type);
++    }
++    // Canvas end - skip spawn cost lookups no layer can answer
++
+     @Deprecated
+     @VisibleForTesting
+     public EnvironmentAttributeSystem setEnvironmentAttributes(final EnvironmentAttributeSystem environmentAttributes) {
 @@ -1064,71 +_,84 @@
      // Paper start - optimise random ticking
      private final io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource simpleRandom = io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource.INSTANCE; // Folia - region threading
