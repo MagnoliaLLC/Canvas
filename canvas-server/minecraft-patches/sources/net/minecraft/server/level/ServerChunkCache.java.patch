@@ -19,20 +19,31 @@
  
              // call mid-tick tasks for chunk system
              if ((i & 7) == 0) {
-@@ -533,6 +_,12 @@
+@@ -533,6 +_,23 @@
          int chunkCount = this.distanceManager.getNaturalSpawnChunkCount();
          // Paper start - Optional per player mob spawns
          NaturalSpawner.SpawnState spawnCookie;
 +        // Canvas start - optimize natural spawning
++        boolean spawnStateSkipped = false;
 +        final boolean mobSpawning = this.level.getGameRules().get(GameRules.SPAWN_MOBS) && !this.level.getLocalPlayers().isEmpty();
 +        if (!(this.spawnFriendlies || this.spawnEnemies) || !mobSpawning) {
 +            spawnCookie = null;
++        } else if (!NaturalSpawner.canvas$anySpawnDue(this.level, this.spawnFriendlies, this.spawnEnemies)) {
++            spawnStateSkipped = true;
++            spawnCookie = null;
++            if (this.level.paperConfig().entities.spawning.perPlayerMobSpawns) {
++                for (final ServerPlayer player : this.level.getLocalPlayers()) {
++                    for (int j = 0; j < ServerPlayer.MOBCATEGORY_TOTAL_ENUMS; j++) {
++                        player.mobBackoffCounts[j] = Math.max(0, player.mobBackoffCounts[j] - 1);
++                    }
++                }
++            }
 +        } else
 +        // Canvas end - optimize natural spawning
          if ((this.spawnFriendlies || this.spawnEnemies) && this.level.paperConfig().entities.spawning.perPlayerMobSpawns) { // don't count mobs when animals and monsters are disabled
              // re-set mob counts
              for (ServerPlayer player : this.level.getLocalPlayers()) { // Folia - region threading
-@@ -548,22 +_,23 @@
+@@ -548,26 +_,42 @@
                  }
                  // Paper end - per player mob spawning backoff
              }
@@ -43,7 +54,8 @@
 +            spawnCookie = NaturalSpawner.createState(chunkCount, this.level, this::getFullChunk, !this.level.paperConfig().entities.spawning.perPlayerMobSpawns ? new LocalMobCapCalculator(this.chunkMap) : null, false, regionizedWorldData); // Canvas - optimize natural spawning
          }
          // Paper end - Optional per player mob spawns
-         regionizedWorldData.lastSpawnState = spawnCookie; // Folia - region threading
+-        regionizedWorldData.lastSpawnState = spawnCookie; // Folia - region threading
++        if (!spawnStateSkipped) regionizedWorldData.lastSpawnState = spawnCookie; // Folia - region threading // Canvas - optimize natural spawning
          boolean doMobSpawning = this.level.getGameRules().get(GameRules.SPAWN_MOBS) && !this.level.getLocalPlayers().isEmpty(); // CraftBukkit // Folia - region threading
          int tickSpeed = this.level.getGameRules().get(GameRules.RANDOM_TICK_SPEED);
          List<MobCategory> spawningCategories;
@@ -59,6 +71,26 @@
              }
              // Paper end - PlayerNaturallySpawnCreaturesEvent
              boolean spawnPersistent = this.level.ticksPerSpawnCategory.getLong(org.bukkit.entity.SpawnCategory.ANIMAL) != 0L && this.level.getRedstoneGameTime() % this.level.ticksPerSpawnCategory.getLong(org.bukkit.entity.SpawnCategory.ANIMAL) == 0L; // CraftBukkit // Folia - region threading
+-            spawningCategories = NaturalSpawner.getFilteredSpawningCategories(spawnCookie, this.spawnFriendlies, this.spawnEnemies, spawnPersistent, this.level); // CraftBukkit
++            // Canvas start - optimize natural spawning
++            if (spawnStateSkipped && NaturalSpawner.canvas$anySpawnDue(this.level, this.spawnFriendlies, this.spawnEnemies)) {
++                // a spawn event listener changed the settings, count now
++                spawnStateSkipped = false;
++                if (this.level.paperConfig().entities.spawning.perPlayerMobSpawns) {
++                    for (final ServerPlayer player : this.level.getLocalPlayers()) {
++                        java.util.Arrays.fill(player.mobCounts, 0);
++                    }
++                    spawnCookie = NaturalSpawner.createState(chunkCount, this.level, this::getFullChunk, null, true, regionizedWorldData);
++                } else {
++                    spawnCookie = NaturalSpawner.createState(chunkCount, this.level, this::getFullChunk, new LocalMobCapCalculator(this.chunkMap), false, regionizedWorldData);
++                }
++                regionizedWorldData.lastSpawnState = spawnCookie;
++            }
++            spawningCategories = spawnStateSkipped ? List.of() : NaturalSpawner.getFilteredSpawningCategories(spawnCookie, this.spawnFriendlies, this.spawnEnemies, spawnPersistent, this.level); // CraftBukkit
++            // Canvas end - optimize natural spawning
+         } else {
+             spawningCategories = List.of();
+         }
 @@ -575,16 +_,21 @@
          List<LevelChunk> spawningChunks = regionizedWorldData.temporaryChunkTickList; // Folia - region threading
  
