@@ -34,7 +34,7 @@
      @Deprecated
      @VisibleForTesting
      public EnvironmentAttributeSystem setEnvironmentAttributes(final EnvironmentAttributeSystem environmentAttributes) {
-@@ -1064,71 +_,84 @@
+@@ -1064,71 +_,82 @@
      // Paper start - optimise random ticking
      private final io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource simpleRandom = io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource.INSTANCE; // Folia - region threading
  
@@ -55,14 +55,18 @@
  
 +        final net.minecraft.util.RandomSource random = worldData.getCanvasWorldData().simpleUnsafeLocalRandom;
 +
++        final short[] tickingBlockCounts = chunk.canvas$getTickingBlockCounts();
          for (int sectionIndex = 0, sectionsLen = sections.length; sectionIndex < sectionsLen; sectionIndex++) {
 -            final int offsetY = (sectionIndex + minSection) << 4;
++            final int tickingBlocks = tickingBlockCounts[sectionIndex];
++            if (tickingBlocks == 0) continue;
++
              final LevelChunkSection section = sections[sectionIndex];
 -            final net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.world.level.block.state.BlockState> states = section.getStates();
-             if (!section.isRandomlyTickingBlocks()) {
-                 continue;
-             }
- 
+-            if (!section.isRandomlyTickingBlocks()) {
+-                continue;
+-            }
+-
 -            final ca.spottedleaf.moonrise.common.list.ShortList tickList = ((ca.spottedleaf.moonrise.patches.block_counting.BlockCountingChunkSection)section).moonrise$getTickingBlockList();
 -
 -            for (int i = 0; i < tickSpeed; ++i) {
@@ -74,8 +78,6 @@
 -                    continue;
 +            final var states = section.getStates();
 +            final var tickList = ((ca.spottedleaf.moonrise.patches.block_counting.BlockCountingChunkSection)section).moonrise$getTickingBlockList();
-+            final int tickingBlocks = tickList.size();
-+            if (tickingBlocks == 0) continue;
 +
 +            final int offsetY = (sectionIndex + minSection) << 4;
 +
