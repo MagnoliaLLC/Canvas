@@ -113,7 +113,7 @@
                  if (this.level.paperConfig().collisions.onlyPlayersCollide && !(entity instanceof ServerPlayer || this instanceof ServerPlayer)) return; // Paper - Collision option for requiring a player participant
                  // Paper start - Add EntityCollideWithEntity Event
                  if (io.papermc.paper.event.entity.EntityCollideWithEntityEvent.getHandlerList().getRegisteredListeners().length != 0 &&
-@@ -4070,6 +_,7 @@
+@@ -4071,6 +_,7 @@
      }
  
      protected static void sendBubbleColumnParticles(final Level level, final BlockPos pos) {
@@ -121,7 +121,7 @@
          if (level instanceof ServerLevel serverLevel) {
              RandomSource random = level.getRandom();
  
-@@ -6019,6 +_,7 @@
+@@ -6032,6 +_,7 @@
  
      public void placePortalTicket(final BlockPos ticketPosition) {
          if (this.level() instanceof ServerLevel serverLevel) {
