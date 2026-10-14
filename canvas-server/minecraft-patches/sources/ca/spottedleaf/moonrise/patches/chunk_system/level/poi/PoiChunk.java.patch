@@ -1,0 +1,72 @@
+--- a/ca/spottedleaf/moonrise/patches/chunk_system/level/poi/PoiChunk.java
++++ b/ca/spottedleaf/moonrise/patches/chunk_system/level/poi/PoiChunk.java
+@@ -45,7 +_,45 @@
+         if (this.sections.length != (maxSection - minSection + 1)) {
+             throw new IllegalStateException("Incorrect length used, expected " + (maxSection - minSection + 1) + ", got " + this.sections.length);
+         }
+-    }
++        // Canvas start - index point of interest types
++        for (final PoiSection section : sections) {
++            if (section != null) {
++                section.canvas$setColumn(this);
++            }
++        }
++        // Canvas end - index point of interest types
++    }
++
++    // Canvas start - index point of interest types
++    private long canvas$types;
++    private long canvas$typesWithSpace;
++    private long canvas$typesOccupied;
++
++    public long canvas$types(final PoiManager.Occupancy occupancy) {
++        return switch (occupancy) {
++            case HAS_SPACE -> this.canvas$typesWithSpace;
++            case IS_OCCUPIED -> this.canvas$typesOccupied;
++            case ANY -> this.canvas$types;
++        };
++    }
++
++    public void canvas$addTypes(final long types, final long withSpace, final long occupied) {
++        this.canvas$types |= types;
++        this.canvas$typesWithSpace |= withSpace;
++        this.canvas$typesOccupied |= occupied;
++    }
++
++    public void canvas$refreshTypes() {
++        this.canvas$types = 0L;
++        this.canvas$typesWithSpace = 0L;
++        this.canvas$typesOccupied = 0L;
++        for (final PoiSection section : this.sections) {
++            if (section != null) {
++                this.canvas$addTypes(section.canvas$types(PoiManager.Occupancy.ANY), section.canvas$types(PoiManager.Occupancy.HAS_SPACE), section.canvas$types(PoiManager.Occupancy.IS_OCCUPIED));
++            }
++        }
++    }
++    // Canvas end - index point of interest types
+ 
+     public void load() {
+         TickThread.ensureTickThread(this.world, this.chunkX, this.chunkZ, "Loading in poi chunk off-main");
+@@ -81,9 +_,11 @@
+             final PoiManager poiManager = this.world.getPoiManager();
+             final long key = CoordinateUtils.getChunkSectionKey(this.chunkX, chunkY, this.chunkZ);
+ 
+-            return this.sections[idx] = new PoiSection(() -> {
+-                poiManager.setDirty(key);
+-            });
++            // Canvas start - index point of interest types
++            final PoiSection created = this.sections[idx] = new PoiSection(() -> poiManager.setDirty(key));
++            created.canvas$setColumn(this);
++            return created;
++            // Canvas end - index point of interest types
+         }
+         throw new IllegalArgumentException("chunkY is out of bounds, chunkY: " + chunkY + " outside [" + this.minSection + "," + this.maxSection + "]");
+     }
+@@ -195,6 +_,7 @@
+ 
+             readAnything = true;
+             ret.sections[sectionY - ret.minSection] = deserialized;
++            deserialized.canvas$setColumn(ret); // Canvas - index point of interest types
+         }
+ 
+         ret.loaded = !readAnything; // Set loaded to false if we read anything to ensure proper callbacks to PoiManager are made on #load
