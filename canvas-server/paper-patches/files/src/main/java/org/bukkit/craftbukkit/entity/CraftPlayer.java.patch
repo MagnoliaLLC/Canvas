@@ -1,6 +1,6 @@
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-@@ -2179,8 +_,14 @@
+@@ -2179,8 +_,20 @@
  
      @Override
      public boolean canSee(org.bukkit.entity.Entity entity) {
@@ -10,6 +10,12 @@
 +    }
 +    // Leaf start - optimize canSee checks
 +
++    // Canvas start - read tracker visibility from the entity
++    public boolean canvas$canSeeChunkMapUpdate(final net.minecraft.world.entity.Entity entity) {
++        return entity.visibleByDefault ^ (!this.invertedVisibilityEntities.isEmpty() && this.invertedVisibilityEntities.containsKey(entity.getUUID()));
++    }
++    // Canvas end - read tracker visibility from the entity
++
 +    public boolean canSeeChunkMapUpdatePlayer(org.bukkit.entity.Entity entity) {
 +        return entity.isVisibleByDefault() ^ (!invertedVisibilityEntities.isEmpty() && this.invertedVisibilityEntities.containsKey(entity.getUniqueId())); // SPIGOT-7312: Can always see self // SparklyPaper - optimize canSee checks
 +    }
@@ -17,7 +23,7 @@
  
      public boolean canSeePlayer(UUID uuid) {
          org.bukkit.entity.Entity entity = this.getServer().getPlayer(uuid);
-@@ -2535,6 +_,12 @@
+@@ -2539,6 +_,12 @@
      public void disconnect() {
          this.conversationTracker.abandonAllConversations();
          this.perm.clearPermissions();
