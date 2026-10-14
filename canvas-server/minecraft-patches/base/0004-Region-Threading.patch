@@ -27929,7 +27929,7 @@ index f1c57bc4310784999784d77678ea88912d6e41db..88b1130f5fdd78c53978e497922b3d69
                  && position.closerThan(input.position(), radius)
                  && (
 diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
-index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d274f2b701 100644
+index f4d8b5287fb34d8ef37a233f58647ab979f69269..b85595399ff5366d4f4e91e2615cc34751eb9733 100644
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
 @@ -172,7 +172,7 @@ public abstract class Entity
@@ -28190,15 +28190,17 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
              // CraftBukkit start
              if (entityToRide.getBukkitEntity() instanceof org.bukkit.entity.Vehicle vehicle && this instanceof LivingEntity entered) {
                  org.bukkit.event.vehicle.VehicleEnterEvent event = new org.bukkit.event.vehicle.VehicleEnterEvent(vehicle, entered.getBukkitEntity());
-@@ -3403,6 +3520,7 @@ public abstract class Entity
+@@ -3403,15 +3520,17 @@ public abstract class Entity
                  return false;
              }
              // CraftBukkit end
 +            } // Folia - region threading - suppress entire event logic during worldgen
              if (this.isPassenger()) {
                  this.stopRiding();
++                if (this.isPassenger()) return false; // Canvas - region threading
              }
-@@ -3411,7 +3529,7 @@ public abstract class Entity
+ 
+             this.setPose(Pose.STANDING);
              this.vehicle = entityToRide;
              this.vehicle.addPassenger(this);
              if (sendEventAndTriggers) {
@@ -28207,7 +28209,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
                  entityToRide.getIndirectPassengersStream()
                      .filter(e -> e instanceof ServerPlayer)
                      .forEach(player -> CriteriaTriggers.START_RIDING_TRIGGER.trigger((ServerPlayer)player));
-@@ -3428,8 +3546,14 @@ public abstract class Entity
+@@ -3428,8 +3547,14 @@ public abstract class Entity
      }
  
      public void ejectPassengers() {
@@ -28223,7 +28225,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
          }
      }
  
-@@ -3452,7 +3576,7 @@ public abstract class Entity
+@@ -3452,7 +3577,7 @@ public abstract class Entity
              if (!oldVehicle.removePassenger(this, suppressCancellation)) this.vehicle = oldVehicle; // CraftBukkit // Paper - Force entity dismount during teleportation
              Entity.RemovalReason removalReason = this.getRemovalReason();
              if (removalReason == null || removalReason.shouldDestroy()) {
@@ -28232,7 +28234,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
              }
          }
      }
-@@ -3497,6 +3621,7 @@ public abstract class Entity
+@@ -3497,6 +3622,7 @@ public abstract class Entity
              throw new IllegalStateException("Use x.stopRiding(y), not y.removePassenger(x)");
          }
          // CraftBukkit start
@@ -28240,7 +28242,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
          org.bukkit.craftbukkit.entity.CraftEntity craft = (org.bukkit.craftbukkit.entity.CraftEntity) passenger.getBukkitEntity().getVehicle();
          Entity orig = craft == null ? null : craft.getHandle();
          if (this.getBukkitEntity() instanceof org.bukkit.entity.Vehicle vehicle && passenger instanceof LivingEntity exited) {
-@@ -3523,6 +3648,7 @@ public abstract class Entity
+@@ -3523,6 +3649,7 @@ public abstract class Entity
              return false;
          }
          // CraftBukkit end
@@ -28248,7 +28250,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
          if (this.passengers.size() == 1 && this.passengers.get(0) == passenger) {
              this.passengers = ImmutableList.of();
          } else {
-@@ -3600,6 +3726,15 @@ public abstract class Entity
+@@ -3600,6 +3727,15 @@ public abstract class Entity
          return calculateViewQuaternion(this.getXRot(), this.getYRot());
      }
  
@@ -28264,7 +28266,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
      public Vec3 getHeadLookAngle() {
          return calculateViewVector(this.getXRot(), this.getYHeadRot());
      }
-@@ -3635,28 +3770,23 @@ public abstract class Entity
+@@ -3635,28 +3771,23 @@ public abstract class Entity
          }
      }
  
@@ -28297,7 +28299,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
      }
  
      public int getDimensionChangingDelay() {
-@@ -4141,12 +4271,20 @@ public abstract class Entity
+@@ -4141,12 +4272,20 @@ public abstract class Entity
      }
  
      public void restoreFrom(final Entity oldEntity) {
@@ -28318,7 +28320,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
          // Paper end - Forward CraftEntity in teleport command
          try (ProblemReporter.ScopedCollector reporter = new ProblemReporter.ScopedCollector(this.problemPath(), LOGGER)) {
              TagValueOutput entityData = TagValueOutput.createWithContext(reporter, oldEntity.registryAccess());
-@@ -4158,198 +4296,1713 @@ public abstract class Entity
+@@ -4158,198 +4297,1725 @@ public abstract class Entity
          this.portalProcess = oldEntity.portalProcess;
      }
  
@@ -29914,6 +29916,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
 +            return;
 +        }
 +
++        this.dropPassengersNotRiding();
 +        final List<Entity> indirectPassengers = (List<Entity>)this.getIndirectPassengers();
 +        final List<ChunkPos> positions = new java.util.ArrayList<>(indirectPassengers.size() + 1);
 +
@@ -29984,6 +29987,17 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
 +            org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.UNKNOWN, Entity.TELEPORT_FLAG_LOAD_CHUNK | Entity.TELEPORT_FLAG_TELEPORT_PASSENGERS,
 +            null
 +        );
++    }
++
++    private void dropPassengersNotRiding() {
++        for (final Entity passenger : this.passengers) {
++            if (passenger.getVehicle() != this) {
++                LOGGER.warn("Vehicle {} still listed passenger {} which rides {}, removing it", this, passenger, passenger.getVehicle());
++                this.passengers = this.passengers.stream().filter(p -> p != passenger).collect(ImmutableList.toImmutableList());
++            } else {
++                passenger.dropPassengersNotRiding();
++            }
++        }
 +    }
 +
 +    // Folia & Canvas end - region threading
@@ -30187,7 +30201,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
          this.clearMovementThisTick();
      }
  
-@@ -4370,6 +6023,12 @@ public abstract class Entity
+@@ -4370,6 +6036,12 @@ public abstract class Entity
          }
      }
  
@@ -30200,7 +30214,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
      protected void removeAfterChangingDimensions() {
          this.setRemoved(Entity.RemovalReason.CHANGED_DIMENSION, null); // CraftBukkit - add Bukkit remove cause
          if (this instanceof Leashable leashable && leashable.isLeashed()) { // Paper - only call if it is leashed
-@@ -4714,6 +6373,12 @@ public abstract class Entity
+@@ -4714,6 +6386,12 @@ public abstract class Entity
      }
  
      public void startSeenByPlayer(final ServerPlayer player) {
@@ -30213,7 +30227,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
      }
  
      public void stopSeenByPlayer(final ServerPlayer player) {
-@@ -4723,6 +6388,12 @@ public abstract class Entity
+@@ -4723,6 +6401,12 @@ public abstract class Entity
              new io.papermc.paper.event.player.PlayerUntrackEntityEvent(player.getBukkitEntity(), this.getBukkitEntity()).callEvent();
          }
          // Paper end - entity tracking events
@@ -30226,7 +30240,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
      }
  
      public float rotate(final Rotation rotation) {
-@@ -5130,7 +6801,10 @@ public abstract class Entity
+@@ -5130,7 +6814,10 @@ public abstract class Entity
              return;
          }
          // Paper end - Block invalid positions and bounding box
@@ -30238,7 +30252,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
              this.position = new Vec3(x, y, z);
              int fx = Mth.floor(x);
              int fy = Mth.floor(y);
-@@ -5161,7 +6835,7 @@ public abstract class Entity
+@@ -5161,7 +6848,7 @@ public abstract class Entity
          }
          // Paper start - Block invalid positions and bounding box; don't allow desync of pos and AABB
          // hanging has its own special logic
@@ -30247,7 +30261,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
              this.setBoundingBox(this.makeBoundingBox());
          }
          // Paper end - Block invalid positions and bounding box
-@@ -5236,6 +6910,7 @@ public abstract class Entity
+@@ -5236,6 +6923,7 @@ public abstract class Entity
              Util.logAndPauseIfInIde("Invalid entity rotation: " + yRot + ", discarding.");
          } else {
              this.yRot = yRot;
@@ -30255,7 +30269,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
          }
      }
  
-@@ -5248,6 +6923,7 @@ public abstract class Entity
+@@ -5248,6 +6936,7 @@ public abstract class Entity
              Util.logAndPauseIfInIde("Invalid entity rotation: " + xRot + ", discarding.");
          } else {
              this.xRot = Math.clamp(xRot % 360.0F, -90.0F, 90.0F);
@@ -30263,7 +30277,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
          }
      }
  
-@@ -5280,6 +6956,12 @@ public abstract class Entity
+@@ -5280,6 +6969,12 @@ public abstract class Entity
          return this.removalReason != null;
      }
  
@@ -30276,7 +30290,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
      public Entity.@Nullable RemovalReason getRemovalReason() {
          return this.removalReason;
      }
-@@ -5294,6 +6976,7 @@ public abstract class Entity
+@@ -5294,6 +6989,7 @@ public abstract class Entity
          // Paper end - rewrite chunk system
          org.bukkit.craftbukkit.event.CraftEventFactory.callEntityRemoveEvent(this, cause); // CraftBukkit
          final boolean alreadyRemoved = this.removalReason != null; // Paper - Folia schedulers
@@ -30284,7 +30298,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
          if (this.removalReason == null) {
              this.removalReason = reason;
              this.removeEventCause = cause; // Paper
-@@ -5322,6 +7005,10 @@ public abstract class Entity
+@@ -5322,6 +7018,10 @@ public abstract class Entity
          // Paper end
      }
  
@@ -30295,7 +30309,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..0871e4eb2f1ff35f3853a5cf76b032d2
      // Paper start - Folia schedulers
      /**
       * Invoked only when the entity is truly removed from the server, never to be added to any world.
-@@ -5333,7 +7020,7 @@ public abstract class Entity
+@@ -5333,7 +7033,7 @@ public abstract class Entity
      // Paper end - Folia schedulers
      // Paper start - optimise Folia entity scheduler
      public final void registerScheduler() {
