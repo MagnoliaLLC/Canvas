@@ -1,0 +1,37 @@
+--- a/net/minecraft/world/entity/ai/village/poi/PoiRecord.java
++++ b/net/minecraft/world/entity/ai/village/poi/PoiRecord.java
+@@ -14,6 +_,7 @@
+     private final Holder<PoiType> poiType;
+     private int freeTickets;
+     private final Runnable setDirty;
++    @org.jspecify.annotations.Nullable PoiSection canvas$section; // Canvas - index point of interest types
+ 
+     private PoiRecord(final BlockPos pos, final Holder<PoiType> poiType, final int freeTickets, final Runnable setDirty) {
+         this.pos = pos.immutable();
+@@ -42,6 +_,7 @@
+         }
+ 
+         this.freeTickets--;
++        this.canvas$refreshSection(); // Canvas - index point of interest types
+         this.setDirty.run();
+         return true;
+     }
+@@ -52,9 +_,18 @@
+         }
+ 
+         this.freeTickets++;
++        this.canvas$refreshSection(); // Canvas - index point of interest types
+         this.setDirty.run();
+         return true;
+     }
++
++    // Canvas start - index point of interest types
++    private void canvas$refreshSection() {
++        if (this.canvas$section != null) {
++            this.canvas$section.canvas$refreshTypes();
++        }
++    }
++    // Canvas end - index point of interest types
+ 
+     public boolean hasSpace() {
+         return this.freeTickets > 0;

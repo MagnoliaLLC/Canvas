@@ -1,0 +1,96 @@
+--- a/net/minecraft/world/entity/ai/village/poi/PoiSection.java
++++ b/net/minecraft/world/entity/ai/village/poi/PoiSection.java
+@@ -46,6 +_,66 @@
+     }
+     // Paper end - rewrite chunk system
+ 
++    // Canvas start - index point of interest types
++    private ca.spottedleaf.moonrise.patches.chunk_system.level.poi.@Nullable PoiChunk canvas$column;
++    private long canvas$types;
++    private long canvas$typesWithSpace;
++    private long canvas$typesOccupied;
++
++    public long canvas$types(final PoiManager.Occupancy occupancy) {
++        return switch (occupancy) {
++            case HAS_SPACE -> this.canvas$typesWithSpace;
++            case IS_OCCUPIED -> this.canvas$typesOccupied;
++            case ANY -> this.canvas$types;
++        };
++    }
++
++    public void canvas$setColumn(final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk column) {
++        this.canvas$column = column;
++        column.canvas$addTypes(this.canvas$types, this.canvas$typesWithSpace, this.canvas$typesOccupied);
++    }
++
++    private void canvas$addTypes(final PoiRecord record) {
++        final long bit = io.canvasmc.canvas.util.PoiTypeMasks.bit(record.getPoiType());
++        final long withSpace = record.hasSpace() ? bit : 0L;
++        final long occupied = record.isOccupied() ? bit : 0L;
++
++        this.canvas$types |= bit;
++        this.canvas$typesWithSpace |= withSpace;
++        this.canvas$typesOccupied |= occupied;
++        if (this.canvas$column != null) {
++            this.canvas$column.canvas$addTypes(bit, withSpace, occupied);
++        }
++    }
++
++    void canvas$refreshTypes() {
++        long types = 0L;
++        long withSpace = 0L;
++        long occupied = 0L;
++
++        for (final Map.Entry<Holder<PoiType>, Set<PoiRecord>> entry : this.byType.entrySet()) {
++            if (entry.getValue().isEmpty()) {
++                continue;
++            }
++
++            final long bit = io.canvasmc.canvas.util.PoiTypeMasks.bit(entry.getKey());
++
++            types |= bit;
++            for (final PoiRecord record : entry.getValue()) {
++                withSpace |= record.hasSpace() ? bit : 0L;
++                occupied |= record.isOccupied() ? bit : 0L;
++            }
++        }
++
++        this.canvas$types = types;
++        this.canvas$typesWithSpace = withSpace;
++        this.canvas$typesOccupied = occupied;
++        if (this.canvas$column != null) {
++            this.canvas$column.canvas$refreshTypes();
++        }
++    }
++    // Canvas end - index point of interest types
++
+     public PoiSection(final Runnable setDirty) {
+         this(setDirty, true, ImmutableList.of());
+     }
+@@ -90,6 +_,10 @@
+ 
+         this.records.put(key, record);
+         this.byType.computeIfAbsent(poiType, k -> Sets.newHashSet()).add(record);
++        // Canvas start - index point of interest types
++        record.canvas$section = this;
++        this.canvas$addTypes(record);
++        // Canvas end - index point of interest types
+         return true;
+     }
+ 
+@@ -99,6 +_,7 @@
+             LOGGER.error("POI data mismatch: never registered at {}", pos);
+         } else {
+             this.byType.get(poiRecord.getPoiType()).remove(poiRecord);
++            this.canvas$refreshTypes(); // Canvas - index point of interest types
+             LOGGER.debug("Removed POI of type {} @ {}", LogUtils.defer(poiRecord::getPoiType), LogUtils.defer(poiRecord::getPos));
+             this.setDirty.run();
+         }
+@@ -154,6 +_,7 @@
+     private void clear() {
+         this.records.clear();
+         this.byType.clear();
++        this.canvas$refreshTypes(); // Canvas - index point of interest types
+     }
+ 
+     public boolean isValid() {
