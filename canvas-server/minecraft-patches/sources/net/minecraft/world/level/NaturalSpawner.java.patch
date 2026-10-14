@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/NaturalSpawner.java
 +++ b/net/minecraft/world/level/NaturalSpawner.java
-@@ -67,57 +_,136 @@
+@@ -67,57 +_,158 @@
          final int spawnableChunkCount, final ServerLevel level, final NaturalSpawner.ChunkGetter chunkGetter, final LocalMobCapCalculator localMobCapCalculator
      ) {
          // Paper start - Optional per player mob spawns
@@ -171,6 +171,28 @@
 +        return true;
 +    }
 +    // Canvas end - skip spawn cost lookups no layer can answer
++
++    // Canvas start - skip mob cap counting on ticks where nothing can spawn
++    public static boolean canvas$anySpawnDue(final ServerLevel level, final boolean spawnFriendlies, final boolean spawnEnemies) {
++        final long animalTicks = level.ticksPerSpawnCategory.getLong(org.bukkit.entity.SpawnCategory.ANIMAL);
++        final boolean spawnPersistent = animalTicks != 0L && level.getRedstoneGameTime() % animalTicks == 0L;
++        for (final MobCategory mobCategory : SPAWNING_CATEGORIES) {
++            boolean spawnThisTick = true;
++            int limit = mobCategory.getMaxInstancesPerChunk();
++            final org.bukkit.entity.SpawnCategory spawnCategory = org.bukkit.craftbukkit.util.CraftSpawnCategory.toBukkit(mobCategory);
++            if (org.bukkit.craftbukkit.util.CraftSpawnCategory.isValidForLimits(spawnCategory)) {
++                spawnThisTick = level.ticksPerSpawnCategory.getLong(spawnCategory) != 0 && level.getRedstoneGameTime() % level.ticksPerSpawnCategory.getLong(spawnCategory) == 0;
++                limit = level.getWorld().getSpawnLimit(spawnCategory);
++            }
++
++            if (spawnThisTick && limit != 0 && (spawnFriendlies || !mobCategory.isFriendly()) && (spawnEnemies || mobCategory.isFriendly()) && (spawnPersistent || !mobCategory.isPersistent())) {
++                return true;
++            }
++        }
++
++        return false;
++    }
++    // Canvas end - skip mob cap counting on ticks where nothing can spawn
  
      public static List<MobCategory> getFilteredSpawningCategories(
          final NaturalSpawner.SpawnState state, final boolean spawnFriendlies, final boolean spawnEnemies, final boolean spawnPersistent, final ServerLevel level // CraftBukkit - add level/spawnFriendlies
