@@ -120,6 +120,18 @@
          boolean isEmpty = section.hasOnlyAir();
          if (wasEmpty != isEmpty) {
              this.level.getChunkSource().getLightEngine().updateSectionStatus(pos, isEmpty);
+@@ -447,6 +_,11 @@
+                 blockEntity.setBlockState(state);
+                 this.updateBlockEntityTicker(blockEntity);
+             }
++            // Canvas start - keep the world block state on ticking block entities
++            if (blockEntity != null) {
++                blockEntity.canvas$worldState = section.getBlockState(localX, localY, localZ);
++            }
++            // Canvas end - keep the world block state on ticking block entities
+         }
+ 
+         this.markUnsaved();
 @@ -472,7 +_,7 @@
          // CraftBukkit start
          BlockEntity blockEntity = this.level.getCurrentWorldData().capturedBlockEntities.get(pos); // Folia - region threading
@@ -138,8 +150,11 @@
              return null;
          }
  
-@@ -553,7 +_,7 @@
+@@ -551,9 +_,10 @@
+                 blockEntity.setBlockState(blockState);
+             }
  
++            blockEntity.canvas$worldState = blockState; // Canvas - keep the world block state on ticking block entities
              blockEntity.setLevel(this.level);
              blockEntity.clearRemoved();
 -            BlockEntity previousEntry = this.blockEntities.put(pos.immutable(), blockEntity);
@@ -318,15 +333,17 @@
  
          // Folia start - region threading
          @Override
-@@ -955,10 +_,10 @@
+@@ -955,10 +_,11 @@
          public void tick() {
              if (!this.blockEntity.isRemoved() && this.blockEntity.hasLevel()) {
                  BlockPos pos = this.blockEntity.getBlockPos();
 -                if (LevelChunk.this.isTicking(pos)) {
 +                if (canvas$isTicking()) { // Canvas - optimize block entities
                      try {
-                         BlockState blockState = LevelChunk.this.getBlockState(pos);
+-                        BlockState blockState = LevelChunk.this.getBlockState(pos);
 -                        if (this.blockEntity.getType().isValid(blockState)) {
++                        BlockState blockState = this.blockEntity.canvas$worldState; // Canvas - keep the world block state on ticking block entities
++                        if (blockState == null) blockState = LevelChunk.this.getBlockState(pos); // Canvas - keep the world block state on ticking block entities
 +                        if (this.blockEntity.canvas$isValid) { // Canvas - optimize block entities
                              this.ticker.tick(LevelChunk.this.level, this.blockEntity.getBlockPos(), blockState, this.blockEntity);
                              this.loggedInvalidBlockState = false;
