@@ -1,0 +1,71 @@
+--- a/ca/spottedleaf/moonrise/patches/chunk_system/level/entity/ChunkEntitySlices.java
++++ b/ca/spottedleaf/moonrise/patches/chunk_system/level/entity/ChunkEntitySlices.java
+@@ -40,6 +_,7 @@
+ public final class ChunkEntitySlices {
+ 
+     private static final Logger LOGGER = LogUtils.getLogger();
++    private static final EntityCollectionBySection[] CANVAS$NO_CLASSES = new EntityCollectionBySection[0]; // Canvas - index entity classes
+ 
+     public final int minSection;
+     public final int maxSection;
+@@ -51,6 +_,7 @@
+     private final EntityCollectionBySection hardCollidingEntities;
+     private final Reference2ObjectOpenHashMap<Class<? extends Entity>, EntityCollectionBySection> entitiesByClass;
+     private final Reference2ObjectOpenHashMap<EntityType<?>, EntityCollectionBySection> entitiesByType;
++    private EntityCollectionBySection[] canvas$byClassIndex = CANVAS$NO_CLASSES; // Canvas - index entity classes
+     private final EntityList entities = new EntityList();
+ 
+     public FullChunkStatus status;
+@@ -376,27 +_,36 @@
+         return ret;
+     }
+ 
+-    public <T extends Entity> void getEntities(final Class<? extends T> clazz, final Entity except, final AABB box, final List<? super T> into,
++    // Canvas start - index entity classes
++    private EntityCollectionBySection canvas$byClass(final int classIndex, final Class<? extends Entity> clazz) {
++        final EntityCollectionBySection[] byIndex = this.canvas$byClassIndex;
++        if (classIndex < byIndex.length && byIndex[classIndex] != null) {
++            return byIndex[classIndex];
++        }
++
++        EntityCollectionBySection collection = this.entitiesByClass.get(clazz);
++        if (collection == null) {
++            this.entitiesByClass.put(clazz, collection = this.initClass(clazz));
++        }
++
++        if (classIndex >= byIndex.length) {
++            this.canvas$byClassIndex = Arrays.copyOf(byIndex, classIndex + 1);
++        }
++        this.canvas$byClassIndex[classIndex] = collection;
++
++        return collection;
++    }
++
++    public <T extends Entity> void getEntities(final int classIndex, final Class<? extends T> clazz, final Entity except, final AABB box, final List<? super T> into,
+                                                final Predicate<? super T> predicate) {
+-        EntityCollectionBySection collection = this.entitiesByClass.get(clazz);
+-        if (collection != null) {
+-            collection.getEntities(except, box, (List)into, (Predicate)predicate);
+-        } else {
+-            this.entitiesByClass.put(clazz, collection = this.initClass(clazz));
+-            collection.getEntities(except, box, (List)into, (Predicate)predicate);
+-        }
++        this.canvas$byClass(classIndex, clazz).getEntities(except, box, (List)into, (Predicate)predicate);
+     }
+ 
+-    public <T extends Entity> boolean getEntities(final Class<? extends T> clazz, final Entity except, final AABB box, final List<? super T> into,
++    public <T extends Entity> boolean getEntities(final int classIndex, final Class<? extends T> clazz, final Entity except, final AABB box, final List<? super T> into,
+                                                   final Predicate<? super T> predicate, final int maxCount) {
+-        EntityCollectionBySection collection = this.entitiesByClass.get(clazz);
+-        if (collection != null) {
+-            return collection.getEntitiesLimited(except, box, (List)into, (Predicate)predicate, maxCount);
+-        } else {
+-            this.entitiesByClass.put(clazz, collection = this.initClass(clazz));
+-            return collection.getEntitiesLimited(except, box, (List)into, (Predicate)predicate, maxCount);
+-        }
++        return this.canvas$byClass(classIndex, clazz).getEntitiesLimited(except, box, (List)into, (Predicate)predicate, maxCount);
+     }
++    // Canvas end - index entity classes
+ 
+     private static final class BasicEntityList<E extends Entity> {
+ 
