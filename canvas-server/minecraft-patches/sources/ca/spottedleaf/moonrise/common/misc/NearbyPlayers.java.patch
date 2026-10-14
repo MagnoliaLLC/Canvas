@@ -16,3 +16,32 @@
          players[NearbyMapType.TICK_VIEW_DISTANCE.ordinal()].update(chunk.x(), chunk.z(), PlatformHooks.get().getTickViewDistance(player));
          players[NearbyMapType.VIEW_DISTANCE.ordinal()].update(chunk.x(), chunk.z(), PlatformHooks.get().getViewDistance(player));
          players[NearbyMapType.SPAWN_RANGE.ordinal()].update(chunk.x(), chunk.z(), ChunkTickConstants.PLAYER_SPAWN_TRACK_RANGE); // Moonrise - chunk tick iteration
+@@ -163,6 +_,7 @@
+         private final ReferenceList<ServerPlayer>[] players = new ReferenceList[TOTAL_MAP_TYPES];
+         private int nonEmptyLists;
+         private long updateCount;
++        private boolean canvas$removed; // Canvas - cache the tracked chunk of tracked entities
+ 
+         public TrackedChunk(final long chunkKey, final NearbyPlayers nearbyPlayers) {
+             this.chunkKey = chunkKey;
+@@ -177,6 +_,12 @@
+             return this.updateCount;
+         }
+ 
++        // Canvas start - cache the tracked chunk of tracked entities
++        public boolean canvas$isRemoved() {
++            return this.canvas$removed;
++        }
++        // Canvas end - cache the tracked chunk of tracked entities
++
+         public ReferenceList<ServerPlayer> getPlayers(final NearbyMapType type) {
+             return this.players[type.ordinal()];
+         }
+@@ -263,6 +_,7 @@
+ 
+             if (chunk.isEmpty()) {
+                 NearbyPlayers.this.byChunk.remove(chunkKey);
++                chunk.canvas$removed = true; // Canvas - cache the tracked chunk of tracked entities
+                 // Folia - region threading
+             }
+         }
