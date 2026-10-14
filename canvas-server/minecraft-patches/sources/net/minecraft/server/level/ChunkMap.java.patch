@@ -18,6 +18,41 @@
                  this.ticketStorage.getTicketDebugString(posKey, true),
                  this.distanceManager.getChunkLevel(posKey, true),
                  fullChunk.<Integer>map(levelChunk -> levelChunk.getBlockTicks().count()).orElse(0),
+@@ -1108,7 +_,7 @@
+                 if (tracker == null) {
+                     continue;
+                 }
+-                ((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity)tracker).moonrise$tick(nearbyPlayers.getChunk(entity.chunkPosition())); // Folia - region threading
++                ((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity)tracker).moonrise$tick(tracker.canvas$getTrackedChunk(nearbyPlayers, entity.chunkPosition())); // Folia - region threading // Canvas - cache the tracked chunk of tracked entities
+                 if (((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity)tracker).moonrise$hasPlayers()
+                     || ((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)entity).moonrise$getChunkStatus().isOrAfter(FullChunkStatus.ENTITY_TICKING)) {
+                     tracker.serverEntity.sendChanges();
+@@ -1243,6 +_,25 @@
+         // Paper start - optimise entity tracker
+         private long lastChunkUpdate = -1L;
+         private ca.spottedleaf.moonrise.common.misc.NearbyPlayers.TrackedChunk lastTrackedChunk;
++        // Canvas start - cache the tracked chunk of tracked entities
++        private ca.spottedleaf.moonrise.common.misc.@Nullable NearbyPlayers canvas$trackedChunkOwner;
++        private long canvas$trackedChunkKey;
++        private ca.spottedleaf.moonrise.common.misc.NearbyPlayers.@Nullable TrackedChunk canvas$trackedChunk;
++
++        public ca.spottedleaf.moonrise.common.misc.NearbyPlayers.@Nullable TrackedChunk canvas$getTrackedChunk(final ca.spottedleaf.moonrise.common.misc.NearbyPlayers nearbyPlayers, final ChunkPos pos) {
++            final long key = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkKey(pos);
++            final ca.spottedleaf.moonrise.common.misc.NearbyPlayers.TrackedChunk cached = this.canvas$trackedChunk;
++            if (cached != null && this.canvas$trackedChunkOwner == nearbyPlayers && this.canvas$trackedChunkKey == key && !cached.canvas$isRemoved()) {
++                return cached;
++            }
++
++            final ca.spottedleaf.moonrise.common.misc.NearbyPlayers.TrackedChunk found = nearbyPlayers.getChunk(pos);
++            this.canvas$trackedChunk = found;
++            this.canvas$trackedChunkOwner = nearbyPlayers;
++            this.canvas$trackedChunkKey = key;
++            return found;
++        }
++        // Canvas end - cache the tracked chunk of tracked entities
+ 
+         @Override
+         public final void moonrise$tick(final ca.spottedleaf.moonrise.common.misc.NearbyPlayers.TrackedChunk chunk) {
 @@ -1393,7 +_,7 @@
                  double distanceSquared = deltaToPlayerX * deltaToPlayerX + deltaToPlayerZ * deltaToPlayerZ; // Paper
                  double rangeSquared = visibleRange * visibleRange;
