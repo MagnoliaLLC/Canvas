@@ -1,8 +1,10 @@
 --- a/net/minecraft/world/level/block/entity/BlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/BlockEntity.java
-@@ -52,6 +_,7 @@
+@@ -51,7 +_,9 @@
+     protected final BlockPos worldPosition;
      protected boolean remove;
      private BlockState blockState;
++    public @Nullable BlockState canvas$worldState; // Canvas - keep the world block state on ticking block entities
      private DataComponentMap components = DataComponentMap.EMPTY;
 +    public boolean canvas$isValid; // Canvas - optimize block entities
  
