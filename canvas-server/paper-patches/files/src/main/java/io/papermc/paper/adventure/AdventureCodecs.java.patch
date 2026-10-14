@@ -1,0 +1,24 @@
+--- a/src/main/java/io/papermc/paper/adventure/AdventureCodecs.java
++++ b/src/main/java/io/papermc/paper/adventure/AdventureCodecs.java
+@@ -388,7 +_,7 @@
+         OBJECT_CONTENTS_MAPPER.put("atlas", SPRITE_OBJECT_CODEC);
+         OBJECT_CONTENTS_MAPPER.put("player", PLAYER_OBJECT_CODEC);
+     }
+-    static final MapCodec<ObjectComponent> OBJECT_COMPONENT_MAP_CODEC = ComponentSerialization.createLegacyComponentMatcher(OBJECT_CONTENTS_MAPPER, objectComponent -> {
++    static final MapCodec<ObjectComponent> OBJECT_CONTENTS_MAP_CODEC = ComponentSerialization.createLegacyComponentMatcher(OBJECT_CONTENTS_MAPPER, objectComponent -> { // Canvas - keep the fallback of object components
+         if (objectComponent.contents() instanceof SpriteObjectContents) {
+             return SPRITE_OBJECT_CODEC;
+         } else if (objectComponent.contents() instanceof PlayerHeadObjectContents) {
+@@ -397,6 +_,12 @@
+             throw new IllegalArgumentException("Unknown ObjectContents type " + objectComponent.contents().getClass());
+         }
+     }, "object");
++    // Canvas start - keep the fallback of object components
++    static final MapCodec<ObjectComponent> OBJECT_COMPONENT_MAP_CODEC = mapCodec(instance -> instance.group(
++        OBJECT_CONTENTS_MAP_CODEC.forGetter(obj -> obj),
++        COMPONENT_CODEC.optionalFieldOf("fallback").forGetter(nullableGetter(ObjectComponent::fallback))
++    ).apply(instance, (object, fallback) -> object.fallback(fallback.orElse(null))));
++    // Canvas end - keep the fallback of object components
+ 
+     static final MapCodec<ScoreComponent> SCORE_COMPONENT_INNER_MAP_CODEC = ScoreContents.INNER_CODEC.xmap(
+         s -> Component.score(s.name().map(CompilableString::source, identity()), s.objective()),
