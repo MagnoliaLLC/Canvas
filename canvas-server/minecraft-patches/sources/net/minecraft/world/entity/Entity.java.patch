@@ -113,6 +113,14 @@
                  if (this.level.paperConfig().collisions.onlyPlayersCollide && !(entity instanceof ServerPlayer || this instanceof ServerPlayer)) return; // Paper - Collision option for requiring a player participant
                  // Paper start - Add EntityCollideWithEntity Event
                  if (io.papermc.paper.event.entity.EntityCollideWithEntityEvent.getHandlerList().getRegisteredListeners().length != 0 &&
+@@ -3517,6 +_,7 @@
+             } // Folia - region threading - suppress entire event logic during worldgen
+             if (this.isPassenger()) {
+                 this.stopRiding();
++                if (this.isPassenger()) return false; // Canvas - do not ride another vehicle while leaving the current one was refused
+             }
+ 
+             this.setPose(Pose.STANDING);
 @@ -4064,6 +_,7 @@
      }
  
@@ -121,7 +129,35 @@
          if (level instanceof ServerLevel serverLevel) {
              RandomSource random = level.getRandom();
  
-@@ -5884,6 +_,7 @@
+@@ -5619,6 +_,7 @@
+             return;
+         }
+ 
++        this.dropPassengersNotRiding(); // Canvas - drop passengers that no longer ride their vehicle
+         final List<Entity> indirectPassengers = (List<Entity>)this.getIndirectPassengers();
+         final List<ChunkPos> positions = new java.util.ArrayList<>(indirectPassengers.size() + 1);
+ 
+@@ -5691,6 +_,19 @@
+         );
+     }
+ 
++    // Canvas start - drop passengers that no longer ride their vehicle
++    private void dropPassengersNotRiding() {
++        for (final Entity passenger : this.passengers) {
++            if (passenger.getVehicle() != this) {
++                LOGGER.warn("Vehicle {} still listed passenger {} which rides {}, removing it", this, passenger, passenger.getVehicle());
++                this.passengers = this.passengers.stream().filter(p -> p != passenger).collect(ImmutableList.toImmutableList());
++            } else {
++                passenger.dropPassengersNotRiding();
++            }
++        }
++    }
++    // Canvas end - drop passengers that no longer ride their vehicle
++
+     // Folia & Canvas end - region threading
+     public @Nullable Entity teleport(TeleportTransition transition) { // Paper - remove param final
+         // Folia start - region threading
+@@ -5905,6 +_,7 @@
  
      public void placePortalTicket(final BlockPos ticketPosition) {
          if (this.level() instanceof ServerLevel serverLevel) {
