@@ -1,64 +1,396 @@
 --- a/ca/spottedleaf/moonrise/patches/poi_lookup/PoiAccess.java
 +++ b/ca/spottedleaf/moonrise/patches/poi_lookup/PoiAccess.java
-@@ -360,8 +_,13 @@
-         final long centerKey = CoordinateUtils.getChunkSectionKey(centerX, centerY, centerZ);
+@@ -1,12 +_,9 @@
+ package ca.spottedleaf.moonrise.patches.poi_lookup;
  
-         final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
+-import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
+ import ca.spottedleaf.moonrise.common.util.WorldUtil;
+ import com.mojang.datafixers.util.Pair;
+ import it.unimi.dsi.fastutil.doubles.Double2ObjectMap;
+ import it.unimi.dsi.fastutil.doubles.Double2ObjectRBTreeMap;
+-import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
+-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+ import java.util.function.BiPredicate;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Holder;
+@@ -20,7 +_,6 @@
+ import java.util.Iterator;
+ import java.util.List;
+ import java.util.Map;
+-import java.util.Optional;
+ import java.util.Set;
+ import java.util.function.Predicate;
+ 
+@@ -57,37 +_,37 @@
+         return Long.compareUnsigned(d1, d2);
+     }
+ 
+-    protected static double clamp(final double val, final double min, final double max) {
+-        return (val < min ? min : (val > max ? max : val));
+-    }
+-
+-    protected static double getSmallestDistanceSquared(final double boxMinX, final double boxMinY, final double boxMinZ,
+-                                                       final double boxMaxX, final double boxMaxY, final double boxMaxZ,
+-
+-                                                       final double circleX, final double circleY, final double circleZ) {
+-        // is the circle center inside the box?
+-        if (circleX >= boxMinX && circleX <= boxMaxX && circleY >= boxMinY && circleY <= boxMaxY && circleZ >= boxMinZ && circleZ <= boxMaxZ) {
+-            return 0.0;
+-        }
+-
+-        final double boxWidthX = (boxMaxX - boxMinX) / 2.0;
+-        final double boxWidthY = (boxMaxY - boxMinY) / 2.0;
+-        final double boxWidthZ = (boxMaxZ - boxMinZ) / 2.0;
+-
+-        final double boxCenterX = (boxMinX + boxMaxX) / 2.0;
+-        final double boxCenterY = (boxMinY + boxMaxY) / 2.0;
+-        final double boxCenterZ = (boxMinZ + boxMaxZ) / 2.0;
+-
+-        double centerDiffX = circleX - boxCenterX;
+-        double centerDiffY = circleY - boxCenterY;
+-        double centerDiffZ = circleZ - boxCenterZ;
+-
+-        centerDiffX = circleX - (clamp(centerDiffX, -boxWidthX, boxWidthX) + boxCenterX);
+-        centerDiffY = circleY - (clamp(centerDiffY, -boxWidthY, boxWidthY) + boxCenterY);
+-        centerDiffZ = circleZ - (clamp(centerDiffZ, -boxWidthZ, boxWidthZ) + boxCenterZ);
+-
+-        return (centerDiffX * centerDiffX) + (centerDiffY * centerDiffY) + (centerDiffZ * centerDiffZ);
+-    }
++    // Canvas start - index point of interest searches
++    private static long[] squaredGaps(final int source, final int lowerSection, final int length) {
++        final long[] gaps = new long[length];
++
++        for (int i = 0; i < length; ++i) {
++            final int min = (lowerSection + i) << 4;
++            final int max = min | 15;
++            final long gap = source < min ? (long)min - source : (source > max ? (long)source - max : 0L);
++
++            gaps[i] = gap * gap;
++        }
++
++        return gaps;
++    }
++
++    private static PoiSection matchingSection(final PoiManager poiStorage, final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk[] poiChunks,
++                                              final int column, final int chunkX, final int chunkZ, final int sectionY, final boolean load,
++                                              final PoiManager.Occupancy occupancy, final long typeMask) {
++        if (poiChunks[column] == null) {
++            poiChunks[column] = poiStorage.canvas$getPoiChunk(chunkX, chunkZ, load);
++        }
++
++        final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk poiChunk = poiChunks[column];
++        if (poiChunk == null || (poiChunk.canvas$types(occupancy) & typeMask) == 0L) {
++            return null;
++        }
++
++        final PoiSection poiSection = poiChunk.getSection(sectionY);
++        return poiSection == null || (poiSection.canvas$types(occupancy) & typeMask) == 0L ? null : poiSection;
++    }
++    // Canvas end - index point of interest searches
+ 
+     public static void findClosestPoiDataRecords(final PoiManager poiStorage,
+                                                  final Predicate<Holder<PoiType>> villagePlaceType,
+@@ -114,66 +_,42 @@
+         final int centerX = sourcePosition.getX() >> 4;
+         final int centerY = Mth.clamp(sourcePosition.getY() >> 4, lowerY, upperY);
+         final int centerZ = sourcePosition.getZ() >> 4;
+-        final long centerKey = CoordinateUtils.getChunkSectionKey(centerX, centerY, centerZ);
+-
+-        final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
 -        final LongOpenHashSet seen = new LongOpenHashSet();
 -        seen.add(centerKey);
-+        // Canvas start - optimize poi searches
-+        final int lengthY = upperY - lowerY + 1;
-+        final int lengthZ = upperZ - lowerZ + 1;
-+        final java.util.BitSet seen = new java.util.BitSet((upperX - lowerX + 1) * lengthY * lengthZ);
-+        final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk[] poiChunks = new ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk[(upperX - lowerX + 1) * lengthZ];
-+        seen.set(((centerX - lowerX) * lengthY + (centerY - lowerY)) * lengthZ + (centerZ - lowerZ));
-+        // Canvas end - optimize poi searches
-         queue.enqueue(centerKey);
- 
-         while (!queue.isEmpty()) {
-@@ -370,11 +_,6 @@
-             final int sectionY = CoordinateUtils.getChunkSectionY(key);
-             final int sectionZ = CoordinateUtils.getChunkSectionZ(key);
- 
+-        queue.enqueue(centerKey);
+-
+-        while (!queue.isEmpty()) {
+-            final long key = queue.dequeueLong();
+-            final int sectionX = CoordinateUtils.getChunkSectionX(key);
+-            final int sectionY = CoordinateUtils.getChunkSectionY(key);
+-            final int sectionZ = CoordinateUtils.getChunkSectionZ(key);
+-
 -            if (sectionX < lowerX || sectionX > upperX || sectionY < lowerY || sectionY > upperY || sectionZ < lowerZ || sectionZ > upperZ) {
 -                // out of bound chunk
 -                continue;
 -            }
 -
-             final double sectionDistanceSquared = getSmallestDistanceSquared(
-                     (double)(sectionX << 4),
-                     (double)(sectionY << 4),
-@@ -403,15 +_,28 @@
-                         final int neighbourY = sectionY + dy;
-                         final int neighbourZ = sectionZ + dz;
- 
+-            final double sectionDistanceSquared = getSmallestDistanceSquared(
+-                    (double)(sectionX << 4),
+-                    (double)(sectionY << 4),
+-                    (double)(sectionZ << 4),
+-                    (double)((sectionX << 4) | 15),
+-                    (double)((sectionY << 4) | 15),
+-                    (double)((sectionZ << 4) | 15),
+-                    (double)sourcePosition.getX(), (double)sourcePosition.getY(), (double)sourcePosition.getZ()
+-            );
+-            if (sectionDistanceSquared > closestDistanceSquared) {
+-                continue;
+-            }
+-
+-            // queue all neighbours
+-            for (int dz = -1; dz <= 1; ++dz) {
+-                for (int dx = -1; dx <= 1; ++dx) {
+-                    for (int dy = -1; dy <= 1; ++dy) {
+-                        // -1 and 1 have the 1st bit set. so just add up the first bits, and it will tell us how many
+-                        // values are set. we only care about cardinal neighbours, so, we only care if one value is set
+-                        if ((dx & 1) + (dy & 1) + (dz & 1) != 1) {
+-                            continue;
+-                        }
+-
+-                        final int neighbourX = sectionX + dx;
+-                        final int neighbourY = sectionY + dy;
+-                        final int neighbourZ = sectionZ + dz;
+-
 -                        final long neighbourKey = CoordinateUtils.getChunkSectionKey(neighbourX, neighbourY, neighbourZ);
 -                        if (seen.add(neighbourKey)) {
 -                            queue.enqueue(neighbourKey);
 -                        }
-+                        // Canvas start - optimize poi searches
-+                        if (neighbourX < lowerX || neighbourX > upperX || neighbourY < lowerY || neighbourY > upperY || neighbourZ < lowerZ || neighbourZ > upperZ) {
-+                            continue;
-+                        }
+-                    }
+-                }
+-            }
+-
+-            final Optional<PoiSection> poiSectionOptional = load ? poiStorage.getOrLoad(key) : poiStorage.get(key);
+-
+-            if (poiSectionOptional == null || !poiSectionOptional.isPresent()) {
+-                continue;
+-            }
+-
+-            final PoiSection poiSection = poiSectionOptional.get();
 +
-+                        final int neighbourIndex = ((neighbourX - lowerX) * lengthY + (neighbourY - lowerY)) * lengthZ + (neighbourZ - lowerZ);
-+                        if (!seen.get(neighbourIndex)) {
-+                            seen.set(neighbourIndex);
-+                            queue.enqueue(CoordinateUtils.getChunkSectionKey(neighbourX, neighbourY, neighbourZ));
-+                        }
-+                        // Canvas end - optimize poi searches
++        // Canvas start - index point of interest searches
++        final int lengthX = upperX - lowerX + 1;
++        final int lengthY = upperY - lowerY + 1;
++        final int lengthZ = upperZ - lowerZ + 1;
++        if (lengthX <= 0 || lengthZ <= 0) {
++            return;
++        }
++
++        final long[] gapsX = squaredGaps(sourcePosition.getX(), lowerX, lengthX);
++        final long[] gapsY = squaredGaps(sourcePosition.getY(), lowerY, lengthY);
++        final long[] gapsZ = squaredGaps(sourcePosition.getZ(), lowerZ, lengthZ);
++        final long typeMask = io.canvasmc.canvas.util.PoiTypeMasks.matching(villagePlaceType);
++        final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk[] poiChunks = new ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk[lengthX * lengthZ];
++        final io.canvasmc.canvas.util.SectionSearchOrder order = io.canvasmc.canvas.util.SectionSearchOrder.of(lengthX, lengthY, lengthZ, centerX - lowerX, centerY - lowerY, centerZ - lowerZ);
++        final long[] sections = order.sections();
++
++        for (int layer = 0, layers = order.layers(); layer < layers; ++layer) {
++            if (io.canvasmc.canvas.util.SectionSearchOrder.minDistanceSquared(layer) > closestDistanceSquared) {
++                break;
++            }
++
++            for (int i = order.layerStart(layer), end = order.layerStart(layer + 1); i < end; ++i) {
++                final int offsetX = io.canvasmc.canvas.util.SectionSearchOrder.x(sections[i]);
++                final int offsetY = io.canvasmc.canvas.util.SectionSearchOrder.y(sections[i]);
++                final int offsetZ = io.canvasmc.canvas.util.SectionSearchOrder.z(sections[i]);
++
++                if ((double)(gapsX[offsetX] + gapsY[offsetY] + gapsZ[offsetZ]) > closestDistanceSquared) {
++                    continue;
++                }
++
++                final PoiSection poiSection = matchingSection(poiStorage, poiChunks, offsetX * lengthZ + offsetZ, lowerX + offsetX, lowerZ + offsetZ, lowerY + offsetY, load, occupancy, typeMask);
++                if (poiSection == null) {
++                    continue;
++                }
++        // Canvas end - index point of interest searches
+ 
+             final Map<Holder<PoiType>, Set<PoiRecord>> sectionData = poiSection.byType;
+             if (sectionData.isEmpty()) {
+@@ -222,6 +_,7 @@
+                     closestRecords.add(poiData);
+                 }
+             }
++            } // Canvas - index point of interest searches
+         }
+ 
+         // uh oh! we might have multiple records that match the distance sorting!
+@@ -357,67 +_,42 @@
+         final int centerX = sourcePosition.getX() >> 4;
+         final int centerY = Mth.clamp(sourcePosition.getY() >> 4, lowerY, upperY);
+         final int centerZ = sourcePosition.getZ() >> 4;
+-        final long centerKey = CoordinateUtils.getChunkSectionKey(centerX, centerY, centerZ);
+-
+-        final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
+-        final LongOpenHashSet seen = new LongOpenHashSet();
+-        seen.add(centerKey);
+-        queue.enqueue(centerKey);
+-
+-        while (!queue.isEmpty()) {
+-            final long key = queue.dequeueLong();
+-            final int sectionX = CoordinateUtils.getChunkSectionX(key);
+-            final int sectionY = CoordinateUtils.getChunkSectionY(key);
+-            final int sectionZ = CoordinateUtils.getChunkSectionZ(key);
+-
+-            if (sectionX < lowerX || sectionX > upperX || sectionY < lowerY || sectionY > upperY || sectionZ < lowerZ || sectionZ > upperZ) {
+-                // out of bound chunk
+-                continue;
+-            }
+-
+-            final double sectionDistanceSquared = getSmallestDistanceSquared(
+-                    (double)(sectionX << 4),
+-                    (double)(sectionY << 4),
+-                    (double)(sectionZ << 4),
+-                    (double)((sectionX << 4) | 15),
+-                    (double)((sectionY << 4) | 15),
+-                    (double)((sectionZ << 4) | 15),
+-                    (double)sourcePosition.getX(), (double)sourcePosition.getY(), (double)sourcePosition.getZ()
+-            );
+-
+-            if (sectionDistanceSquared > (totalRecords >= max ? furthestDistanceSquared : maxDistanceSquared)) {
+-                continue;
+-            }
+-
+-            // queue all neighbours
+-            for (int dz = -1; dz <= 1; ++dz) {
+-                for (int dx = -1; dx <= 1; ++dx) {
+-                    for (int dy = -1; dy <= 1; ++dy) {
+-                        // -1 and 1 have the 1st bit set. so just add up the first bits, and it will tell us how many
+-                        // values are set. we only care about cardinal neighbours, so, we only care if one value is set
+-                        if ((dx & 1) + (dy & 1) + (dz & 1) != 1) {
+-                            continue;
+-                        }
+-
+-                        final int neighbourX = sectionX + dx;
+-                        final int neighbourY = sectionY + dy;
+-                        final int neighbourZ = sectionZ + dz;
+-
+-                        final long neighbourKey = CoordinateUtils.getChunkSectionKey(neighbourX, neighbourY, neighbourZ);
+-                        if (seen.add(neighbourKey)) {
+-                            queue.enqueue(neighbourKey);
+-                        }
+-                    }
+-                }
+-            }
+-
+-            final Optional<PoiSection> poiSectionOptional = load ? poiStorage.getOrLoad(key) : poiStorage.get(key);
+-
+-            if (poiSectionOptional == null || !poiSectionOptional.isPresent()) {
+-                continue;
+-            }
+-
+-            final PoiSection poiSection = poiSectionOptional.get();
++
++        // Canvas start - index point of interest searches
++        final int lengthX = upperX - lowerX + 1;
++        final int lengthY = upperY - lowerY + 1;
++        final int lengthZ = upperZ - lowerZ + 1;
++        if (lengthX <= 0 || lengthZ <= 0) {
++            return;
++        }
++
++        final long[] gapsX = squaredGaps(sourcePosition.getX(), lowerX, lengthX);
++        final long[] gapsY = squaredGaps(sourcePosition.getY(), lowerY, lengthY);
++        final long[] gapsZ = squaredGaps(sourcePosition.getZ(), lowerZ, lengthZ);
++        final long typeMask = io.canvasmc.canvas.util.PoiTypeMasks.matching(villagePlaceType);
++        final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk[] poiChunks = new ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk[lengthX * lengthZ];
++        final io.canvasmc.canvas.util.SectionSearchOrder order = io.canvasmc.canvas.util.SectionSearchOrder.of(lengthX, lengthY, lengthZ, centerX - lowerX, centerY - lowerY, centerZ - lowerZ);
++        final long[] sections = order.sections();
++
++        for (int layer = 0, layers = order.layers(); layer < layers; ++layer) {
++            if (io.canvasmc.canvas.util.SectionSearchOrder.minDistanceSquared(layer) > (totalRecords >= max ? furthestDistanceSquared : maxDistanceSquared)) {
++                break;
++            }
++
++            for (int i = order.layerStart(layer), end = order.layerStart(layer + 1); i < end; ++i) {
++                final int offsetX = io.canvasmc.canvas.util.SectionSearchOrder.x(sections[i]);
++                final int offsetY = io.canvasmc.canvas.util.SectionSearchOrder.y(sections[i]);
++                final int offsetZ = io.canvasmc.canvas.util.SectionSearchOrder.z(sections[i]);
++
++                if ((double)(gapsX[offsetX] + gapsY[offsetY] + gapsZ[offsetZ]) > (totalRecords >= max ? furthestDistanceSquared : maxDistanceSquared)) {
++                    continue;
++                }
++
++                final PoiSection poiSection = matchingSection(poiStorage, poiChunks, offsetX * lengthZ + offsetZ, lowerX + offsetX, lowerZ + offsetZ, lowerY + offsetY, load, occupancy, typeMask);
++                if (poiSection == null) {
++                    continue;
++                }
++        // Canvas end - index point of interest searches
+ 
+             final Map<Holder<PoiType>, Set<PoiRecord>> sectionData = poiSection.byType;
+             if (sectionData.isEmpty()) {
+@@ -479,7 +_,7 @@
+                             final Iterator<Double2ObjectMap.Entry<List<PoiRecord>>> iterator = closestRecords.double2ObjectEntrySet().iterator();
+                             double nextFurthestDistanceSquared = 0.0;
+ 
+-                            for (int i = 0, len = closestRecords.size() - 1; i < len; ++i) {
++                            for (int j = 0, len = closestRecords.size() - 1; j < len; ++j) { // Canvas - index point of interest searches
+                                 final Double2ObjectMap.Entry<List<PoiRecord>> recordEntry = iterator.next();
+                                 entriesInClosest += recordEntry.getValue().size();
+                                 nextFurthestDistanceSquared = recordEntry.getDoubleKey();
+@@ -497,6 +_,7 @@
                      }
                  }
              }
++            } // Canvas - index point of interest searches
+         }
  
--            final Optional<PoiSection> poiSectionOptional = load ? poiStorage.getOrLoad(key) : poiStorage.get(key);
-+            // Canvas start - optimize poi searches
-+            final int column = (sectionX - lowerX) * lengthZ + (sectionZ - lowerZ);
-+            if (poiChunks[column] == null) {
-+                poiChunks[column] = poiStorage.canvas$getPoiChunk(sectionX, sectionZ, load);
-+            }
-+            final Optional<PoiSection> poiSectionOptional = poiChunks[column] == null ? Optional.empty() : poiChunks[column].getSectionForVanilla(sectionY);
-+            // Canvas end - optimize poi searches
+         final List<PoiRecord> closestRecordsUnsorted = new ArrayList<>();
+@@ -632,17 +_,31 @@
+         final int upperY = Math.min(WorldUtil.getMaxSection(poiStorage.levelHeightAccessor), Mth.floor(sourcePosition.getY() + range) >> 4);
+         final int upperZ = Mth.floor(sourcePosition.getZ() + range) >> 4;
  
-             if (poiSectionOptional == null || !poiSectionOptional.isPresent()) {
-                 continue;
++        // Canvas start - index point of interest searches
++        if (lowerY > upperY) {
++            return;
++        }
++
++        final long typeMask = io.canvasmc.canvas.util.PoiTypeMasks.matching(villagePlaceType);
++        // Canvas end - index point of interest searches
++
+         // Vanilla iterates by x until max is reached then increases z
+         // vanilla also searches by increasing Y section value
+         for (int currZ = lowerZ; currZ <= upperZ; ++currZ) {
+             for (int currX = lowerX; currX <= upperX; ++currX) {
++                // Canvas start - index point of interest searches
++                final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk poiChunk = poiStorage.canvas$getPoiChunk(currX, currZ, load);
++                if (poiChunk == null || (poiChunk.canvas$types(occupancy) & typeMask) == 0L) {
++                    continue;
++                }
++                // Canvas end - index point of interest searches
+                 for (int currY = lowerY; currY <= upperY; ++currY) { // vanilla searches the entire chunk because they're actually stupid. just search the sections we need
+-                    final Optional<PoiSection> poiSectionOptional = load ? poiStorage.getOrLoad(CoordinateUtils.getChunkSectionKey(currX, currY, currZ)) :
+-                            poiStorage.get(CoordinateUtils.getChunkSectionKey(currX, currY, currZ));
+-                    final PoiSection poiSection = poiSectionOptional == null ? null : poiSectionOptional.orElse(null);
+-                    if (poiSection == null) {
++                    // Canvas start - index point of interest searches
++                    final PoiSection poiSection = poiChunk.getSection(currY);
++                    if (poiSection == null || (poiSection.canvas$types(occupancy) & typeMask) == 0L) {
+                         continue;
+                     }
++                    // Canvas end - index point of interest searches
+ 
+                     final Map<Holder<PoiType>, Set<PoiRecord>> sectionData = poiSection.byType;
+                     if (sectionData.isEmpty()) {
+@@ -731,17 +_,31 @@
+         final int upperY = Math.min(WorldUtil.getMaxSection(poiStorage.levelHeightAccessor), Mth.floor(sourcePosition.getY() + range) >> 4);
+         final int upperZ = Mth.floor(sourcePosition.getZ() + range) >> 4;
+ 
++        // Canvas start - index point of interest searches
++        if (lowerY > upperY) {
++            return;
++        }
++
++        final long typeMask = io.canvasmc.canvas.util.PoiTypeMasks.matching(villagePlaceType);
++        // Canvas end - index point of interest searches
++
+         // Vanilla iterates by x until max is reached then increases z
+         // vanilla also searches by increasing Y section value
+         for (int currZ = lowerZ; currZ <= upperZ; ++currZ) {
+             for (int currX = lowerX; currX <= upperX; ++currX) {
++                // Canvas start - index point of interest searches
++                final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk poiChunk = poiStorage.canvas$getPoiChunk(currX, currZ, load);
++                if (poiChunk == null || (poiChunk.canvas$types(occupancy) & typeMask) == 0L) {
++                    continue;
++                }
++                // Canvas end - index point of interest searches
+                 for (int currY = lowerY; currY <= upperY; ++currY) { // vanilla searches the entire chunk because they're actually stupid. just search the sections we need
+-                    final Optional<PoiSection> poiSectionOptional = load ? poiStorage.getOrLoad(CoordinateUtils.getChunkSectionKey(currX, currY, currZ)) :
+-                            poiStorage.get(CoordinateUtils.getChunkSectionKey(currX, currY, currZ));
+-                    final PoiSection poiSection = poiSectionOptional == null ? null : poiSectionOptional.orElse(null);
+-                    if (poiSection == null) {
++                    // Canvas start - index point of interest searches
++                    final PoiSection poiSection = poiChunk.getSection(currY);
++                    if (poiSection == null || (poiSection.canvas$types(occupancy) & typeMask) == 0L) {
+                         continue;
+                     }
++                    // Canvas end - index point of interest searches
+ 
+                     final Map<Holder<PoiType>, Set<PoiRecord>> sectionData = poiSection.byType;
+                     if (sectionData.isEmpty()) {
