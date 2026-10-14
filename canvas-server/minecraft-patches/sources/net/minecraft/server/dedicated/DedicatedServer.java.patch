@@ -21,3 +21,12 @@
          // Paper end - initialize global and world-defaults configuration
          this.server.spark.enableEarlyIfRequested(); // Paper - spark
          // Paper start - fix converting txt to json file; convert old users earlier after PlayerList creation but before file load/save
+@@ -576,7 +_,7 @@
+             if (event.isCancelled()) continue;
+             input = new ConsoleInput(event.getCommand(), input.source);
+             // CraftBukkit end
+-            this.getCommands().performPrefixedCommand(input.source, input.msg);
++            this.getCommands().performPrefixedCommand(this.createCommandSourceStack(), input.msg); // Canvas - create the source when the line runs, one read during startup has no level
+         }
+     }
+ 
