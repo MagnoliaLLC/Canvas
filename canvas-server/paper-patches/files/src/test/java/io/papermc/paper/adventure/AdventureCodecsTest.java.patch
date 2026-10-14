@@ -1,0 +1,13 @@
+--- a/src/test/java/io/papermc/paper/adventure/AdventureCodecsTest.java
++++ b/src/test/java/io/papermc/paper/adventure/AdventureCodecsTest.java
+@@ -457,7 +_,9 @@
+             object(playerHead().name("sheep").id(UUID.randomUUID()).build()),
+             object(playerHead(UUID.randomUUID())),
+             object(playerHead().profileProperties(List.of(property("textures", "abc"))).build()),
+-            object(playerHead().texture(key("apples")).build())
++            object(playerHead().texture(key("apples")).build()),
++            object(sprite(key("item/diamond_sword"))).fallback(text(":diamond_sword:")), // Canvas - keep the fallback of object components
++            object(playerHead("pig")).fallback(text("pig")) // Canvas - keep the fallback of object components
+         );
+     }
+ }
