@@ -37,14 +37,29 @@
          this.level = (ServerLevel) level; // CraftBukkit - type
          this.gameEventListenerRegistrySections = new Int2ObjectOpenHashMap<>();
  
-@@ -181,6 +_,7 @@
+@@ -181,7 +_,21 @@
          this.debug = !empty && this.level.isDebug();
          this.defaultBlockState = empty ? VOID_AIR_BLOCKSTATE : AIR_BLOCKSTATE;
          // Paper end - get block chunk optimisation
+-    }
 +        this.lightningTick = new java.util.Random().nextInt(100000) << 1; // Pufferfish - initialize lightning tick
-     }
++        // Canvas start - keep per-chunk ticking block counts
++        for (int i = 0; i < this.sections.length; ++i) {
++            this.sections[i].canvas$attachTickingBlockCounts(this.canvas$tickingBlockCounts, i);
++        }
++        // Canvas end - keep per-chunk ticking block counts
++    }
++
++    // Canvas start - keep per-chunk ticking block counts
++    private final short[] canvas$tickingBlockCounts = new short[this.sections.length];
++
++    public short[] canvas$getTickingBlockCounts() {
++        return this.canvas$tickingBlockCounts;
++    }
++    // Canvas end - keep per-chunk ticking block counts
  
      public LevelChunk(final ServerLevel level, final ProtoChunk protoChunk, final LevelChunk.@Nullable PostLoadProcessor postLoad) {
+         this(
 @@ -195,11 +_,9 @@
              postLoad,
              protoChunk.getBlendingData()

@@ -1,0 +1,41 @@
+--- a/net/minecraft/world/level/chunk/LevelChunkSection.java
++++ b/net/minecraft/world/level/chunk/LevelChunkSection.java
+@@ -29,6 +_,22 @@
+     private static final short CLIENT_FORCED_SPECIAL_COLLIDING_BLOCKS = (short)9999;
+     private short specialCollidingBlocks;
+     private final ca.spottedleaf.moonrise.common.list.ShortList tickingBlocks = new ca.spottedleaf.moonrise.common.list.ShortList();
++    // Canvas start - keep per-chunk ticking block counts
++    private short[] canvas$tickingBlockCounts;
++    private int canvas$sectionIndex;
++
++    public final void canvas$attachTickingBlockCounts(final short[] counts, final int sectionIndex) {
++        this.canvas$tickingBlockCounts = counts;
++        this.canvas$sectionIndex = sectionIndex;
++        this.canvas$updateTickingBlockCount();
++    }
++
++    private void canvas$updateTickingBlockCount() {
++        if (this.canvas$tickingBlockCounts != null) {
++            this.canvas$tickingBlockCounts[this.canvas$sectionIndex] = (short)(this.tickingBlockCount > 0 ? this.tickingBlocks.size() : 0);
++        }
++    }
++    // Canvas end - keep per-chunk ticking block counts
+ 
+     @Override
+     public final boolean moonrise$hasSpecialCollidingBlocks() {
+@@ -165,6 +_,7 @@
+         }
+ 
+         this.updateBlockCallback(sectionX, sectionY, sectionZ, state, previous); // Paper - block counting
++        this.canvas$updateTickingBlockCount(); // Canvas - keep per-chunk ticking block counts
+ 
+         return previous;
+     }
+@@ -252,6 +_,7 @@
+                 }
+             }
+         }
++        this.canvas$updateTickingBlockCount(); // Canvas - keep per-chunk ticking block counts
+         // Paper end - block counting
+     }
+ 
