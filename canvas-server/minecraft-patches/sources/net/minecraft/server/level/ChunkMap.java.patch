@@ -32,7 +32,7 @@
                  // Folia end - region threading
                  // CraftBukkit start - respect vanish API
 -                if (visibleToPlayer && (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(player) || !player.getBukkitEntity().canSee(this.entity.getBukkitEntity()))) { // Paper - only consider hits // Folia - region threading
-+                if (visibleToPlayer && (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(player) || !player.getBukkitEntity().canSeeChunkMapUpdatePlayer(this.entity.getBukkitEntity()))) { // Paper - only consider hits // Folia - region threading // Leaf - optimize canSee checks
++                if (visibleToPlayer && (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(player) || !player.getBukkitEntity().canvas$canSeeChunkMapUpdate(this.entity))) { // Paper - only consider hits // Folia - region threading // Leaf - optimize canSee checks // Canvas - read tracker visibility from the entity
                      visibleToPlayer = false;
                  }
                  // CraftBukkit end
