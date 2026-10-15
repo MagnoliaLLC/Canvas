@@ -18,6 +18,20 @@
  
          ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getHardCollidingEntities(entity, box, ret, predicate);
  
+@@ -816,6 +_,13 @@
+      */
+     @Override
+     public Holder<Biome> getNoiseBiome(final int x, final int y, final int z) {
++        // Canvas start - skip biome lookups that cannot matter
++        // a full chunk answers from the same sections the chunk holder would hand out, without the holder lookup
++        final ChunkAccess full = this.getChunkSource().getChunk(x >> 2, z >> 2, ChunkStatus.FULL, false);
++        if (full != null) {
++            return full.getNoiseBiome(x, y, z);
++        }
++        // Canvas end - skip biome lookups that cannot matter
+         final ChunkAccess chunk = this.getChunk(x >> 2, z >> 2, ChunkStatus.BIOMES, false);
+ 
+         return chunk != null ? chunk.getNoiseBiome(x, y, z) : this.getUncachedNoiseBiome(x, y, z);
 @@ -1600,26 +_,36 @@
          // Paper - Fix MC-117075 use removeAll - remove iterator in favour of indexed for loop, ensuring compile error if something uses iter incorrectly
          boolean tickBlockEntities = regionizedWorldData.regionData.tickHandle.getTickManager().doesRunGameElements(); // Canvas - region threading
