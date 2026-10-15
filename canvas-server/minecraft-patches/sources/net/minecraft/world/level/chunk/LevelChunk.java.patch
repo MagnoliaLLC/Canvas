@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/LevelChunk.java
 +++ b/net/minecraft/world/level/chunk/LevelChunk.java
-@@ -89,7 +_,7 @@
+@@ -89,10 +_,11 @@
              return "<null>";
          }
      };
@@ -9,6 +9,10 @@
      private boolean loaded;
      private final ServerLevel level; // CraftBukkit - type
      private @Nullable Supplier<FullChunkStatus> fullStatus;
++    public @Nullable FullChunkStatus canvas$fullStatus; // Canvas - optimize chunk status
+     private LevelChunk.@Nullable PostLoadProcessor postLoad;
+     private final Int2ObjectMap<GameEventListenerRegistry> gameEventListenerRegistrySections;
+     private final LevelChunkTicks<Block> blockTicks;
 @@ -133,6 +_,18 @@
      private final int maxSection;
      private final boolean debug;
@@ -266,7 +270,7 @@
                      return result;
                  } else {
                      return null;
-@@ -943,6 +_,66 @@
+@@ -943,6 +_,67 @@
              this.blockEntity = blockEntity;
              this.ticker = ticker;
          }
@@ -293,7 +297,8 @@
 +                // no need to check 'LevelChunk.this.level.areEntitiesLoaded', as this will
 +                // always be true, since as a LevelChunk, we are always at the FULL chunk status
 +                // so obviously we are loaded. we just need to check if we are block ticking now
-+                return LevelChunk.this.getFullStatus().isOrAfter(FullChunkStatus.BLOCK_TICKING);
++                final FullChunkStatus fullStatus = LevelChunk.this.canvas$fullStatus;
++                return (fullStatus != null ? fullStatus : LevelChunk.this.getFullStatus()).isOrAfter(FullChunkStatus.BLOCK_TICKING);
 +            }
 +            return false;
 +        }
