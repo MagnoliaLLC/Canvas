@@ -26,6 +26,90 @@
          }
  
          this.firstTick = false;
+@@ -1909,8 +_,83 @@
+         return SoundEvents.GENERIC_SPLASH;
+     }
+ 
++    // Canvas start - skip inside-block checks when no block can act
++    // the walk below only acts through entityInside, fluid states and onInsideBlock (overridden by players and pearls); every block
++    // it visits lies in the box spanning each movement's start and end bounding boxes (the corner-ray clamp stays within 1.0E-5),
++    // so when no block there can act the walk is skipped
++    private static final ClassValue<Boolean> CANVAS_INSIDE_HOOK = new ClassValue<>() {
++        @Override
++        protected Boolean computeValue(final Class<?> type) {
++            for (Class<?> current = type; current != null && current != Entity.class; current = current.getSuperclass()) {
++                try {
++                    current.getDeclaredMethod("onInsideBlock", BlockState.class);
++                    return Boolean.TRUE;
++                } catch (final NoSuchMethodException ignored) {
++                }
++            }
++            return Boolean.FALSE;
++        }
++    };
++
++    private boolean canvas$insideEffectFree(final List<Entity.Movement> movements) {
++        if (this.level instanceof ServerLevel serverLevel && serverLevel.getServer().debugSubscribers().hasAnySubscriberFor(DebugSubscriptions.ENTITY_BLOCK_INTERSECTIONS)) {
++            return false;
++        }
++        double minX = Double.POSITIVE_INFINITY;
++        double minY = Double.POSITIVE_INFINITY;
++        double minZ = Double.POSITIVE_INFINITY;
++        double maxX = Double.NEGATIVE_INFINITY;
++        double maxY = Double.NEGATIVE_INFINITY;
++        double maxZ = Double.NEGATIVE_INFINITY;
++        for (final Entity.Movement movement : movements) {
++            final AABB fromBox = this.makeBoundingBox(movement.from());
++            final AABB toBox = this.makeBoundingBox(movement.to());
++            minX = Math.min(minX, Math.min(fromBox.minX, toBox.minX));
++            minY = Math.min(minY, Math.min(fromBox.minY, toBox.minY));
++            minZ = Math.min(minZ, Math.min(fromBox.minZ, toBox.minZ));
++            maxX = Math.max(maxX, Math.max(fromBox.maxX, toBox.maxX));
++            maxY = Math.max(maxY, Math.max(fromBox.maxY, toBox.maxY));
++            maxZ = Math.max(maxZ, Math.max(fromBox.maxZ, toBox.maxZ));
++        }
++        if (!(maxX - minX < 8.0 && maxY - minY < 8.0 && maxZ - minZ < 8.0)) {
++            return false;
++        }
++        final int x0 = Mth.floor(minX - 1.0E-4);
++        final int y0 = Mth.floor(minY - 1.0E-4);
++        final int z0 = Mth.floor(minZ - 1.0E-4);
++        final int x1 = Mth.floor(maxX + 1.0E-4);
++        final int y1 = Mth.floor(maxY + 1.0E-4);
++        final int z1 = Mth.floor(maxZ + 1.0E-4);
++        if ((x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > 64) {
++            return false;
++        }
++        final boolean airOnly = CANVAS_INSIDE_HOOK.get(this.getClass());
++        final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
++        for (int x = x0; x <= x1; ++x) {
++            for (int z = z0; z <= z1; ++z) {
++                final net.minecraft.world.level.chunk.ChunkAccess chunk = this.level.getChunkIfLoaded(x >> 4, z >> 4);
++                if (chunk == null) {
++                    continue;
++                }
++                for (int y = y0; y <= y1; ++y) {
++                    final BlockState state = chunk.getBlockState(cursor.set(x, y, z));
++                    if (airOnly ? !state.isAir() : !state.canvas$noInsideEffect) {
++                        return false;
++                    }
++                }
++            }
++        }
++        return true;
++    }
++    // Canvas end - skip inside-block checks when no block can act
++
+     private void checkInsideBlocks(final List<Entity.Movement> movements, final InsideBlockEffectApplier.StepBasedCollector effectCollector) {
+         if (this.isAffectedByBlocks()) {
++            // Canvas start - skip inside-block checks when no block can act
++            if (this.canvas$insideEffectFree(movements)) {
++                return;
++            }
++            // Canvas end - skip inside-block checks when no block can act
+             LongSet visitedBlocks = this.visitedBlocks;
+ 
+             for (Entity.Movement movement : movements) {
 @@ -1951,6 +_,11 @@
          boolean debugEntityBlockIntersections = this.level instanceof ServerLevel serverLevel
              && serverLevel.getServer().debugSubscribers().hasAnySubscriberFor(DebugSubscriptions.ENTITY_BLOCK_INTERSECTIONS);
