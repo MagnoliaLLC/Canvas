@@ -1,5 +1,42 @@
 --- a/net/minecraft/world/level/pathfinder/WalkNodeEvaluator.java
 +++ b/net/minecraft/world/level/pathfinder/WalkNodeEvaluator.java
+@@ -37,6 +_,7 @@
+     @Override
+     public void prepare(final PathNavigationRegion level, final Mob entity) {
+         super.prepare(level, entity);
++        this.canvas$mobJumpHeight = Math.max(1.125, entity.maxUpStep()); // Canvas - compute per-search pathfinding values once
+         entity.onPathfindingStart();
+     }
+ 
+@@ -268,8 +_,10 @@
+         }
+     }
+ 
++    private double canvas$mobJumpHeight; // Canvas - compute per-search pathfinding values once
++
+     private double getMobJumpHeight() {
+-        return Math.max(1.125, this.mob.maxUpStep());
++        return this.canvas$mobJumpHeight; // Canvas - compute per-search pathfinding values once
+     }
+ 
+     private Node getNodeAndUpdateCostToMax(final int x, final int y, final int z, final PathType pathType, final float cost) {
+@@ -372,7 +_,15 @@
+     }
+ 
+     protected PathType getCachedPathType(final int x, final int y, final int z) {
+-        return this.pathTypesByPosCacheByMob.computeIfAbsent(BlockPos.asLong(x, y, z), k -> this.getPathTypeOfMob(this.currentContext, x, y, z, this.mob));
++        // Canvas start - compute per-search pathfinding values once
++        final long key = BlockPos.asLong(x, y, z);
++        PathType pathType = this.pathTypesByPosCacheByMob.get(key);
++        if (pathType == null) {
++            pathType = this.getPathTypeOfMob(this.currentContext, x, y, z, this.mob);
++            this.pathTypesByPosCacheByMob.put(key, pathType);
++        }
++        return pathType;
++        // Canvas end - compute per-search pathfinding values once
+     }
+ 
+     @Override
 @@ -511,6 +_,8 @@
          return blockPathType;
      }
