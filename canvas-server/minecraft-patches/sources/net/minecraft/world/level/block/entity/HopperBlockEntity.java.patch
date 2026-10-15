@@ -112,6 +112,54 @@
              if (fullState != HOPPER_EMPTY) { // Paper - Perf: Optimize Hoppers
                  changed = ejectItems(level, pos, entity);
              }
+@@ -481,7 +_,47 @@
+         return slots;
+     }
+ 
++    // Canvas start - read plain containers directly when checking fullness
++    // containers whose getItem is the list read (after the slot 0 loot unpack): their fullness is read off the list, each half
++    // reached in the same order and its slot 0 still read through getItem
++    private static final java.util.Set<Class<?>> CANVAS_PLAIN_CONTAINERS = java.util.Set.of(
++        ChestBlockEntity.class, TrappedChestBlockEntity.class, BarrelBlockEntity.class, DispenserBlockEntity.class, DropperBlockEntity.class, HopperBlockEntity.class
++    );
++
++    private static boolean canvas$plain(final Container container) {
++        return CANVAS_PLAIN_CONTAINERS.contains(container.getClass());
++    }
++
++    private static boolean canvas$allFull(final BaseContainerBlockEntity container) {
++        final int size = container.getContainerSize();
++        if (size == 0) {
++            return true;
++        }
++        final ItemStack first = container.getItem(0);
++        if (first.getCount() < first.getMaxStackSize()) {
++            return false;
++        }
++        final net.minecraft.core.NonNullList<ItemStack> items = container.getItems();
++        for (int slot = 1; slot < size; ++slot) {
++            final ItemStack itemStack = items.get(slot);
++            if (itemStack.getCount() < itemStack.getMaxStackSize()) {
++                return false;
++            }
++        }
++        return true;
++    }
++    // Canvas end - read plain containers directly when checking fullness
++
+     private static boolean isFullContainer(final Container container, final Direction direction) {
++        // Canvas start - read plain containers directly when checking fullness
++        if (container instanceof net.minecraft.world.CompoundContainer compound) {
++            if (canvas$plain(compound.container1) && canvas$plain(compound.container2)) {
++                return canvas$allFull((BaseContainerBlockEntity) compound.container1) && canvas$allFull((BaseContainerBlockEntity) compound.container2);
++            }
++        } else if (canvas$plain(container)) {
++            return canvas$allFull((BaseContainerBlockEntity) container);
++        }
++        // Canvas end - read plain containers directly when checking fullness
+         int[] slots = getSlots(container, direction);
+ 
+         for (int slot : slots) {
 @@ -728,7 +_,7 @@
          final boolean optimizeEntities
      ) {
