@@ -1,0 +1,34 @@
+--- a/net/minecraft/world/entity/ai/goal/WrappedGoal.java
++++ b/net/minecraft/world/entity/ai/goal/WrappedGoal.java
+@@ -7,6 +_,7 @@
+     private final Goal goal;
+     private final int priority;
+     private boolean isRunning;
++    @Nullable GoalSelector canvas$owner; // Canvas - goal selector fast paths
+ 
+     public WrappedGoal(final int priority, final Goal goal) {
+         this.priority = priority;
+@@ -36,6 +_,11 @@
+     public void start() {
+         if (!this.isRunning) {
+             this.isRunning = true;
++            // Canvas start - goal selector fast paths
++            if (this.canvas$owner != null) {
++                ++this.canvas$owner.canvas$running;
++            }
++            // Canvas end - goal selector fast paths
+             this.goal.start();
+         }
+     }
+@@ -44,6 +_,11 @@
+     public void stop() {
+         if (this.isRunning) {
+             this.isRunning = false;
++            // Canvas start - goal selector fast paths
++            if (this.canvas$owner != null) {
++                --this.canvas$owner.canvas$running;
++            }
++            // Canvas end - goal selector fast paths
+             this.goal.stop();
+         }
+     }
