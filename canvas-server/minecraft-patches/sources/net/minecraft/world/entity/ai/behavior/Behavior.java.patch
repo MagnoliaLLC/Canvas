@@ -18,6 +18,37 @@
          // Paper start - configurable behavior tick rate and timings
          String key = this.getClass().getName();
          int lastSeparator = key.lastIndexOf('.');
+@@ -44,6 +_,13 @@
+         return this.status;
+     }
+ 
++    // Canvas start - cache the configured behavior tick rate
++    private @org.jspecify.annotations.Nullable TickRate canvas$tickRate;
++
++    private record TickRate(com.google.common.collect.Table<net.minecraft.world.entity.EntityType<?>, String, Integer> tickRates, net.minecraft.world.entity.EntityType<?> type, int rate) {
++    }
++    // Canvas end - cache the configured behavior tick rate
++
+     @Override
+     public Set<MemoryModuleType<?>> getRequiredMemories() {
+         return this.entryCondition.keySet();
+@@ -52,7 +_,15 @@
+     @Override
+     public final boolean tryStart(final ServerLevel level, final E body, final long timestamp) {
+         // Paper start - configurable behavior tick rate and timings
+-        int tickRate = java.util.Objects.requireNonNullElse(level.paperConfig().tickRates.behavior.get(body.getType(), this.configKey), -1);
++        // Canvas start - cache the configured behavior tick rate
++        final com.google.common.collect.Table<net.minecraft.world.entity.EntityType<?>, String, Integer> tickRates = level.paperConfig().tickRates.behavior;
++        final net.minecraft.world.entity.EntityType<?> type = body.getType();
++        TickRate cachedRate = this.canvas$tickRate;
++        if (cachedRate == null || cachedRate.tickRates() != tickRates || cachedRate.type() != type) {
++            this.canvas$tickRate = cachedRate = new TickRate(tickRates, type, java.util.Objects.requireNonNullElse(tickRates.get(type, this.configKey), -1));
++        }
++        int tickRate = cachedRate.rate();
++        // Canvas end - cache the configured behavior tick rate
+         if (tickRate > -1 && timestamp < this.endTimestamp + tickRate) {
+             return false;
+         }
 @@ -110,15 +_,24 @@
      }
  
