@@ -1,0 +1,13 @@
+--- a/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/task/ChunkFullTask.java
++++ b/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/task/ChunkFullTask.java
+@@ -109,6 +_,10 @@
+             final NewChunkHolder chunkHolder = this.chunkHolder;
+ 
+             chunk.setFullStatus(chunkHolder::getChunkStatus);
++            // Canvas start - keep the full chunk status on the chunk
++            chunkHolder.canvas$fullChunk = chunk;
++            chunk.canvas$fullStatus = chunkHolder.getChunkStatus();
++            // Canvas end - keep the full chunk status on the chunk
+             try {
+                 platformHooks.setCurrentlyLoading(this.chunkHolder.vanillaChunkHolder, chunk);
+                 // Unlike Vanilla, we load the entity chunk here, as we load the NBT in empty status (unlike Vanilla)

@@ -227,7 +227,14 @@
                          fluidState.tick(level, blockPos, blockState);
                      }
  
-@@ -881,14 +_,14 @@
+@@ -876,19 +_,21 @@
+         return this.fullStatus == null ? FullChunkStatus.FULL : this.fullStatus.get();
+     }
+ 
++    public @Nullable FullChunkStatus canvas$fullStatus; // Canvas - keep the full chunk status on the chunk
++
+     public void setFullStatus(final Supplier<FullChunkStatus> fullStatus) {
+         this.fullStatus = fullStatus;
      }
  
      public void clearAllBlockEntities() {
@@ -266,7 +273,7 @@
                      return result;
                  } else {
                      return null;
-@@ -943,6 +_,66 @@
+@@ -943,6 +_,67 @@
              this.blockEntity = blockEntity;
              this.ticker = ticker;
          }
@@ -293,7 +300,8 @@
 +                // no need to check 'LevelChunk.this.level.areEntitiesLoaded', as this will
 +                // always be true, since as a LevelChunk, we are always at the FULL chunk status
 +                // so obviously we are loaded. we just need to check if we are block ticking now
-+                return LevelChunk.this.getFullStatus().isOrAfter(FullChunkStatus.BLOCK_TICKING);
++                final FullChunkStatus fullStatus = LevelChunk.this.canvas$fullStatus; // Canvas - keep the full chunk status on the chunk
++                return (fullStatus != null ? fullStatus : LevelChunk.this.getFullStatus()).isOrAfter(FullChunkStatus.BLOCK_TICKING); // Canvas - keep the full chunk status on the chunk
 +            }
 +            return false;
 +        }
