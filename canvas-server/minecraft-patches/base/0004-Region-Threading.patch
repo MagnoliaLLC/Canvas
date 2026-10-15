@@ -31557,6 +31557,51 @@ index 76e33f716b858707484952187b72ecda7ba4e469..5f4395b363563639180c80928e9a9f97
              && level.getBlockState(likedNoteblockPos.pos()).is(Blocks.NOTE_BLOCK)
              && likedNoteblockCooldown.isPresent();
      }
+diff --git a/net/minecraft/world/entity/animal/armadillo/ArmadilloAi.java b/net/minecraft/world/entity/animal/armadillo/ArmadilloAi.java
+index e4f2d4da439e8d9ce8f1d6d49cecd4e3ac1c8b65..05f9316b140270a7042992b5455fd87c21c0997e 100644
+--- a/net/minecraft/world/entity/animal/armadillo/ArmadilloAi.java
++++ b/net/minecraft/world/entity/animal/armadillo/ArmadilloAi.java
+@@ -45,16 +45,21 @@ public class ArmadilloAi {
+     private static final double DEFAULT_CLOSE_ENOUGH_DIST = 2.0;
+     private static final double BABY_CLOSE_ENOUGH_DIST = 1.0;
+     private static final UniformInt ADULT_FOLLOW_RANGE = UniformInt.of(5, 16);
+-    private static final OneShot<Armadillo> ARMADILLO_ROLLING_OUT = BehaviorBuilder.create(
+-        i -> i.group(i.absent(MemoryModuleType.DANGER_DETECTED_RECENTLY)).apply(i, location -> (level, body, timestamp) -> {
+-            if (body.isScared()) {
+-                body.rollOut();
+-                return true;
+-            } else {
+-                return false;
+-            }
+-        })
+-    );
++    // Canvas start - region threading
++    // a OneShot keeps its running status, so it can't be shared across regions
++    private static OneShot<Armadillo> armadilloRollingOut() {
++        return BehaviorBuilder.create(
++            i -> i.group(i.absent(MemoryModuleType.DANGER_DETECTED_RECENTLY)).apply(i, location -> (level, body, timestamp) -> {
++                if (body.isScared()) {
++                    body.rollOut();
++                    return true;
++                } else {
++                    return false;
++                }
++            })
++        );
++    }
++    // Canvas end - region threading
+ 
+     protected static List<ActivityData<Armadillo>> getActivities() {
+         return List.of(initCoreActivity(), initIdleActivity(), initScaredActivity());
+@@ -76,7 +81,7 @@ public class ArmadilloAi {
+                 },
+                 new CountDownCooldownTicks(MemoryModuleType.TEMPTATION_COOLDOWN_TICKS),
+                 new CountDownCooldownTicks(MemoryModuleType.GAZE_COOLDOWN_TICKS),
+-                ARMADILLO_ROLLING_OUT
++                armadilloRollingOut() // Canvas - region threading
+             )
+         );
+     }
 diff --git a/net/minecraft/world/entity/animal/axolotl/AxolotlAi.java b/net/minecraft/world/entity/animal/axolotl/AxolotlAi.java
 index 59944ddd9a294f9e7cb03a8c9c8aef2000648775..7ee7cf1b3bd0da3b18c1be33731b7ab315b0705d 100644
 --- a/net/minecraft/world/entity/animal/axolotl/AxolotlAi.java
@@ -32047,6 +32092,49 @@ index 574566c08965e600a0b08082d368059bb897e93f..3f9a39447adf0a6f647b695333f676ba
              && EntitySelector.NO_CREATIVE_OR_SPECTATOR.test(entity)
              && !this.isAlliedTo(entity)
              && !livingEntity.is(EntityTypes.ARMOR_STAND)
+diff --git a/net/minecraft/world/entity/monster/warden/WardenAi.java b/net/minecraft/world/entity/monster/warden/WardenAi.java
+index 7c3a50ace9037e2054317a81423ae81db7416423..468c10d955b235e46aa2af9d25cdd900273662ad 100644
+--- a/net/minecraft/world/entity/monster/warden/WardenAi.java
++++ b/net/minecraft/world/entity/monster/warden/WardenAi.java
+@@ -51,15 +51,20 @@ public class WardenAi {
+     private static final int SNIFFING_DURATION = Mth.ceil(83.2F);
+     public static final int DIGGING_COOLDOWN = 1200;
+     private static final int DISTURBANCE_LOCATION_EXPIRY_TIME = 100;
+-    private static final BehaviorControl<Warden> DIG_COOLDOWN_SETTER = BehaviorBuilder.create(
+-        i -> i.group(i.registered(MemoryModuleType.DIG_COOLDOWN)).apply(i, cooldown -> (level, body, timestamp) -> {
+-            if (i.tryGet(cooldown).isPresent()) {
+-                cooldown.setWithExpiry(Unit.INSTANCE, 1200L);
+-            }
+-
+-            return true;
+-        })
+-    );
++    // Canvas start - region threading
++    // a OneShot keeps its running status, so it can't be shared across regions
++    private static BehaviorControl<Warden> digCooldownSetter() {
++        return BehaviorBuilder.create(
++            i -> i.group(i.registered(MemoryModuleType.DIG_COOLDOWN)).apply(i, cooldown -> (level, body, timestamp) -> {
++                if (i.tryGet(cooldown).isPresent()) {
++                    cooldown.setWithExpiry(Unit.INSTANCE, 1200L);
++                }
++
++                return true;
++            })
++        );
++    }
++    // Canvas end - region threading
+ 
+     protected static List<ActivityData<Warden>> getActivities(final Warden body) {
+         return List.of(
+@@ -140,7 +145,7 @@ public class WardenAi {
+             Activity.FIGHT,
+             10,
+             ImmutableList.of(
+-                DIG_COOLDOWN_SETTER,
++                digCooldownSetter(), // Canvas - region threading
+                 StopAttackingIfTargetInvalid.<Warden>create(
+                     (level, target) -> !body.getAngerLevel().isAngry() || !body.canTargetEntity(target), WardenAi::onTargetInvalid, false
+                 ),
 diff --git a/net/minecraft/world/entity/monster/zombie/ZombieVillager.java b/net/minecraft/world/entity/monster/zombie/ZombieVillager.java
 index 60c66dba6c868578a49f468da70c1abe973f64f2..3b20494c7d3432e167ede4121b7a02ca048ef3ef 100644
 --- a/net/minecraft/world/entity/monster/zombie/ZombieVillager.java
