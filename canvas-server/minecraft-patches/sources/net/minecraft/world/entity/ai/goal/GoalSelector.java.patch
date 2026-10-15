@@ -1,0 +1,115 @@
+--- a/net/minecraft/world/entity/ai/goal/GoalSelector.java
++++ b/net/minecraft/world/entity/ai/goal/GoalSelector.java
+@@ -19,14 +_,19 @@
+             return false;
+         }
+     };
+-    private final Map<Goal.Flag, WrappedGoal> lockedFlags = new EnumMap<>(Goal.Flag.class);
++    private final WrappedGoal[] lockedFlags = new WrappedGoal[Goal.Flag.values().length]; // Canvas - goal selector fast paths (null is NO_GOAL)
+     private final Set<WrappedGoal> availableGoals = new ObjectLinkedOpenHashSet<>();
+     private static final Goal.Flag[] GOAL_FLAG_VALUES = Goal.Flag.values(); // Paper - remove streams from GoalSelector
+     private final ca.spottedleaf.moonrise.common.set.OptimizedSmallEnumSet<net.minecraft.world.entity.ai.goal.Goal.Flag> goalTypes = new ca.spottedleaf.moonrise.common.set.OptimizedSmallEnumSet<>(Goal.Flag.class); // Paper - remove streams from GoalSelector
+     private int curRate; // Paper - EAR 2
++    int canvas$running; // Canvas - goal selector fast paths (running goals this selector added)
+ 
+     public void addGoal(final int prio, final Goal goal) {
+-        this.availableGoals.add(new WrappedGoal(prio, goal));
++        // Canvas start - goal selector fast paths
++        final WrappedGoal wrapped = new WrappedGoal(prio, goal);
++        wrapped.canvas$owner = this;
++        this.availableGoals.add(wrapped);
++        // Canvas end - goal selector fast paths
+     }
+ 
+     public void removeAllGoals(final Predicate<Goal> predicate) {
+@@ -64,14 +_,15 @@
+         return goal.getFlags().hasCommonElements(disabledFlags);
+     }
+ 
+-    private static boolean goalCanBeReplacedForAllFlags(final WrappedGoal goal, final Map<Goal.Flag, WrappedGoal> lockedFlags) {
++    private static boolean goalCanBeReplacedForAllFlags(final WrappedGoal goal, final WrappedGoal[] lockedFlags) { // Canvas - goal selector fast paths
+         long flagIterator = goal.getFlags().getBackingSet();
+         final int flagSize = goal.getFlags().size();
+         for (int i = 0; i < flagSize; ++i) {
+             final Goal.Flag flag = GOAL_FLAG_VALUES[Long.numberOfTrailingZeros(flagIterator)];
+             flagIterator ^= ca.spottedleaf.common.util.IntegerUtil.getTrailingBit(flagIterator);
+             // Paper end - Perf: optimize goal types
+-            if (!lockedFlags.getOrDefault(flag, NO_GOAL).canBeReplacedBy(goal)) {
++            final WrappedGoal holder = lockedFlags[flag.ordinal()]; // Canvas - goal selector fast paths
++            if (!(holder == null ? NO_GOAL : holder).canBeReplacedBy(goal)) { // Canvas - goal selector fast paths
+                 return false;
+             }
+         }
+@@ -79,27 +_,54 @@
+         return true;
+     }
+ 
++    // Canvas start - goal selector fast paths
++    private boolean canvas$hasDisabledFlag(final WrappedGoal goal) {
++        return this.goalTypes.getBackingSet() != 0L && goalContainsAnyFlags(goal, this.goalTypes);
++    }
++
++    // with nothing locked every flag is held by NO_GOAL, which any goal below Integer.MAX_VALUE priority replaces
++    private static boolean canvas$canReplaceUnlocked(final WrappedGoal goal) {
++        return goal.getPriority() < Integer.MAX_VALUE || goal.getFlags().size() == 0;
++    }
++    // Canvas end - goal selector fast paths
++
+     public void tick() {
+         for (WrappedGoal goal : this.availableGoals) {
+-            if (goal.isRunning() && (goalContainsAnyFlags(goal, this.goalTypes) || !goal.canContinueToUse())) { // Paper - Perf: optimize goal types by removing streams
++            if (goal.isRunning() && (this.canvas$hasDisabledFlag(goal) || !goal.canContinueToUse())) { // Paper - Perf: optimize goal types by removing streams // Canvas - goal selector fast paths
+                 goal.stop();
+             }
+         }
+ 
+-        this.lockedFlags.entrySet().removeIf(entry -> !entry.getValue().isRunning());
++        // Canvas start - goal selector fast paths
++        final WrappedGoal[] lockedFlags = this.lockedFlags;
++        boolean anyLocked = false;
++        for (int i = 0; i < lockedFlags.length; ++i) {
++            final WrappedGoal holder = lockedFlags[i];
++            if (holder != null) {
++                if (holder.isRunning()) {
++                    anyLocked = true;
++                } else {
++                    lockedFlags[i] = null;
++                }
++            }
++        }
++        // Canvas end - goal selector fast paths
+ 
+         for (WrappedGoal goal : this.availableGoals) {
+             // Paper start
+-            if (!goal.isRunning() && !goalContainsAnyFlags(goal, this.goalTypes) && goalCanBeReplacedForAllFlags(goal, this.lockedFlags) && goal.canUse()) {
++            if (!goal.isRunning() && !this.canvas$hasDisabledFlag(goal) && (anyLocked ? goalCanBeReplacedForAllFlags(goal, lockedFlags) : canvas$canReplaceUnlocked(goal)) && goal.canUse()) { // Canvas - goal selector fast paths
+                 long flagIterator = goal.getFlags().getBackingSet();
+                 int wrappedGoalSize = goal.getFlags().size();
+                 for (int i = 0; i < wrappedGoalSize; ++i) {
+                     final Goal.Flag flag = GOAL_FLAG_VALUES[Long.numberOfTrailingZeros(flagIterator)];
+                     flagIterator ^= ca.spottedleaf.common.util.IntegerUtil.getTrailingBit(flagIterator);
+                     // Paper end
+-                    WrappedGoal currentGoal = this.lockedFlags.getOrDefault(flag, NO_GOAL);
+-                    currentGoal.stop();
+-                    this.lockedFlags.put(flag, goal);
++                    // Canvas start - goal selector fast paths
++                    final WrappedGoal currentGoal = lockedFlags[flag.ordinal()];
++                    (currentGoal == null ? NO_GOAL : currentGoal).stop();
++                    lockedFlags[flag.ordinal()] = goal;
++                    anyLocked = true;
++                    // Canvas end - goal selector fast paths
+                 }
+ 
+                 goal.start();
+@@ -110,6 +_,11 @@
+     }
+ 
+     public void tickRunningGoals(final boolean forceTickAllRunningGoals) {
++        // Canvas start - goal selector fast paths
++        if (this.canvas$running == 0) {
++            return;
++        }
++        // Canvas end - goal selector fast paths
+         for (WrappedGoal goal : this.availableGoals) {
+             if (goal.isRunning() && (forceTickAllRunningGoals || goal.requiresUpdateEveryTick())) {
+                 goal.tick();
