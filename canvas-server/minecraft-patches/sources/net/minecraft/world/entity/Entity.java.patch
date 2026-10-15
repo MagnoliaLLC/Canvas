@@ -26,6 +26,15 @@
          }
  
          this.firstTick = false;
+@@ -1547,7 +_,7 @@
+             int previousRemainingFireTicks = this.getRemainingFireTicks();
+             this.checkInsideBlocks(movements, this.insideEffectCollector);
+             this.insideEffectCollector.applyAndClear(this);
+-            if (this.isInRain()) {
++            if (this.getRemainingFireTicks() > 0 && this.isInRain()) { // Canvas - only put out fire in rain when burning (clearFire changes nothing at zero or less)
+                 this.clearFire();
+             }
+ 
 @@ -1910,8 +_,83 @@
          return SoundEvents.GENERIC_SPLASH;
      }
