@@ -169,6 +169,22 @@
              BlockPos pos = this.findLightningTargetAround(this.getBlockRandomPos(minX, 0, minZ, 15));
              if (this.isRainingAt(pos)) {
                  DifficultyInstance difficulty = this.getCurrentDifficultyAt(pos);
+@@ -1168,6 +_,15 @@
+     public void tickPrecipitation(final BlockPos pos) {
+         BlockPos topPos = this.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, pos);
+         BlockPos belowPos = topPos.below();
++        // Canvas start - skip biome lookups that cannot matter
++        // in clear weather only freezing can happen, and Biome#shouldFreeze needs a water source liquid block below the top
++        if (!this.isRaining()) {
++            final BlockState belowState = this.getBlockState(belowPos);
++            if (!(belowState.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock) || !belowState.getFluidState().is(net.minecraft.world.level.material.Fluids.WATER)) {
++                return;
++            }
++        }
++        // Canvas end - skip biome lookups that cannot matter
+         Biome biome = this.getBiome(topPos).value();
+         if (biome.shouldFreeze(this, belowPos)) {
+             org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockFormEvent(this, belowPos, Blocks.ICE.defaultBlockState(), Block.UPDATE_ALL, null); // CraftBukkit
 @@ -1251,10 +_,11 @@
                  int percentage = this.getGameRules().get(GameRules.PLAYERS_SLEEPING_PERCENTAGE);
                  Component message;
