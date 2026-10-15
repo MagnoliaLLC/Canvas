@@ -158,7 +158,128 @@
              && canPassThroughWall(direction, level, sourcePos, sourceState, testPos, testState);
      }
  
-@@ -468,7 +_,7 @@
+@@ -420,55 +_,91 @@
+         return count;
+     }
+ 
++    // Canvas start - optimize fluid
++    private static final Direction[] HORIZONTAL_DIRECTIONS = Direction.Plane.HORIZONTAL.stream().toArray(Direction[]::new);
++
++    // with no replaceable side nothing spreads, so no slope search is needed
+     protected Map<Direction, FluidState> getSpread(final ServerLevel level, final BlockPos pos, final BlockState state) {
++        BlockPos[] testPositions = null;
++        BlockState[] testStates = null;
++        FluidState[] newFluids = null;
++        int passable = 0;
++        int fillable = 0;
++        for (int i = 0; i < HORIZONTAL_DIRECTIONS.length; ++i) {
++            final Direction direction = HORIZONTAL_DIRECTIONS[i];
++            final BlockPos testPos = pos.relative(direction);
++            final BlockState testState = level.getBlockStateIfLoaded(testPos); // Paper - Prevent chunk loading from fluid flowing
++            if (testState == null) {
++                continue;
++            }
++            final FluidState testFluidState = testState.getFluidState();
++            if (!this.canMaybePassThrough(level, pos, state, direction, testPos, testState, testFluidState)) {
++                continue;
++            }
++            final FluidState newFluid = this.getNewLiquid(level, testPos, testState);
++            if (!canHoldSpecificFluid(level, testPos, testState, newFluid.getType())) {
++                continue;
++            }
++            if (testPositions == null) {
++                testPositions = new BlockPos[HORIZONTAL_DIRECTIONS.length];
++                testStates = new BlockState[HORIZONTAL_DIRECTIONS.length];
++                newFluids = new FluidState[HORIZONTAL_DIRECTIONS.length];
++            }
++            testPositions[i] = testPos;
++            testStates[i] = testState;
++            newFluids[i] = newFluid;
++            passable |= 1 << i;
++            if (testFluidState.canBeReplacedWith(level, testPos, newFluid.getType(), direction)) {
++                fillable |= 1 << i;
++            }
++        }
++        if (fillable == 0) {
++            return java.util.Collections.emptyMap();
++        }
++
++        final FlowingFluid.SpreadContext context = new FlowingFluid.SpreadContext(level, pos);
+         int lowest = 1000;
+-        Map<Direction, FluidState> result = Maps.newEnumMap(Direction.class);
+-        FlowingFluid.SpreadContext context = null;
+-
+-        for (Direction direction : Direction.Plane.HORIZONTAL) {
+-            BlockPos testPos = pos.relative(direction);
+-            BlockState testState = level.getBlockStateIfLoaded(testPos); // Paper - Prevent chunk loading from fluid flowing
+-            if (testState == null) continue; // Paper - Prevent chunk loading from fluid flowing
+-            FluidState testFluidState = testState.getFluidState();
+-            if (this.canMaybePassThrough(level, pos, state, direction, testPos, testState, testFluidState)) {
+-                FluidState newFluid = this.getNewLiquid(level, testPos, testState);
+-                if (canHoldSpecificFluid(level, testPos, testState, newFluid.getType())) {
+-                    if (context == null) {
+-                        context = new FlowingFluid.SpreadContext(level, pos);
+-                    }
+-
+-                    int distance;
+-                    if (context.isHole(testPos)) {
+-                        distance = 0;
+-                    } else {
+-                        distance = this.getSlopeDistance(level, testPos, 1, direction.getOpposite(), testState, context);
+-                    }
+-
+-                    if (distance < lowest) {
+-                        result.clear();
+-                    }
+-
+-                    if (distance <= lowest) {
+-                        if (testFluidState.canBeReplacedWith(level, testPos, newFluid.getType(), direction)) {
+-                            result.put(direction, newFluid);
+-                        }
+-
+-                        lowest = distance;
+-                    }
+-                }
+-            }
+-        }
+-
++        int nearest = 0;
++        for (int i = 0; i < HORIZONTAL_DIRECTIONS.length; ++i) {
++            if ((fillable & 1 << i) == 0) {
++                continue;
++            }
++            final int distance = this.canvas$holeDistance(level, testPositions[i], HORIZONTAL_DIRECTIONS[i], testStates[i], context);
++            if (distance < lowest) {
++                lowest = distance;
++                nearest = 1 << i;
++            } else if (distance == lowest) {
++                nearest |= 1 << i;
++            }
++        }
++
++        final Map<Direction, FluidState> result = Maps.newEnumMap(Direction.class);
++        final int unfillable = passable & ~fillable;
++        for (int i = 0; i < HORIZONTAL_DIRECTIONS.length && lowest > 0; ++i) {
++            if ((unfillable & 1 << i) != 0 && this.canvas$holeDistance(level, testPositions[i], HORIZONTAL_DIRECTIONS[i], testStates[i], context) < lowest) {
++                return result;
++            }
++        }
++        for (int i = 0; i < HORIZONTAL_DIRECTIONS.length; ++i) {
++            if ((nearest & 1 << i) != 0) {
++                result.put(HORIZONTAL_DIRECTIONS[i], newFluids[i]);
++            }
++        }
+         return result;
+     }
+ 
++    private int canvas$holeDistance(final ServerLevel level, final BlockPos testPos, final Direction direction, final BlockState testState, final FlowingFluid.SpreadContext context) {
++        return context.isHole(testPos) ? 0 : this.getSlopeDistance(level, testPos, 1, direction.getOpposite(), testState, context);
++    }
++    // Canvas end - optimize fluid
++
+     public static boolean canHoldAnyFluid(final BlockState state) {
+         Block block = state.getBlock();
+         return block instanceof LiquidBlockContainer || state.is(BlockTags.WASHED_AWAY_BY_FLUIDS);
      }
  
      private static boolean canHoldFluid(final BlockGetter level, final BlockPos pos, final BlockState state, final Fluid newFluid) {
