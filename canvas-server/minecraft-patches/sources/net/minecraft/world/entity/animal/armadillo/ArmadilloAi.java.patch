@@ -1,0 +1,43 @@
+--- a/net/minecraft/world/entity/animal/armadillo/ArmadilloAi.java
++++ b/net/minecraft/world/entity/animal/armadillo/ArmadilloAi.java
+@@ -45,16 +_,21 @@
+     private static final double DEFAULT_CLOSE_ENOUGH_DIST = 2.0;
+     private static final double BABY_CLOSE_ENOUGH_DIST = 1.0;
+     private static final UniformInt ADULT_FOLLOW_RANGE = UniformInt.of(5, 16);
+-    private static final OneShot<Armadillo> ARMADILLO_ROLLING_OUT = BehaviorBuilder.create(
+-        i -> i.group(i.absent(MemoryModuleType.DANGER_DETECTED_RECENTLY)).apply(i, location -> (level, body, timestamp) -> {
+-            if (body.isScared()) {
+-                body.rollOut();
+-                return true;
+-            } else {
+-                return false;
+-            }
+-        })
+-    );
++    // Canvas start - build one-shot behaviors per brain
++    // a OneShot carries its running status, so a static one shared by every armadillo was written from several regions at once
++    private static OneShot<Armadillo> armadilloRollingOut() {
++        return BehaviorBuilder.create(
++            i -> i.group(i.absent(MemoryModuleType.DANGER_DETECTED_RECENTLY)).apply(i, location -> (level, body, timestamp) -> {
++                if (body.isScared()) {
++                    body.rollOut();
++                    return true;
++                } else {
++                    return false;
++                }
++            })
++        );
++    }
++    // Canvas end - build one-shot behaviors per brain
+ 
+     protected static List<ActivityData<Armadillo>> getActivities() {
+         return List.of(initCoreActivity(), initIdleActivity(), initScaredActivity());
+@@ -76,7 +_,7 @@
+                 },
+                 new CountDownCooldownTicks(MemoryModuleType.TEMPTATION_COOLDOWN_TICKS),
+                 new CountDownCooldownTicks(MemoryModuleType.GAZE_COOLDOWN_TICKS),
+-                ARMADILLO_ROLLING_OUT
++                armadilloRollingOut() // Canvas - build one-shot behaviors per brain
+             )
+         );
+     }
