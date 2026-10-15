@@ -34,18 +34,19 @@
      @Deprecated
      @VisibleForTesting
      public EnvironmentAttributeSystem setEnvironmentAttributes(final EnvironmentAttributeSystem environmentAttributes) {
-@@ -1064,71 +_,82 @@
+@@ -1064,71 +_,94 @@
      // Paper start - optimise random ticking
      private final io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource simpleRandom = io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource.INSTANCE; // Folia - region threading
  
 -    private void optimiseRandomTick(final LevelChunk chunk, final int tickSpeed) {
+-        final LevelChunkSection[] sections = chunk.getSections();
+-        final int minSection = ca.spottedleaf.moonrise.common.util.WorldUtil.getMinSection((ServerLevel)(Object)this);
+-        final io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource simpleRandom = this.simpleRandom; // Folia - region threading
 +    // Canvas start - optimize random tick
 +    // the modifications in this method essentially reduce tick volume drastically without
 +    // any sort of bias or skipping important updates, and significantly reduce RNG calls
 +    private void optimiseRandomTick(final LevelChunk chunk, final int tickSpeed, io.papermc.paper.threadedregions.RegionizedWorldData worldData) {
-         final LevelChunkSection[] sections = chunk.getSections();
--        final int minSection = ca.spottedleaf.moonrise.common.util.WorldUtil.getMinSection((ServerLevel)(Object)this);
--        final io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource simpleRandom = this.simpleRandom; // Folia - region threading
++        LevelChunkSection[] sections = null; // Canvas - load ticked sections lazily
 +        final int minSection = ca.spottedleaf.moonrise.common.util.WorldUtil.getMinSection(this);
          final boolean doubleTickFluids = !ca.spottedleaf.moonrise.common.PlatformHooks.get().configFixMC224294();
  
@@ -53,15 +54,22 @@
          final int offsetX = cpos.x() << 4;
          final int offsetZ = cpos.z() << 4;
  
+-        for (int sectionIndex = 0, sectionsLen = sections.length; sectionIndex < sectionsLen; sectionIndex++) {
 +        final net.minecraft.util.RandomSource random = worldData.getCanvasWorldData().simpleUnsafeLocalRandom;
 +
 +        final short[] tickingBlockCounts = chunk.canvas$getTickingBlockCounts();
-         for (int sectionIndex = 0, sectionsLen = sections.length; sectionIndex < sectionsLen; sectionIndex++) {
--            final int offsetY = (sectionIndex + minSection) << 4;
++        for (int sectionIndex = 0, sectionsLen = tickingBlockCounts.length; sectionIndex < sectionsLen; sectionIndex++) { // Canvas - load ticked sections lazily
 +            final int tickingBlocks = tickingBlockCounts[sectionIndex];
 +            if (tickingBlocks == 0) continue;
 +
-             final LevelChunkSection section = sections[sectionIndex];
++            // Canvas start - load ticked sections lazily
++            // most picks miss the ticking blocks, so the section is read on the first hit; the random draws stay where they are
++            net.minecraft.world.level.chunk.PalettedContainer<BlockState> states = null;
++            ca.spottedleaf.moonrise.common.list.ShortList tickList = null;
++            // Canvas end - load ticked sections lazily
++
+             final int offsetY = (sectionIndex + minSection) << 4;
+-            final LevelChunkSection section = sections[sectionIndex];
 -            final net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.world.level.block.state.BlockState> states = section.getStates();
 -            if (!section.isRandomlyTickingBlocks()) {
 -                continue;
@@ -76,10 +84,7 @@
 -                if (index >= tickingBlocks) {
 -                    // most of the time we fall here
 -                    continue;
-+            final var states = section.getStates();
-+            final var tickList = ((ca.spottedleaf.moonrise.patches.block_counting.BlockCountingChunkSection)section).moonrise$getTickingBlockList();
-+
-+            final int offsetY = (sectionIndex + minSection) << 4;
+-                }
 +
 +            // cached rng for block selection
 +            long rndCache = random.nextLong();
@@ -89,11 +94,21 @@
 +                if (bitsLeft < 12) { // need 12 bits for 0-4095
 +                    rndCache = random.nextLong();
 +                    bitsLeft = 64;
-                 }
++                }
 +                bitsLeft -= 12;
 +
 +                final int index = (int)((rndCache >>> bitsLeft) & 0xFFF);
 +                if (index >= tickingBlocks) continue;
++                // Canvas start - load ticked sections lazily
++                if (tickList == null) {
++                    if (sections == null) {
++                        sections = chunk.getSections();
++                    }
++                    final LevelChunkSection section = sections[sectionIndex];
++                    states = section.getStates();
++                    tickList = ((ca.spottedleaf.moonrise.patches.block_counting.BlockCountingChunkSection)section).moonrise$getTickingBlockList();
++                }
++                // Canvas end - load ticked sections lazily
  
                  final int location = (int)tickList.getRaw(index) & 0xFFFF;
                  final BlockState state = states.get(location);
