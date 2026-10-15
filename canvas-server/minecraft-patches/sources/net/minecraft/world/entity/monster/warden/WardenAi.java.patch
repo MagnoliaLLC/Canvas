@@ -1,0 +1,40 @@
+--- a/net/minecraft/world/entity/monster/warden/WardenAi.java
++++ b/net/minecraft/world/entity/monster/warden/WardenAi.java
+@@ -51,15 +_,20 @@
+     private static final int SNIFFING_DURATION = Mth.ceil(83.2F);
+     public static final int DIGGING_COOLDOWN = 1200;
+     private static final int DISTURBANCE_LOCATION_EXPIRY_TIME = 100;
+-    private static final BehaviorControl<Warden> DIG_COOLDOWN_SETTER = BehaviorBuilder.create(
+-        i -> i.group(i.registered(MemoryModuleType.DIG_COOLDOWN)).apply(i, cooldown -> (level, body, timestamp) -> {
+-            if (i.tryGet(cooldown).isPresent()) {
+-                cooldown.setWithExpiry(Unit.INSTANCE, 1200L);
+-            }
++    // Canvas start - build one-shot behaviors per brain
++    // a OneShot carries its running status, so a static one shared by every warden was written from several regions at once
++    private static BehaviorControl<Warden> digCooldownSetter() {
++        return BehaviorBuilder.create(
++            i -> i.group(i.registered(MemoryModuleType.DIG_COOLDOWN)).apply(i, cooldown -> (level, body, timestamp) -> {
++                if (i.tryGet(cooldown).isPresent()) {
++                    cooldown.setWithExpiry(Unit.INSTANCE, 1200L);
++                }
+ 
+-            return true;
+-        })
+-    );
++                return true;
++            })
++        );
++    }
++    // Canvas end - build one-shot behaviors per brain
+ 
+     protected static List<ActivityData<Warden>> getActivities(final Warden body) {
+         return List.of(
+@@ -140,7 +_,7 @@
+             Activity.FIGHT,
+             10,
+             ImmutableList.of(
+-                DIG_COOLDOWN_SETTER,
++                digCooldownSetter(), // Canvas - build one-shot behaviors per brain
+                 StopAttackingIfTargetInvalid.<Warden>create(
+                     (level, target) -> !body.getAngerLevel().isAngry() || !body.canTargetEntity(target), WardenAi::onTargetInvalid, false
+                 ),
