@@ -1,0 +1,19 @@
+--- a/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/NewChunkHolder.java
++++ b/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/NewChunkHolder.java
+@@ -1190,8 +_,16 @@
+ 
+     private boolean processingFullStatus = false;
+ 
++    public net.minecraft.world.level.chunk.LevelChunk canvas$fullChunk; // Canvas - keep the full chunk status on the chunk
++
+     private void updateCurrentState(final FullChunkStatus to) {
+         this.currentFullChunkStatus = to;
++        // Canvas start - keep the full chunk status on the chunk
++        final net.minecraft.world.level.chunk.LevelChunk fullChunk = this.canvas$fullChunk;
++        if (fullChunk != null) {
++            fullChunk.canvas$fullStatus = to;
++        }
++        // Canvas end - keep the full chunk status on the chunk
+     }
+ 
+     // only to be called on the main thread, no locks need to be held
