@@ -1,0 +1,101 @@
+--- a/net/minecraft/world/entity/ai/sensing/Sensor.java
++++ b/net/minecraft/world/entity/ai/sensing/Sensor.java
+@@ -13,19 +_,33 @@
+ public abstract class Sensor<E extends LivingEntity> {
+     private static final int DEFAULT_SCAN_RATE = 20;
+     private static final int DEFAULT_TARGETING_RANGE = 16;
+-    private static final TargetingConditions TARGET_CONDITIONS = TargetingConditions.forNonCombat().range(16.0);
+-    private static final TargetingConditions TARGET_CONDITIONS_IGNORE_INVISIBILITY_TESTING = TargetingConditions.forNonCombat()
+-        .range(16.0)
+-        .ignoreInvisibilityTesting();
+-    private static final TargetingConditions ATTACK_TARGET_CONDITIONS = TargetingConditions.forCombat().range(16.0);
+-    private static final TargetingConditions ATTACK_TARGET_CONDITIONS_IGNORE_INVISIBILITY_TESTING = TargetingConditions.forCombat()
+-        .range(16.0)
+-        .ignoreInvisibilityTesting();
+-    private static final TargetingConditions ATTACK_TARGET_CONDITIONS_IGNORE_LINE_OF_SIGHT = TargetingConditions.forCombat().range(16.0).ignoreLineOfSight();
+-    private static final TargetingConditions ATTACK_TARGET_CONDITIONS_IGNORE_INVISIBILITY_AND_LINE_OF_SIGHT = TargetingConditions.forCombat()
+-        .range(16.0)
+-        .ignoreLineOfSight()
+-        .ignoreInvisibilityTesting();
++    // Canvas start - region-local sensor targeting
++    // vanilla keeps these conditions in statics and re-ranges them to each sensing mob's follow range before its scan; regions
++    // tick at once, so one region re-ranged them under another's tests. Each region now holds its own set (the shared one is
++    // left for callers off a region thread), which is the single-threaded behavior per region
++    private static final Sensor.Targeting SHARED_TARGETING = new Sensor.Targeting();
++
++    public static final class Targeting {
++        private final TargetingConditions targetConditions = TargetingConditions.forNonCombat().range(16.0);
++        private final TargetingConditions targetConditionsIgnoreInvisibilityTesting = TargetingConditions.forNonCombat()
++            .range(16.0)
++            .ignoreInvisibilityTesting();
++        private final TargetingConditions attackTargetConditions = TargetingConditions.forCombat().range(16.0);
++        private final TargetingConditions attackTargetConditionsIgnoreInvisibilityTesting = TargetingConditions.forCombat()
++            .range(16.0)
++            .ignoreInvisibilityTesting();
++        private final TargetingConditions attackTargetConditionsIgnoreLineOfSight = TargetingConditions.forCombat().range(16.0).ignoreLineOfSight();
++        private final TargetingConditions attackTargetConditionsIgnoreInvisibilityAndLineOfSight = TargetingConditions.forCombat()
++            .range(16.0)
++            .ignoreLineOfSight()
++            .ignoreInvisibilityTesting();
++    }
++
++    private static Sensor.Targeting targeting() {
++        final io.papermc.paper.threadedregions.RegionizedWorldData worldData = io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData();
++        return worldData == null ? SHARED_TARGETING : worldData.getCanvasWorldData().sensorTargeting;
++    }
++    // Canvas end - region-local sensor targeting
+     private final int scanRate;
+     private long timeToTick;
+     private final String configKey; // Paper - configurable sensor tick rate and timings
+@@ -60,12 +_,15 @@
+ 
+     private void updateTargetingConditionRanges(final E body) {
+         double followRange = body.getAttributeValue(Attributes.FOLLOW_RANGE);
+-        TARGET_CONDITIONS.range(followRange);
+-        TARGET_CONDITIONS_IGNORE_INVISIBILITY_TESTING.range(followRange);
+-        ATTACK_TARGET_CONDITIONS.range(followRange);
+-        ATTACK_TARGET_CONDITIONS_IGNORE_INVISIBILITY_TESTING.range(followRange);
+-        ATTACK_TARGET_CONDITIONS_IGNORE_LINE_OF_SIGHT.range(followRange);
+-        ATTACK_TARGET_CONDITIONS_IGNORE_INVISIBILITY_AND_LINE_OF_SIGHT.range(followRange);
++        // Canvas start - region-local sensor targeting
++        final Sensor.Targeting targeting = targeting();
++        targeting.targetConditions.range(followRange);
++        targeting.targetConditionsIgnoreInvisibilityTesting.range(followRange);
++        targeting.attackTargetConditions.range(followRange);
++        targeting.attackTargetConditionsIgnoreInvisibilityTesting.range(followRange);
++        targeting.attackTargetConditionsIgnoreLineOfSight.range(followRange);
++        targeting.attackTargetConditionsIgnoreInvisibilityAndLineOfSight.range(followRange);
++        // Canvas end - region-local sensor targeting
+     }
+ 
+     protected abstract void doTick(final ServerLevel level, final E body);
+@@ -74,14 +_,14 @@
+ 
+     public static boolean isEntityTargetable(final ServerLevel level, final LivingEntity body, final LivingEntity entity) {
+         return body.getBrain().isMemoryValue(MemoryModuleType.ATTACK_TARGET, entity)
+-            ? TARGET_CONDITIONS_IGNORE_INVISIBILITY_TESTING.test(level, body, entity)
+-            : TARGET_CONDITIONS.test(level, body, entity);
++            ? targeting().targetConditionsIgnoreInvisibilityTesting.test(level, body, entity) // Canvas - region-local sensor targeting
++            : targeting().targetConditions.test(level, body, entity); // Canvas - region-local sensor targeting
+     }
+ 
+     public static boolean isEntityAttackable(final ServerLevel level, final LivingEntity body, final LivingEntity target) {
+         return body.getBrain().isMemoryValue(MemoryModuleType.ATTACK_TARGET, target)
+-            ? ATTACK_TARGET_CONDITIONS_IGNORE_INVISIBILITY_TESTING.test(level, body, target)
+-            : ATTACK_TARGET_CONDITIONS.test(level, body, target);
++            ? targeting().attackTargetConditionsIgnoreInvisibilityTesting.test(level, body, target) // Canvas - region-local sensor targeting
++            : targeting().attackTargetConditions.test(level, body, target); // Canvas - region-local sensor targeting
+     }
+ 
+     public static BiPredicate<ServerLevel, LivingEntity> wasEntityAttackableLastNTicks(final LivingEntity body, final int ticks) {
+@@ -90,8 +_,8 @@
+ 
+     public static boolean isEntityAttackableIgnoringLineOfSight(final ServerLevel level, final LivingEntity body, final LivingEntity target) {
+         return body.getBrain().isMemoryValue(MemoryModuleType.ATTACK_TARGET, target)
+-            ? ATTACK_TARGET_CONDITIONS_IGNORE_INVISIBILITY_AND_LINE_OF_SIGHT.test(level, body, target)
+-            : ATTACK_TARGET_CONDITIONS_IGNORE_LINE_OF_SIGHT.test(level, body, target);
++            ? targeting().attackTargetConditionsIgnoreInvisibilityAndLineOfSight.test(level, body, target) // Canvas - region-local sensor targeting
++            : targeting().attackTargetConditionsIgnoreLineOfSight.test(level, body, target); // Canvas - region-local sensor targeting
+     }
+ 
+     public static <T, U> BiPredicate<T, U> rememberPositives(final int invocations, final BiPredicate<T, U> predicate) {

@@ -1,0 +1,12 @@
+--- a/io/canvasmc/canvas/threadedregions/CanvasRegionizedWorldData.java
++++ b/io/canvasmc/canvas/threadedregions/CanvasRegionizedWorldData.java
+@@ -63,6 +_,9 @@
+     public LongSet slopeDistanceCacheVisited = new LongOpenHashSet(512);
+     public FlowingFluid.SlopeDistanceNodeDeque slopeDistanceCacheQueue = new FlowingFluid.SlopeDistanceNodeDeque();
+ 
++    // this is transient, Sensor's targeting conditions re-ranged by each sensing mob in this region
++    public final net.minecraft.world.entity.ai.sensing.Sensor.Targeting sensorTargeting = new net.minecraft.world.entity.ai.sensing.Sensor.Targeting();
++
+     public long projectilesLoadedTick = 0;
+     public long projectilesLoadedThisTick = 0;
+ 
