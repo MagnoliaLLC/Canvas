@@ -3,7 +3,7 @@ From: RootBeer <rootb33rman@gmail.com>
 Date: Thu, 15 Oct 2026 23:33:25 -0400
 Subject: [PATCH] Extended View Distance fixes
 
-Failed and ungenerated reads stay cached for a few seconds instead of being read again every tick, where they also held back every farther fake chunk; cache entries expire a few seconds after a player last asked for them rather than living as long as any client holds the chunk, which kept every fake chunk ever sent in memory and every built but unsent one forever, and a watch racing the drain left an entry without a future that threw on the region thread. A real chunk leaving the load range is kept on the client as a fake chunk instead of being forgotten and rebuilt from disk, which sent it twice and left a hole where the chunk was not saved yet. Real and fake chunks share the send allocation, the visual distance stops at the client's view distance like the send distance does, and a player set to 0 gets no fake chunks. Light is sent as the live light engine sends it, so sections it leaves to the client are no longer sent dark, and chunks without valid light are lit by the sky instead of sent black. Chunks saved by a newer version are skipped instead of stopping the server, and hidden ores keep the stone they sit in.
+Failed and ungenerated reads stay cached for a few seconds instead of being read again every tick, where they also held back every farther fake chunk; cache entries expire a few seconds after a player last asked for them rather than living as long as any client holds the chunk, which kept every fake chunk ever sent in memory and every built but unsent one forever, and a watch racing the drain left an entry without a future that threw on the region thread. A real chunk leaving the load range is kept on the client as a fake chunk instead of being forgotten and rebuilt from disk, which sent it twice and left a hole where the chunk was not saved yet. Real and fake chunks share the send allocation, the visual distance stops at the client's view distance like the send distance does, and a player set to 0 gets no fake chunks. Light is sent as the live light engine sends it, so sections it leaves to the client are no longer sent dark, and chunks without valid light are lit by the sky instead of sent black. Chunks saved by a newer version are skipped instead of stopping the server, and hidden ores keep the stone they sit in. Hollowing removes only blocks boxed in by opaque full blocks and keeps the world below Y 0, since a fence, wall, slab, stair or snow layer beside a block had it removed and left a hole into the hollowed terrain, and builds run on their own threads instead of waiting for a chunk worker with nothing else queued.
 
 diff --git a/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java b/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java
 index fede09ee32da72d414dacc553af91199e954ad99..ece708951041d7032e5cb17b6524e3d0d6017494 100644
@@ -209,20 +209,45 @@ index fede09ee32da72d414dacc553af91199e954ad99..ece708951041d7032e5cb17b6524e3d0
  
                  if (vvChunk && !sentChunk) {
 diff --git a/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java b/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java
-index 15b3f309e0e54678a03b55a41e0da762e58b97e5..73e8c6ca6bc6fb0e8316ec0d87616df44bcbd9d9 100644
+index 15b3f309e0e54678a03b55a41e0da762e58b97e5..204ed387190ff8a4a44b395cdead3aff99b8ddaf 100644
 --- a/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java
 +++ b/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java
-@@ -9,7 +9,9 @@ import com.mojang.logging.LogUtils;
+@@ -1,15 +1,17 @@
+ package io.canvasmc.canvas.extendedview;
+ 
+-import ca.spottedleaf.concurrentutil.executor.PrioritisedExecutor;
+ import ca.spottedleaf.concurrentutil.util.Priority;
+ import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
+-import ca.spottedleaf.moonrise.common.util.MoonriseCommon;
+ import ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO;
+ import com.mojang.logging.LogUtils;
  import io.canvasmc.canvas.GlobalConfiguration;
  import io.canvasmc.canvas.util.Util;
  import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.Executor;
++import java.util.concurrent.Executors;
 +import net.minecraft.SharedConstants;
  import net.minecraft.nbt.CompoundTag;
 +import net.minecraft.nbt.NbtUtils;
  import net.minecraft.network.protocol.game.ClientboundLevelChunkPacketData;
  import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
  import net.minecraft.network.protocol.game.ClientboundLightUpdatePacketData;
-@@ -52,7 +54,6 @@ public final class ExtendedViewDistance {
+@@ -29,8 +31,12 @@ public final class ExtendedViewDistance {
+ 
+     public static final Logger LOGGER = LogUtils.getLogger();
+ 
+-    // we use our own executor in the worker pool for building data after the io read
+-    private static final PrioritisedExecutor PACKET_BUILD_EXECUTOR = MoonriseCommon.SERVER_GROUP.createExecutor();
++    // we use our own threads for building data after the io read, the worker pool runs the highest
++    // priority first and would only reach these once no chunk is loading or generating anywhere
++    private static final Executor PACKET_BUILD_EXECUTOR = Executors.newFixedThreadPool(
++        Math.max(1, Runtime.getRuntime().availableProcessors() / 4),
++        Thread.ofPlatform().name("Canvas Visual View Builder #", 0).daemon().priority(Thread.NORM_PRIORITY - 1).factory()
++    );
+ 
+     public final VVChunkCache cache = new VVChunkCache();
+ 
+@@ -52,7 +58,6 @@ public final class ExtendedViewDistance {
      }
  
      private CompletableFuture<Result> startBuild(final int chunkX, final int chunkZ) {
@@ -230,12 +255,14 @@ index 15b3f309e0e54678a03b55a41e0da762e58b97e5..73e8c6ca6bc6fb0e8316ec0d87616df4
          final CompletableFuture<Result> future = new CompletableFuture<>();
  
          try {
-@@ -63,14 +64,12 @@ public final class ExtendedViewDistance {
+@@ -62,15 +67,13 @@ public final class ExtendedViewDistance {
+                 chunkX,
                  chunkZ,
                  MoonriseRegionFileIO.RegionFileType.CHUNK_DATA,
-                 (tag, throwable) -> PACKET_BUILD_EXECUTOR.queueTask(
+-                (tag, throwable) -> PACKET_BUILD_EXECUTOR.queueTask(
 -                    () -> this.completeBuild(chunkKey, chunkX, chunkZ, future, tag, throwable), Priority.IDLE
-+                    () -> this.completeBuild(chunkX, chunkZ, future, tag, throwable), Priority.IDLE
++                (tag, throwable) -> PACKET_BUILD_EXECUTOR.execute(
++                    () -> this.completeBuild(chunkX, chunkZ, future, tag, throwable)
                  ),
                  false,
                  Priority.IDLE // use idle, i dont give a fuck about this
@@ -246,7 +273,7 @@ index 15b3f309e0e54678a03b55a41e0da762e58b97e5..73e8c6ca6bc6fb0e8316ec0d87616df4
              // ruh roh :(
              future.complete(new Result.Failure(thrown));
          }
-@@ -79,7 +78,6 @@ public final class ExtendedViewDistance {
+@@ -79,7 +82,6 @@ public final class ExtendedViewDistance {
      }
  
      private void completeBuild(
@@ -254,7 +281,7 @@ index 15b3f309e0e54678a03b55a41e0da762e58b97e5..73e8c6ca6bc6fb0e8316ec0d87616df4
          final int chunkX,
          final int chunkZ,
          final CompletableFuture<Result> future,
-@@ -89,14 +87,14 @@ public final class ExtendedViewDistance {
+@@ -89,14 +91,14 @@ public final class ExtendedViewDistance {
          final Throwable ioThrowable
      ) {
          if (ioThrowable != null) {
@@ -272,7 +299,7 @@ index 15b3f309e0e54678a03b55a41e0da762e58b97e5..73e8c6ca6bc6fb0e8316ec0d87616df4
                  final CompoundTag upgraded = this.world.getChunkSource().chunkMap.upgradeChunkTag(tag);
  
                  // parse the tag and then try and create the packet
-@@ -122,7 +120,6 @@ public final class ExtendedViewDistance {
+@@ -122,7 +124,6 @@ public final class ExtendedViewDistance {
              }
  
              // not generated or something
@@ -280,7 +307,7 @@ index 15b3f309e0e54678a03b55a41e0da762e58b97e5..73e8c6ca6bc6fb0e8316ec0d87616df4
              future.complete(Result.NotGenerated.INSTANCE);
          } catch (final Throwable thrown) {
              LOGGER.warn(
-@@ -133,8 +130,7 @@ public final class ExtendedViewDistance {
+@@ -133,8 +134,7 @@ public final class ExtendedViewDistance {
                  thrown
              );
  
@@ -290,8 +317,17 @@ index 15b3f309e0e54678a03b55a41e0da762e58b97e5..73e8c6ca6bc6fb0e8316ec0d87616df4
              future.complete(new Result.Failure(thrown));
          }
      }
+@@ -169,7 +169,7 @@ public final class ExtendedViewDistance {
+         // try hollow chunks before we create the actual chunk object
+         if (GlobalConfiguration.getInstance().chunkSystem.visualViewDistance.hollowChunks) {
+             //noinspection NullableProblems - we made "sections" nonnull above
+-            PacketConstructorUtils.carveChunk(sections, this.world, this.airSection);
++            PacketConstructorUtils.carveChunk(sections);
+         }
+ 
+         // remove the ores if asked of us
 diff --git a/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java b/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java
-index 568faeca6f97e23a30b661bb26749f50e519e156..c9356d1ad2475c4545a568967cbfe5027512d2e8 100644
+index 568faeca6f97e23a30b661bb26749f50e519e156..c3f48cd6f20db9de5212afefa4cc118cdccaf2b7 100644
 --- a/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java
 +++ b/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java
 @@ -1,5 +1,6 @@
@@ -346,7 +382,46 @@ index 568faeca6f97e23a30b661bb26749f50e519e156..c9356d1ad2475c4545a568967cbfe502
                          }
                      }
                  }
-@@ -159,11 +170,17 @@ public class PacketConstructorUtils {
+@@ -64,13 +75,8 @@ public class PacketConstructorUtils {
+         }
+     }
+ 
+-    public static void carveChunk(
+-        final LevelChunkSection[] sections,
+-        final ServerLevel world,
+-        final LevelChunkSection airSection
+-    ) {
++    public static void carveChunk(final LevelChunkSection[] sections) {
+         final int sectionCount = sections.length;
+-        final int minSectionY = world.getMinSectionY();
+         final BlockState air = Blocks.AIR.defaultBlockState();
+ 
+         @Nullable final BitSet[] translucentInSection = new BitSet[sectionCount];
+@@ -79,8 +85,7 @@ public class PacketConstructorUtils {
+         // modify in the same pass then we get weird inaccurate carving
+ 
+         for (int index = 0; index < sectionCount; ++index) {
+-            final int sectionBaseY = (index + minSectionY) << 4;
+-            final LevelChunkSection section = sectionBaseY + 15 <= 0 ? (sections[index] = airSection) : sections[index];
++            final LevelChunkSection section = sections[index];
+             if (section.hasOnlyAir()) {
+                 continue;
+             }
+@@ -106,12 +111,11 @@ public class PacketConstructorUtils {
+                 continue;
+             }
+ 
+-            final int sectionBaseY = (index + minSectionY) << 4;
+             final BitSet below = index > 0 ? translucentInSection[index - 1] : null;
+             final BitSet above = index < sectionCount - 1 ? translucentInSection[index + 1] : null;
+             final LevelChunkSection section = sections[index];
+ 
+-            for (int y = Math.max(0, 1 - sectionBaseY); y < 16; ++y) {
++            for (int y = 0; y < 16; ++y) {
+                 for (int x = 1; x < 15; ++x) {
+                     for (int z = 1; z < 15; ++z) {
+                         final int pos = localPos(x, y, z);
+@@ -159,11 +163,17 @@ public class PacketConstructorUtils {
          for (int lIdx = 0; lIdx < sectionCount; ++lIdx) {
              final SerializableChunkData.SectionData stored = byY[lIdx];
  
@@ -366,7 +441,7 @@ index 568faeca6f97e23a30b661bb26749f50e519e156..c9356d1ad2475c4545a568967cbfe502
              }
          }
  
-@@ -180,18 +197,30 @@ public class PacketConstructorUtils {
+@@ -180,18 +190,30 @@ public class PacketConstructorUtils {
      private static void recordLayer(
          @Nullable
          final DataLayer layer,
@@ -550,3 +625,19 @@ index c38705a6c646fcccdd7cf94644d6ca830462b121..0db4a6a54e15e9f91f9c53cb66b1fe9f
          }
      }
  }
+diff --git a/net/minecraft/world/level/block/state/BlockBehaviour.java b/net/minecraft/world/level/block/state/BlockBehaviour.java
+index 94b306fa4c5b00339433f7666b818098e82ad0a2..f8cc5b1601411d57c8e650c72484cbc293b8e26a 100644
+--- a/net/minecraft/world/level/block/state/BlockBehaviour.java
++++ b/net/minecraft/world/level/block/state/BlockBehaviour.java
+@@ -809,9 +809,9 @@ public abstract class BlockBehaviour implements FeatureElement {
+         }
+         // Canvas start - extended view distance
+ 
+-        // air is see through, non-occluding blocks are see through, and SOME fluids too
++        // anything short of an opaque full block can be seen through or past, and SOME fluids too
+         public final boolean isSeeThrough() {
+-            return this.isAir || !this.canOcclude || !this.getFluidState().isEmpty();
++            return !this.solidRender || !this.getFluidState().isEmpty();
+         }
+         // Canvas end - extended view distance
+ 
