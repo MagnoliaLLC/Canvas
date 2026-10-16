@@ -1,0 +1,143 @@
+--- a/net/minecraft/world/entity/ai/behavior/declarative/BehaviorBuilder.java
++++ b/net/minecraft/world/entity/ai/behavior/declarative/BehaviorBuilder.java
+@@ -39,9 +_,14 @@
+         final Function<BehaviorBuilder.Instance<E>, ? extends App<BehaviorBuilder.Mu<E>, Trigger<E>>> builder
+     ) {
+         final BehaviorBuilder.TriggerWithResult<E, Trigger<E>> resolvedBuilder = get((App<BehaviorBuilder.Mu<E>, Trigger<E>>)builder.apply(instance()));
++        // Canvas start - optimize brain
++        final java.util.List<MemoryCondition<?, ?>> conditions = new java.util.ArrayList<>();
++        final io.canvasmc.canvas.util.@Nullable MemoryGate gate = resolvedBuilder.canvas$collect(conditions) ? io.canvasmc.canvas.util.MemoryGate.of(conditions) : null;
++        // Canvas end - optimize brain
+         return new OneShot<E>() {
+             @Override
+             public boolean trigger(final ServerLevel level, final E body, final long timestamp) {
++                if (gate != null && !gate.test(body.getBrain())) return false; // Canvas - optimize brain
+                 Trigger<E> trigger = resolvedBuilder.tryTrigger(level, body, timestamp);
+                 return trigger != null && trigger.trigger(level, body, timestamp);
+             }
+@@ -51,6 +_,13 @@
+                 return resolvedBuilder.memories();
+             }
+ 
++            // Canvas start - optimize brain
++            @Override
++            public io.canvasmc.canvas.util.@Nullable MemoryGate canvas$memoryGate() {
++                return gate;
++            }
++            // Canvas end - optimize brain
++
+             @Override
+             public String debugString() {
+                 return "OneShot[" + resolvedBuilder.debugString() + "]";
+@@ -132,6 +_,13 @@
+                     return Set.of();
+                 }
+ 
++                // Canvas start - optimize brain
++                @Override
++                public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) {
++                    return true;
++                }
++                // Canvas end - optimize brain
++
+                 @Override
+                 public String debugString() {
+                     return debugString.get();
+@@ -204,6 +_,13 @@
+                         return memories;
+                     }
+ 
++                    // Canvas start - optimize brain
++                    @Override
++                    public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) {
++                        return aTrigger.canvas$collect(conditions) && fTrigger.canvas$collect(conditions);
++                    }
++                    // Canvas end - optimize brain
++
+                     @Override
+                     public String debugString() {
+                         return fTrigger.debugString() + " * " + aTrigger.debugString();
+@@ -232,6 +_,13 @@
+                     return tTrigger.memories();
+                 }
+ 
++                // Canvas start - optimize brain
++                @Override
++                public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) {
++                    return tTrigger.canvas$collect(conditions);
++                }
++                // Canvas end - optimize brain
++
+                 @Override
+                 public String debugString() {
+                     return tTrigger.debugString() + ".map[" + func + "]";
+@@ -277,6 +_,13 @@
+                     return memories;
+                 }
+ 
++                // Canvas start - optimize brain
++                @Override
++                public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) {
++                    return aTrigger.canvas$collect(conditions) && bTrigger.canvas$collect(conditions) && fTrigger.canvas$collect(conditions);
++                }
++                // Canvas end - optimize brain
++
+                 @Override
+                 public String debugString() {
+                     return fTrigger.debugString() + " * " + aTrigger.debugString() + " * " + bTrigger.debugString();
+@@ -332,6 +_,13 @@
+                     return memories;
+                 }
+ 
++                // Canvas start - optimize brain
++                @Override
++                public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) {
++                    return t1Trigger.canvas$collect(conditions) && t2Trigger.canvas$collect(conditions) && t3Trigger.canvas$collect(conditions) && fTrigger.canvas$collect(conditions);
++                }
++                // Canvas end - optimize brain
++
+                 @Override
+                 public String debugString() {
+                     return fTrigger.debugString() + " * " + t1Trigger.debugString() + " * " + t2Trigger.debugString() + " * " + t3Trigger.debugString();
+@@ -396,6 +_,13 @@
+                         return memories;
+                     }
+ 
++                    // Canvas start - optimize brain
++                    @Override
++                    public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) {
++                        return t1Trigger.canvas$collect(conditions) && t2Trigger.canvas$collect(conditions) && t3Trigger.canvas$collect(conditions) && t4Trigger.canvas$collect(conditions) && fTrigger.canvas$collect(conditions);
++                    }
++                    // Canvas end - optimize brain
++
+                     @Override
+                     public String debugString() {
+                         return fTrigger.debugString()
+@@ -439,6 +_,14 @@
+                     return Set.of(condition.memory());
+                 }
+ 
++                // Canvas start - optimize brain
++                @Override
++                public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) {
++                    conditions.add(condition);
++                    return true;
++                }
++                // Canvas end - optimize brain
++
+                 @Override
+                 public String debugString() {
+                     return "M[" + condition + "]";
+@@ -456,6 +_,12 @@
+         @Nullable R tryTrigger(final ServerLevel level, final E body, final long timestamp);
+ 
+         Set<MemoryModuleType<?>> memories();
++
++        // Canvas start - optimize brain
++        default boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) {
++            return false;
++        }
++        // Canvas end - optimize brain
+ 
+         String debugString();
+     }
