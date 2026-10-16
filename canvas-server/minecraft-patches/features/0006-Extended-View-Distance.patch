@@ -531,10 +531,10 @@ index fad788a6541a7e9edd42f699d2968897d446a353..6d11d9282b82a7f5ccbbec63ea0e21fa
              this.flushDelayedTicketOps();
 diff --git a/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java b/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..ce50b8b50f726370f28218ac36285d9b1866c018
+index 0000000000000000000000000000000000000000..323e172026c6fa0845a09933d54df059f692d9fe
 --- /dev/null
 +++ b/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java
-@@ -0,0 +1,195 @@
+@@ -0,0 +1,191 @@
 +package io.canvasmc.canvas.extendedview;
 +
 +import ca.spottedleaf.concurrentutil.util.Priority;
@@ -701,16 +701,12 @@ index 0000000000000000000000000000000000000000..ce50b8b50f726370f28218ac36285d9b
 +            }
 +        }
 +
-+        // try hollow chunks before we create the actual chunk object
-+        if (GlobalConfiguration.getInstance().chunkSystem.visualViewDistance.hollowChunks) {
++        // hollow the chunk and remove the ores if asked of us, before we create the actual chunk object
++        final boolean hollow = GlobalConfiguration.getInstance().chunkSystem.visualViewDistance.hollowChunks;
++        final boolean hideOres = GlobalConfiguration.getInstance().chunkSystem.visualViewDistance.hideOres;
++        if (hollow || hideOres) {
 +            //noinspection NullableProblems - we made "sections" nonnull above
-+            PacketConstructorUtils.carveChunk(sections);
-+        }
-+
-+        // remove the ores if asked of us
-+        if (GlobalConfiguration.getInstance().chunkSystem.visualViewDistance.hideOres) {
-+            //noinspection NullableProblems - we made "sections" nonnull above
-+            PacketConstructorUtils.clearOres(sections);
++            PacketConstructorUtils.shapeSections(sections, hollow, hideOres);
 +        }
 +
 +        //noinspection NullableProblems - we made "sections" nonnull above
@@ -732,10 +728,10 @@ index 0000000000000000000000000000000000000000..ce50b8b50f726370f28218ac36285d9b
 +}
 diff --git a/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java b/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..944ccec76b64155de4448b85d1dd0a34f598a0da
+index 0000000000000000000000000000000000000000..882c51ee8c3b7c162a13c4390eeb1d8cee1dffab
 --- /dev/null
 +++ b/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java
-@@ -0,0 +1,231 @@
+@@ -0,0 +1,375 @@
 +package io.canvasmc.canvas.extendedview;
 +
 +import ca.spottedleaf.moonrise.patches.starlight.light.SWMRNibbleArray;
@@ -748,7 +744,10 @@ index 0000000000000000000000000000000000000000..944ccec76b64155de4448b85d1dd0a34
 +import net.minecraft.world.level.block.Blocks;
 +import net.minecraft.world.level.block.state.BlockState;
 +import net.minecraft.world.level.chunk.DataLayer;
++import net.minecraft.world.level.chunk.GlobalPalette;
 +import net.minecraft.world.level.chunk.LevelChunkSection;
++import net.minecraft.world.level.chunk.Palette;
++import net.minecraft.world.level.chunk.PalettedContainer;
 +import net.minecraft.world.level.chunk.storage.SerializableChunkData;
 +import net.minecraft.world.level.lighting.LevelLightEngine;
 +import org.jspecify.annotations.Nullable;
@@ -756,6 +755,8 @@ index 0000000000000000000000000000000000000000..944ccec76b64155de4448b85d1dd0a34
 +public class PacketConstructorUtils {
 +
 +    public static final int MASK_SIZE = 4096; // 16^3
++    private static final int MASK_LONGS = MASK_SIZE >>> 6;
++    private static final int INNER_ROW = 0x7FFE; // x 1 to 14
 +
 +    private static final Predicate<BlockState> IS_ORE = (state) ->
 +        state.is(BlockTags.COPPER_ORES)
@@ -782,94 +783,243 @@ index 0000000000000000000000000000000000000000..944ccec76b64155de4448b85d1dd0a34
 +        || state.is(Blocks.DEEPSLATE_DIAMOND_ORE)
 +        || state.is(Blocks.DEEPSLATE_EMERALD_ORE);
 +
-+    public static void clearOres(final LevelChunkSection[] sections) {
-+        for (final LevelChunkSection section : sections) {
++    public static void shapeSections(final LevelChunkSection[] sections, final boolean hollow, final boolean hideOres) {
++        final int sectionCount = sections.length;
++        final int[] @Nullable [] ids = new int[sectionCount][];
++        final long[] @Nullable [] seeThrough = new long[sectionCount][];
++
++        // read every section before changing any, since hollowing one looks into its neighbors
++        for (int index = 0; index < sectionCount; ++index) {
++            final LevelChunkSection section = sections[index];
 +            if (section.hasOnlyAir()) {
 +                continue;
 +            }
 +
-+            for (int y = 0; y < 16; ++y) {
-+                for (int x = 0; x < 16; ++x) {
-+                    for (int z = 0; z < 16; ++z) {
-+                        final BlockState state = section.getBlockState(x, y, z);
-+                        if (state.isAir()) {
-+                            // don't care
-+                            continue;
-+                        }
++            final PalettedContainer.Data<BlockState> data = section.getStates().data;
++            final int[] sectionIds = new int[MASK_SIZE];
++            data.storage().unpack(sectionIds);
++            ids[index] = sectionIds;
 +
-+                        // nether ores sit in netherrack
-+                        if (state.is(Blocks.NETHER_GOLD_ORE) || state.is(Blocks.NETHER_QUARTZ_ORE) || state.is(Blocks.ANCIENT_DEBRIS)) {
-+                            section.setBlockState(x, y, z, Blocks.NETHERRACK.defaultBlockState(), false);
-+                            continue;
-+                        }
++            if (hollow) {
++                seeThrough[index] = seeThroughMask(data.palette(), sectionIds);
++            }
++        }
 +
-+                        if (IS_ORE.test(state)) {
-+                            // is an ore, replace with the stone it sits in
-+                            section.setBlockState(x, y, z, (IS_DEEPSLATE_ORE.test(state) ? Blocks.DEEPSLATE : Blocks.STONE).defaultBlockState(), false);
++        for (int index = 0; index < sectionCount; ++index) {
++            final int[] sectionIds = ids[index];
++            if (sectionIds == null) {
++                continue;
++            }
++
++            final long[] carved = hollow ? carve(seeThrough, index) : null;
++            final OreReplacements ores = hideOres ? new OreReplacements(sections[index].getStates().data.palette()) : null;
++            if (carved == null && (ores == null || !ores.any)) {
++                continue;
++            }
++
++            final LevelChunkSection section = sections[index];
++            final Palette<BlockState> palette = section.getStates().data.palette();
++            final SectionWriter writer = new SectionWriter(section.getStates());
++            int emptied = 0;
++            boolean recount = false;
++
++            // the same writes in the same order as setting each block, so palette resizes match
++            if (carved != null) {
++                final BlockState air = Blocks.AIR.defaultBlockState();
++                for (int y = 0; y < 16; ++y) {
++                    for (int x = 1; x < 15; ++x) {
++                        for (int z = 1; z < 15; ++z) {
++                            final int pos = (y << 8) | (z << 4) | x;
++                            if (has(carved, pos)) {
++                                writer.set(pos, air);
++                                recount |= isCounted(palette.valueFor(sectionIds[pos]));
++                                ++emptied;
++                            }
 +                        }
 +                    }
 +                }
++            }
++
++            if (ores != null && ores.any) {
++                for (int y = 0; y < 16; ++y) {
++                    for (int x = 0; x < 16; ++x) {
++                        for (int z = 0; z < 16; ++z) {
++                            final int pos = (y << 8) | (z << 4) | x;
++                            if (carved != null && has(carved, pos)) {
++                                continue;
++                            }
++
++                            final BlockState replacement = ores.forId(sectionIds[pos]);
++                            if (replacement != null) {
++                                writer.set(pos, replacement);
++                                recount |= isCounted(palette.valueFor(sectionIds[pos])) || isCounted(replacement);
++                            }
++                        }
++                    }
++                }
++            }
++
++            if (recount) {
++                section.recalcBlockCounts();
++            } else if (emptied != 0) {
++                section.canvas$emptiedPlainBlocks(emptied);
 +            }
 +        }
 +    }
 +
-+    public static void carveChunk(final LevelChunkSection[] sections) {
-+        final int sectionCount = sections.length;
-+        final BlockState air = Blocks.AIR.defaultBlockState();
++    private static final class SectionWriter {
++        private final PalettedContainer<BlockState> states;
++        private PalettedContainer.Data<BlockState> data;
++        private final BlockState[] cachedStates = new BlockState[4];
++        private final int[] cachedIds = new int[4];
++        private int cached;
 +
-+        @Nullable final BitSet[] translucentInSection = new BitSet[sectionCount];
-+
-+        // collect the translucent blocks in the section first, since if we
-+        // modify in the same pass then we get weird inaccurate carving
-+
-+        for (int index = 0; index < sectionCount; ++index) {
-+            final LevelChunkSection section = sections[index];
-+            if (section.hasOnlyAir()) {
-+                continue;
-+            }
-+
-+            final BitSet mask = new BitSet(MASK_SIZE);
-+            for (int y = 0; y < 16; ++y) {
-+                for (int x = 0; x < 16; ++x) {
-+                    for (int z = 0; z < 16; ++z) {
-+                        if (section.getBlockState(x, y, z).isSeeThrough()) {
-+                            mask.set(localPos(x, y, z));
-+                        }
-+                    }
-+                }
-+            }
-+
-+            translucentInSection[index] = mask;
++        private SectionWriter(final PalettedContainer<BlockState> states) {
++            this.states = states;
++            this.data = states.data;
 +        }
 +
-+        // iterate over the translucent blocks in the section
-+        for (int index = 0; index < sectionCount; ++index) {
-+            final BitSet translucentBlocks = translucentInSection[index];
-+            if (translucentBlocks == null) {
-+                continue;
-+            }
-+
-+            final BitSet below = index > 0 ? translucentInSection[index - 1] : null;
-+            final BitSet above = index < sectionCount - 1 ? translucentInSection[index + 1] : null;
-+            final LevelChunkSection section = sections[index];
-+
-+            for (int y = 0; y < 16; ++y) {
-+                for (int x = 1; x < 15; ++x) {
-+                    for (int z = 1; z < 15; ++z) {
-+                        final int pos = localPos(x, y, z);
-+                        final boolean isExposed =
-+                            translucentBlocks.get(pos)
-+                            || translucentBlocks.get(pos - 16) || translucentBlocks.get(pos + 16)
-+                            || translucentBlocks.get(pos - 1) || translucentBlocks.get(pos + 1)
-+                            || (y > 0 ? translucentBlocks.get(pos - 256) : inSection(below, x, 15, z))
-+                            || (y < 15 ? translucentBlocks.get(pos + 256) : inSection(above, x, 0, z));
-+
-+                        if (!isExposed) {
-+                            section.setBlockState(x, y, z, air, false);
-+                        }
-+                    }
++        private void set(final int pos, final BlockState state) {
++            int id = -1;
++            for (int i = 0; i < this.cached; ++i) {
++                if (this.cachedStates[i] == state) {
++                    id = this.cachedIds[i];
++                    break;
 +                }
 +            }
++
++            if (id < 0) {
++                id = this.data.palette().idFor(state, this.states);
++                if (this.states.data != this.data) {
++                    // the palette was resized and renumbered
++                    this.data = this.states.data;
++                    this.cached = 0;
++                }
++                if (this.cached < this.cachedStates.length) {
++                    this.cachedStates[this.cached] = state;
++                    this.cachedIds[this.cached++] = id;
++                }
++            }
++
++            this.data.storage().set(pos, id);
++        }
++    }
++
++    private static long[] seeThroughMask(final Palette<BlockState> palette, final int[] sectionIds) {
++        final long[] mask = new long[MASK_LONGS];
++        if (palette instanceof GlobalPalette<BlockState>) {
++            for (int pos = 0; pos < MASK_SIZE; ++pos) {
++                if (palette.valueFor(sectionIds[pos]).isSeeThrough()) {
++                    mask[pos >>> 6] |= 1L << pos;
++                }
++            }
++            return mask;
++        }
++
++        final int paletteSize = palette.getSize();
++        final boolean[] seeThroughById = new boolean[paletteSize];
++        boolean any = false;
++        for (int id = 0; id < paletteSize; ++id) {
++            seeThroughById[id] = palette.valueFor(id).isSeeThrough();
++            any |= seeThroughById[id];
++        }
++
++        if (any) {
++            for (int pos = 0; pos < MASK_SIZE; ++pos) {
++                if (seeThroughById[sectionIds[pos]]) {
++                    mask[pos >>> 6] |= 1L << pos;
++                }
++            }
++        }
++        return mask;
++    }
++
++    private static long @Nullable [] carve(final long[] @Nullable [] seeThrough, final int index) {
++        final long[] mask = seeThrough[index];
++        final long[] below = index > 0 ? seeThrough[index - 1] : null;
++        final long[] above = index < seeThrough.length - 1 ? seeThrough[index + 1] : null;
++
++        long[] carved = null;
++        for (int y = 0; y < 16; ++y) {
++            for (int z = 1; z < 15; ++z) {
++                final int row = row(mask, y, z);
++                final int exposed = row | (row << 1) | (row >>> 1)
++                    | row(mask, y, z - 1) | row(mask, y, z + 1)
++                    | (y > 0 ? row(mask, y - 1, z) : row(below, 15, z))
++                    | (y < 15 ? row(mask, y + 1, z) : row(above, 0, z));
++                final int hidden = ~exposed & INNER_ROW;
++                if (hidden != 0) {
++                    if (carved == null) {
++                        carved = new long[MASK_LONGS];
++                    }
++                    final int rowStart = (y << 8) | (z << 4);
++                    carved[rowStart >>> 6] |= (long)hidden << rowStart;
++                }
++            }
++        }
++        return carved;
++    }
++
++    // a missing or all air neighbor section counts as see-through
++    private static int row(final long @Nullable [] mask, final int y, final int z) {
++        if (mask == null) {
++            return 0xFFFF;
++        }
++        final int rowStart = (y << 8) | (z << 4);
++        return (int)(mask[rowStart >>> 6] >>> rowStart) & 0xFFFF;
++    }
++
++    private static boolean isCounted(final BlockState state) {
++        return state.isAir()
++            || state.isRandomlyTicking()
++            || !state.getFluidState().isEmpty()
++            || ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.isSpecialCollidingBlock(state);
++    }
++
++    private static @Nullable BlockState oreReplacement(final BlockState state) {
++        if (state.isAir()) {
++            return null;
++        }
++
++        // checked first, nether gold ore is a gold ore too
++        if (state.is(Blocks.NETHER_GOLD_ORE) || state.is(Blocks.NETHER_QUARTZ_ORE) || state.is(Blocks.ANCIENT_DEBRIS)) {
++            return Blocks.NETHERRACK.defaultBlockState();
++        }
++
++        if (IS_ORE.test(state)) {
++            // is an ore, replace with the stone it sits in
++            return (IS_DEEPSLATE_ORE.test(state) ? Blocks.DEEPSLATE : Blocks.STONE).defaultBlockState();
++        }
++        return null;
++    }
++
++    private static final class OreReplacements {
++        private final Palette<BlockState> palette;
++        private final @Nullable BlockState @Nullable [] byId;
++        private final boolean any;
++
++        private OreReplacements(final Palette<BlockState> palette) {
++            this.palette = palette;
++            if (palette instanceof GlobalPalette<BlockState>) {
++                // too many ids to tabulate, so look each block up
++                this.byId = null;
++                this.any = true;
++                return;
++            }
++
++            final int paletteSize = palette.getSize();
++            final @Nullable BlockState[] byId = new BlockState[paletteSize];
++            boolean any = false;
++            for (int id = 0; id < paletteSize; ++id) {
++                byId[id] = oreReplacement(palette.valueFor(id));
++                any |= byId[id] != null;
++            }
++            this.byId = byId;
++            this.any = any;
++        }
++
++        private @Nullable BlockState forId(final int id) {
++            return this.byId != null ? this.byId[id] : oreReplacement(this.palette.valueFor(id));
 +        }
 +    }
 +
@@ -953,18 +1103,8 @@ index 0000000000000000000000000000000000000000..944ccec76b64155de4448b85d1dd0a34
 +        }
 +    }
 +
-+    private static boolean inSection(
-+        @Nullable
-+        final BitSet section,
-+        final int x,
-+        final int y,
-+        final int z
-+    ) {
-+        return section == null || section.get(localPos(x, y, z));
-+    }
-+
-+    private static int localPos(final int x, final int y, final int z) {
-+        return (y << 8) | (x << 4) | z;
++    private static boolean has(final long[] mask, final int pos) {
++        return (mask[pos >>> 6] & (1L << pos)) != 0L;
 +    }
 +}
 diff --git a/io/canvasmc/canvas/extendedview/Result.java b/io/canvasmc/canvas/extendedview/Result.java
@@ -1190,3 +1330,19 @@ index 70417762b2999ab822e2d511e1a721303453cee2..dd9d3d944dda25c911cbeace3273c088
  
          public boolean ignitedByLava() {
              return this.ignitedByLava;
+diff --git a/net/minecraft/world/level/chunk/LevelChunkSection.java b/net/minecraft/world/level/chunk/LevelChunkSection.java
+index 5e4a3c6c631cb316686180f486c25801858e134b..daa4a129dd17ab2128cbe67e59145731513b6172 100644
+--- a/net/minecraft/world/level/chunk/LevelChunkSection.java
++++ b/net/minecraft/world/level/chunk/LevelChunkSection.java
+@@ -45,6 +45,11 @@ public class LevelChunkSection implements ca.spottedleaf.moonrise.patches.block_
+         }
+     }
+     // Canvas end - optimize random tick
++    // Canvas start - extended view distance
++    public final void canvas$emptiedPlainBlocks(final int count) {
++        this.nonEmptyBlockCount -= (short)count;
++    }
++    // Canvas end - extended view distance
+ 
+     @Override
+     public final boolean moonrise$hasSpecialCollidingBlocks() {
