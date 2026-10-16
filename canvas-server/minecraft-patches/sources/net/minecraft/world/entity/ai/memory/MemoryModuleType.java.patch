@@ -1,0 +1,10 @@
+--- a/net/minecraft/world/entity/ai/memory/MemoryModuleType.java
++++ b/net/minecraft/world/entity/ai/memory/MemoryModuleType.java
+@@ -150,6 +_,7 @@
+     public static final MemoryModuleType<BlockPos> BREEZE_JUMP_TARGET = register("breeze_jump_target", BlockPos.CODEC);
+     public static final MemoryModuleType<Unit> BREEZE_LEAVING_WATER = register("breeze_leaving_water", Unit.CODEC);
+     private final Optional<Codec<ExpirableValue<U>>> codec;
++    public final int canvas$index = io.canvasmc.canvas.util.MemoryGate.nextIndex(); // Canvas - memory gate - the counter lives outside, as the constants above are built before a static here would be
+ 
+     @VisibleForTesting
+     public MemoryModuleType(final Optional<Codec<U>> codec) {
