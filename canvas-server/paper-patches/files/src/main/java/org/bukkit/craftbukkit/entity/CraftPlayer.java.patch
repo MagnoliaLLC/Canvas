@@ -1,6 +1,6 @@
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-@@ -2175,8 +_,20 @@
+@@ -2179,8 +_,20 @@
  
      @Override
      public boolean canSee(org.bukkit.entity.Entity entity) {
@@ -23,7 +23,7 @@
  
      public boolean canSeePlayer(UUID uuid) {
          org.bukkit.entity.Entity entity = this.getServer().getPlayer(uuid);
-@@ -2535,6 +_,12 @@
+@@ -2539,6 +_,12 @@
      public void disconnect() {
          this.conversationTracker.abandonAllConversations();
          this.perm.clearPermissions();

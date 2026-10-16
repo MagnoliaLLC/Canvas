@@ -5,7 +5,7 @@ Subject: [PATCH] Remove Dead Old Watchdog Code
 
 
 diff --git a/net/minecraft/network/Connection.java b/net/minecraft/network/Connection.java
-index 936200d7620e1fe83eb45ddbcff86b6b6ecaab8f..bcc484a04e0413d3787706537d9936a8d428d284 100644
+index 76596e87945f0b95af8032338a64817a8faed4d0..e33ccb8d80c8e51596d107142e5d3aa1f353c8d7 100644
 --- a/net/minecraft/network/Connection.java
 +++ b/net/minecraft/network/Connection.java
 @@ -618,13 +618,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {

@@ -1394,7 +1394,7 @@ index 23297b54c74684765f90e9e599d051a44357e9a5..eb0d0706912fe35bd6ffa81b42edaa01
          if (((ServerLevel) this.level()).hasEntityMoveEvent && !(this instanceof Player)) {
              if (this.xo != this.getX() || this.yo != this.getY() || this.zo != this.getZ() || this.yRotO != this.getYRot() || this.xRotO != this.getXRot()) {
 diff --git a/net/minecraft/world/entity/Mob.java b/net/minecraft/world/entity/Mob.java
-index 51dec65d0f437deb370eabbfa0369c4232caac14..fe2d068ab09b6968706dfa70cab7323d1121af64 100644
+index 92ce15b22517bda5033e6377c76abaa6a9d68d03..19da7c01998564e3f5061013117735ee0ac61a2c 100644
 --- a/net/minecraft/world/entity/Mob.java
 +++ b/net/minecraft/world/entity/Mob.java
 @@ -34,8 +34,6 @@ import net.minecraft.util.debug.DebugGoalInfo;
@@ -1406,7 +1406,7 @@ index 51dec65d0f437deb370eabbfa0369c4232caac14..fe2d068ab09b6968706dfa70cab7323d
  import net.minecraft.world.Container;
  import net.minecraft.world.Difficulty;
  import net.minecraft.world.DifficultyInstance;
-@@ -345,14 +343,10 @@ public abstract class Mob extends LivingEntity implements Targeting, EquipmentUs
+@@ -348,14 +346,10 @@ public abstract class Mob extends LivingEntity implements Targeting, EquipmentUs
      @Override
      public void baseTick() {
          super.baseTick();
@@ -1421,7 +1421,7 @@ index 51dec65d0f437deb370eabbfa0369c4232caac14..fe2d068ab09b6968706dfa70cab7323d
      }
  
      @Override
-@@ -537,8 +531,6 @@ public abstract class Mob extends LivingEntity implements Targeting, EquipmentUs
+@@ -540,8 +534,6 @@ public abstract class Mob extends LivingEntity implements Targeting, EquipmentUs
              this.burnUndead();
          }
  
@@ -1430,7 +1430,7 @@ index 51dec65d0f437deb370eabbfa0369c4232caac14..fe2d068ab09b6968706dfa70cab7323d
          if (this.level() instanceof ServerLevel serverLevel
              && this.canPickUpLoot()
              && this.isAlive()
-@@ -558,8 +550,6 @@ public abstract class Mob extends LivingEntity implements Targeting, EquipmentUs
+@@ -561,8 +553,6 @@ public abstract class Mob extends LivingEntity implements Targeting, EquipmentUs
                  }
              }
          }
@@ -1439,7 +1439,7 @@ index 51dec65d0f437deb370eabbfa0369c4232caac14..fe2d068ab09b6968706dfa70cab7323d
      }
  
      protected EquipmentSlot sunProtectionSlot() {
-@@ -823,42 +813,21 @@ public abstract class Mob extends LivingEntity implements Targeting, EquipmentUs
+@@ -826,42 +816,21 @@ public abstract class Mob extends LivingEntity implements Targeting, EquipmentUs
              return;
          }
          // Paper end - Allow nerfed mobs to jump and float

@@ -112,7 +112,7 @@
              if (fullState != HOPPER_EMPTY) { // Paper - Perf: Optimize Hoppers
                  changed = ejectItems(level, pos, entity);
              }
-@@ -481,7 +_,47 @@
+@@ -500,7 +_,47 @@
          return slots;
      }
  
@@ -160,7 +160,7 @@
          int[] slots = getSlots(container, direction);
  
          for (int slot : slots) {
-@@ -707,7 +_,7 @@
+@@ -728,7 +_,7 @@
          final boolean optimizeEntities
      ) {
          // Paper end - Perf: Optimize Hoppers
@@ -169,7 +169,7 @@
          if (result == null && (!optimizeEntities || !level.paperConfig().hopper.ignoreOccludingBlocks || !state.getBukkitMaterial().isOccluding())) { // Paper - Perf: Optimize Hoppers
              result = getEntityContainer(level, x, y, z);
          }
-@@ -722,7 +_,7 @@
+@@ -743,7 +_,7 @@
              return worldlyContainerHolder.getContainer(state, level, pos);
          } else if (state.hasBlockEntity() && level.getBlockEntity(pos) instanceof Container container) {
              if (container instanceof ChestBlockEntity && block instanceof ChestBlock chestBlock) {
@@ -178,7 +178,7 @@
              }
  
              return container;
-@@ -782,6 +_,7 @@
+@@ -803,6 +_,7 @@
      @Override
      protected void setItems(final NonNullList<ItemStack> items) {
          this.items = items;
