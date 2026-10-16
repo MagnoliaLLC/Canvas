@@ -1,0 +1,130 @@
+--- a/net/minecraft/world/entity/ai/behavior/declarative/BehaviorBuilder.java
++++ b/net/minecraft/world/entity/ai/behavior/declarative/BehaviorBuilder.java
+@@ -39,9 +_,14 @@
+         final Function<BehaviorBuilder.Instance<E>, ? extends App<BehaviorBuilder.Mu<E>, Trigger<E>>> builder
+     ) {
+         final BehaviorBuilder.TriggerWithResult<E, Trigger<E>> resolvedBuilder = get((App<BehaviorBuilder.Mu<E>, Trigger<E>>)builder.apply(instance()));
++        // Canvas start - memory gate
++        final java.util.List<MemoryCondition<?, ?>> conditions = new java.util.ArrayList<>();
++        final io.canvasmc.canvas.util.@Nullable MemoryGate gate = resolvedBuilder.canvas$collect(conditions) ? io.canvasmc.canvas.util.MemoryGate.of(conditions) : null;
++        // Canvas end - memory gate
+         return new OneShot<E>() {
+             @Override
+             public boolean trigger(final ServerLevel level, final E body, final long timestamp) {
++                if (gate != null && !gate.test(body.getBrain())) return false; // Canvas - memory gate
+                 Trigger<E> trigger = resolvedBuilder.tryTrigger(level, body, timestamp);
+                 return trigger != null && trigger.trigger(level, body, timestamp);
+             }
+@@ -51,6 +_,13 @@
+                 return resolvedBuilder.memories();
+             }
+ 
++            // Canvas start - memory gate
++            @Override
++            public io.canvasmc.canvas.util.@Nullable MemoryGate canvas$memoryGate() {
++                return gate;
++            }
++            // Canvas end - memory gate
++
+             @Override
+             public String debugString() {
+                 return "OneShot[" + resolvedBuilder.debugString() + "]";
+@@ -133,6 +_,11 @@
+                 }
+ 
+                 @Override
++                public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) { // Canvas - memory gate
++                    return true;
++                }
++
++                @Override
+                 public String debugString() {
+                     return debugString.get();
+                 }
+@@ -205,6 +_,11 @@
+                     }
+ 
+                     @Override
++                    public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) { // Canvas - memory gate
++                        return aTrigger.canvas$collect(conditions) && fTrigger.canvas$collect(conditions);
++                    }
++
++                    @Override
+                     public String debugString() {
+                         return fTrigger.debugString() + " * " + aTrigger.debugString();
+                     }
+@@ -233,6 +_,11 @@
+                 }
+ 
+                 @Override
++                public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) { // Canvas - memory gate
++                    return tTrigger.canvas$collect(conditions);
++                }
++
++                @Override
+                 public String debugString() {
+                     return tTrigger.debugString() + ".map[" + func + "]";
+                 }
+@@ -278,6 +_,11 @@
+                 }
+ 
+                 @Override
++                public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) { // Canvas - memory gate
++                    return aTrigger.canvas$collect(conditions) && bTrigger.canvas$collect(conditions) && fTrigger.canvas$collect(conditions);
++                }
++
++                @Override
+                 public String debugString() {
+                     return fTrigger.debugString() + " * " + aTrigger.debugString() + " * " + bTrigger.debugString();
+                 }
+@@ -333,6 +_,11 @@
+                 }
+ 
+                 @Override
++                public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) { // Canvas - memory gate
++                    return t1Trigger.canvas$collect(conditions) && t2Trigger.canvas$collect(conditions) && t3Trigger.canvas$collect(conditions) && fTrigger.canvas$collect(conditions);
++                }
++
++                @Override
+                 public String debugString() {
+                     return fTrigger.debugString() + " * " + t1Trigger.debugString() + " * " + t2Trigger.debugString() + " * " + t3Trigger.debugString();
+                 }
+@@ -397,6 +_,11 @@
+                     }
+ 
+                     @Override
++                    public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) { // Canvas - memory gate
++                        return t1Trigger.canvas$collect(conditions) && t2Trigger.canvas$collect(conditions) && t3Trigger.canvas$collect(conditions) && t4Trigger.canvas$collect(conditions) && fTrigger.canvas$collect(conditions);
++                    }
++
++                    @Override
+                     public String debugString() {
+                         return fTrigger.debugString()
+                             + " * "
+@@ -440,6 +_,12 @@
+                 }
+ 
+                 @Override
++                public boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) { // Canvas - memory gate
++                    conditions.add(condition);
++                    return true;
++                }
++
++                @Override
+                 public String debugString() {
+                     return "M[" + condition + "]";
+                 }
+@@ -456,6 +_,13 @@
+         @Nullable R tryTrigger(final ServerLevel level, final E body, final long timestamp);
+ 
+         Set<MemoryModuleType<?>> memories();
++
++        // Canvas start - memory gate
++        // adds the memory checks this tree makes, true only when it holds nothing but memory checks and constants
++        default boolean canvas$collect(final java.util.List<MemoryCondition<?, ?>> conditions) {
++            return false;
++        }
++        // Canvas end - memory gate
+ 
+         String debugString();
+     }
