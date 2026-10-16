@@ -1,0 +1,552 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: RootBeer <rootb33rman@gmail.com>
+Date: Thu, 15 Oct 2026 23:33:25 -0400
+Subject: [PATCH] Extended View Distance fixes
+
+Failed and ungenerated reads stay cached for a few seconds instead of being read again every tick, where they also held back every farther fake chunk; cache entries expire a few seconds after a player last asked for them rather than living as long as any client holds the chunk, which kept every fake chunk ever sent in memory and every built but unsent one forever, and a watch racing the drain left an entry without a future that threw on the region thread. A real chunk leaving the load range is kept on the client as a fake chunk instead of being forgotten and rebuilt from disk, which sent it twice and left a hole where the chunk was not saved yet. Real and fake chunks share the send allocation, the visual distance stops at the client's view distance like the send distance does, and a player set to 0 gets no fake chunks. Light is sent as the live light engine sends it, so sections it leaves to the client are no longer sent dark, and chunks without valid light are lit by the sky instead of sent black. Chunks saved by a newer version are skipped instead of stopping the server, and hidden ores keep the stone they sit in.
+
+diff --git a/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java b/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java
+index fede09ee32da72d414dacc553af91199e954ad99..ece708951041d7032e5cb17b6524e3d0d6017494 100644
+--- a/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java
++++ b/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java
+@@ -326,7 +326,7 @@ public final class RegionizedPlayerChunkLoader {
+         final int serverVVD = io.canvasmc.canvas.GlobalConfiguration.getInstance().chunkSystem.visualViewDistance.vvDistance;
+         final int worldVVD = distances.vvDistance;
+ 
+-        return PlayerChunkLoaderData.getVisualViewDistance(sendViewDistance, -1, worldVVD, serverVVD);
++        return PlayerChunkLoaderData.getVisualViewDistance(sendViewDistance, -1, -1, worldVVD, serverVVD);
+     }
+     // Canvas end - extended view distance
+ 
+@@ -405,7 +405,6 @@ public final class RegionizedPlayerChunkLoader {
+         private final LongOpenHashSet sentChunks = new LongOpenHashSet();
+         // Canvas start - extended view distance
+         private final LongOpenHashSet fakeChunks = new LongOpenHashSet();
+-        private final LongOpenHashSet pendingForget = new LongOpenHashSet();
+         // Canvas end - extended view distance
+ 
+         private static final byte CHUNK_TICKET_STAGE_NONE           = 0;
+@@ -501,11 +500,9 @@ public final class RegionizedPlayerChunkLoader {
+             // Canvas start - extended view distance
+             final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
+ 
+-            this.pendingForget.remove(chunkKey);
+             if (this.fakeChunks.remove(chunkKey)) {
+-                // there was a fake chunk, we can unwatch it, we are sending a real chunk now
++                // there was a fake chunk, we are sending a real chunk over it now
+                 this.sentChunks.remove(chunkKey);
+-                this.world.extendedViewDistance().cache.unwatch(chunkKey);
+             }
+ 
+             if (this.sentChunks.add(chunkKey)) {
+@@ -525,20 +522,17 @@ public final class RegionizedPlayerChunkLoader {
+         private void sendUnloadChunk(final int chunkX, final int chunkZ) {
+             // Canvas start - extended view distance
+             final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
+-            final boolean wasSent = this.sentChunks.remove(chunkKey);
+-            final boolean wasFake = wasSent && this.fakeChunks.remove(chunkKey);
+-            final boolean owedForget = wasSent ? wasFake : this.pendingForget.remove(chunkKey);
+-
+-            if (wasFake) {
+-                this.world.extendedViewDistance().cache.unwatch(chunkKey);
++            if (!this.sentChunks.remove(chunkKey)) {
++                return;
+             }
+ 
+-            if (wasSent && !owedForget) {
+-                this.sendUnloadChunkRaw(chunkX, chunkZ);
+-            } else if (owedForget) {
++            if (this.fakeChunks.remove(chunkKey)) {
++                // fake chunks are only on the client
+                 this.player.connection.send(new ClientboundForgetLevelChunkPacket(new ChunkPos(chunkX, chunkZ)));
++                return;
+             }
+             // Canvas end - extended view distance
++            this.sendUnloadChunkRaw(chunkX, chunkZ);
+         }
+ 
+         private void sendUnloadChunkRaw(final int chunkX, final int chunkZ) {
+@@ -546,20 +540,19 @@ public final class RegionizedPlayerChunkLoader {
+             sendUnloadChunkRaw(chunkX, chunkZ, false);
+         }
+ 
+-        private void sendUnloadChunkRaw(final int chunkX, final int chunkZ, final boolean addToPending) {
++        private void sendUnloadChunkRaw(final int chunkX, final int chunkZ, final boolean keepOnClient) {
+         // Canvas end - extended view distance
+             PlatformHooks.get().onChunkUnWatch(this.world, new ChunkPos(chunkX, chunkZ), this.player);
+             // Note: Check PlayerChunkSender#dropChunk for other logic
+             // Note: drop isAlive() check so that chunks properly unload client-side when the player dies
+             ((ChunkSystemChunkHolder)((ChunkSystemServerLevel)this.world).moonrise$getChunkTaskScheduler().chunkHolderManager
+                 .getChunkHolder(chunkX, chunkZ).vanillaChunkHolder).moonrise$removeReceivedChunk(this.player);
+-            if (!addToPending) this.player.connection.send(new ClientboundForgetLevelChunkPacket(new ChunkPos(chunkX, chunkZ))); // Canvas - extended view distance
++            if (!keepOnClient) this.player.connection.send(new ClientboundForgetLevelChunkPacket(new ChunkPos(chunkX, chunkZ))); // Canvas - extended view distance
+             // Paper start - PlayerChunkUnloadEvent
+             if (io.papermc.paper.event.packet.PlayerChunkUnloadEvent.getHandlerList().getRegisteredListeners().length > 0) {
+                 new io.papermc.paper.event.packet.PlayerChunkUnloadEvent(player.getBukkitEntity().getWorld().getChunkAt(new ChunkPos(chunkX, chunkZ).longKey()), player.getBukkitEntity()).callEvent();
+             }
+             // Paper end - PlayerChunkUnloadEvent
+-            if (addToPending) this.pendingForget.add(CoordinateUtils.getChunkKey(chunkX, chunkZ)); // Canvas - extended view distance
+         }
+ 
+         private final SingleUserAreaMap<PlayerChunkLoaderData> broadcastMap = new SingleUserAreaMap<>(this) {
+@@ -658,14 +651,17 @@ public final class RegionizedPlayerChunkLoader {
+ 
+         // Canvas start - extended view distance
+         private static int getVisualViewDistance(
+-            final int sendViewDistance, final int playerVVD, final int worldVVD, final int serverVVD
++            final int sendViewDistance, final int clientViewDistance, final int playerVVD, final int worldVVD, final int serverVVD
+         ) {
+-            if (playerVVD <= 0 && worldVVD <= 0 && serverVVD <= 0) {
++            if (playerVVD < 0 && worldVVD <= 0 && serverVVD <= 0) {
+                 return sendViewDistance;
+             }
+ 
+-            final int vvd = playerVVD <= 0 ? worldVVD <= 0 ? serverVVD : worldVVD : playerVVD;
+-            return Math.max(sendViewDistance, Math.clamp(vvd, 0, MoonriseConstants.MAX_VIEW_DISTANCE));
++            // a player set to 0 gets no fake chunks, whatever the world and server give
++            final int vvd = playerVVD < 0 ? worldVVD <= 0 ? serverVVD : worldVVD : playerVVD;
++            // the client renders no further than its own view distance, like the send distance
++            final int clientVVD = !PlatformHooks.get().configAutoConfigSendDistance() || clientViewDistance < 0 ? vvd : Math.min(vvd, clientViewDistance + 1);
++            return Math.max(sendViewDistance, Math.clamp(clientVVD, 0, MoonriseConstants.MAX_VIEW_DISTANCE));
+         }
+ 
+         private static int squaredDistance(final int dx, final int dz) {
+@@ -961,7 +957,8 @@ public final class RegionizedPlayerChunkLoader {
+             final long maxSends = Math.max(0L, Math.min(MAX_RATE, Math.min(this.sendQueue.size(), Integer.MAX_VALUE))); // note: no logic to track concurrent sends
+             final long maxSendsThisTick = this.chunkSendLimiter.takeAllocation(maxSends);
+             // we do not return sends that we took from the allocation back because we want to limit the max send rate, not target it
+-            for (long i = 0; i < maxSendsThisTick; ++i) {
++            long sentThisTick = 0L; // Canvas - extended view distance
++            for (; sentThisTick < maxSendsThisTick; ++sentThisTick) { // Canvas - extended view distance
+                 final long pendingSend = this.sendQueue.firstLong();
+                 final int pendingSendX = CoordinateUtils.getChunkX(pendingSend);
+                 final int pendingSendZ = CoordinateUtils.getChunkZ(pendingSend);
+@@ -1036,10 +1033,6 @@ public final class RegionizedPlayerChunkLoader {
+ 
+                 final io.canvasmc.canvas.extendedview.Result result = future.getNow(null);
+                 if (!result.isSuccess()) {
+-                    if (this.pendingForget.remove(pendingBuild)) {
+-                        this.player.connection.send(new ClientboundForgetLevelChunkPacket(new ChunkPos(pendingBuildX, pendingBuildZ)));
+-                    }
+-
+                     // remove, the fake load finished or failed, so not needed here anymore
+                     it.remove();
+                     continue;
+@@ -1065,8 +1058,8 @@ public final class RegionizedPlayerChunkLoader {
+                 this.vvBuildingQueue.add(pendingBuild);
+             }
+ 
+-            // try and send fake chunks in queue
+-            for (int i = 0; i < maxSendsThisTick && !this.sendQueue.isEmpty(); ++i) {
++            // try and send fake chunks in queue, with what the real chunks left of the allocation
++            for (long i = sentThisTick; i < maxSendsThisTick && !this.sendQueue.isEmpty(); ++i) {
+                 final long pendingSend = this.sendQueue.firstLong();
+                 final int pendingSendX = CoordinateUtils.getChunkX(pendingSend);
+                 final int pendingSendZ = CoordinateUtils.getChunkZ(pendingSend);
+@@ -1088,16 +1081,10 @@ public final class RegionizedPlayerChunkLoader {
+                     // send the fake chunk now
+                     final net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket packet = result.getPacketOrThrow();
+ 
+-                    // add to sent and fake chunks, mark watch in cache
++                    // add to sent and fake chunks and send chunk packet
+                     this.sentChunks.add(pendingSend);
+                     this.fakeChunks.add(pendingSend);
+-                    extendedViewDistance.cache.watch(pendingSend);
+-
+-                    // remove from pending forget and send chunk packet
+-                    this.pendingForget.remove(pendingSend);
+                     this.player.connection.send(packet);
+-                } else {
+-                    extendedViewDistance.cache.evictIfUnwatched(pendingSend);
+                 }
+             }
+ 
+@@ -1124,7 +1111,7 @@ public final class RegionizedPlayerChunkLoader {
+             // send view cannot be greater-than load view
+             final int clientViewDistance = getClientViewDistance(this.player);
+             final int sendViewDistance = getSendViewDistance(loadViewDistance, clientViewDistance, playerDistances.sendViewDistance, worldDistances.sendViewDistance);
+-            final int vvDistance = getVisualViewDistance(sendViewDistance, playerDistances.vvDistance, worldDistances.vvDistance, io.canvasmc.canvas.GlobalConfiguration.getInstance().chunkSystem.visualViewDistance.vvDistance); // Canvas - extended view distance
++            final int vvDistance = getVisualViewDistance(sendViewDistance, clientViewDistance, playerDistances.vvDistance, worldDistances.vvDistance, io.canvasmc.canvas.GlobalConfiguration.getInstance().chunkSystem.visualViewDistance.vvDistance); // Canvas - extended view distance
+ 
+             // send view distances
+             this.player.connection.send(this.updateClientChunkRadius(vvDistance)); // Canvas - extended view distance
+@@ -1172,7 +1159,7 @@ public final class RegionizedPlayerChunkLoader {
+             // send view cannot be greater-than load view
+             final int clientViewDistance = getClientViewDistance(this.player);
+             final int sendViewDistance = getSendViewDistance(loadViewDistance, clientViewDistance, playerDistances.sendViewDistance, worldDistances.sendViewDistance);
+-            final int vvDistance = getVisualViewDistance(sendViewDistance, playerDistances.vvDistance, worldDistances.vvDistance, io.canvasmc.canvas.GlobalConfiguration.getInstance().chunkSystem.visualViewDistance.vvDistance); // Canvas - extended view distance
++            final int vvDistance = getVisualViewDistance(sendViewDistance, clientViewDistance, playerDistances.vvDistance, worldDistances.vvDistance, io.canvasmc.canvas.GlobalConfiguration.getInstance().chunkSystem.visualViewDistance.vvDistance); // Canvas - extended view distance
+ 
+             final ChunkPos playerPos = this.player.chunkPosition();
+             final boolean canGenerateChunks = this.canPlayerGenerateChunks();
+@@ -1260,18 +1247,23 @@ public final class RegionizedPlayerChunkLoader {
+                 final boolean vvChunk = !sendChunk && (squareDistance <= (vvDistance + 1))
+                     && wantChunkLoaded(currentChunkX, currentChunkZ, chunkX, chunkZ, vvDistance);
+                 final boolean isFake = this.fakeChunks.contains(chunk);
+-                final boolean keepSent = !sendChunk && this.sentChunks.contains(chunk) && (isFake ? vvChunk : withinLoadRange);
++                final boolean keepSent = !sendChunk && this.sentChunks.contains(chunk) && (isFake ? vvChunk : vvChunk && withinLoadRange);
+ 
+                 boolean sentChunk = keepSent || (sendChunk ? this.sentChunks.contains(chunk) && !isFake : this.sentChunks.remove(chunk));
+                 if (!sendChunk && !keepSent && sentChunk) {
+-                    this.fakeChunks.remove(chunk);
+                     if (isFake) {
+-                        this.world.extendedViewDistance().cache.unwatch(chunk);
++                        this.fakeChunks.remove(chunk);
+                         this.player.connection.send(new ClientboundForgetLevelChunkPacket(new ChunkPos(chunkX, chunkZ)));
++                        sentChunk = false;
++                    } else if (vvChunk) {
++                        // the client already holds this chunk, so it stays there as a fake chunk
++                        this.sendUnloadChunkRaw(chunkX, chunkZ, true);
++                        this.sentChunks.add(chunk);
++                        this.fakeChunks.add(chunk);
+                     } else {
+-                        this.sendUnloadChunkRaw(chunkX, chunkZ, vvChunk);
++                        this.sendUnloadChunkRaw(chunkX, chunkZ);
++                        sentChunk = false;
+                     }
+-                    sentChunk = false;
+                 }
+ 
+                 if (vvChunk && !sentChunk) {
+diff --git a/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java b/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java
+index 15b3f309e0e54678a03b55a41e0da762e58b97e5..73e8c6ca6bc6fb0e8316ec0d87616df44bcbd9d9 100644
+--- a/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java
++++ b/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java
+@@ -9,7 +9,9 @@ import com.mojang.logging.LogUtils;
+ import io.canvasmc.canvas.GlobalConfiguration;
+ import io.canvasmc.canvas.util.Util;
+ import java.util.concurrent.CompletableFuture;
++import net.minecraft.SharedConstants;
+ import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.NbtUtils;
+ import net.minecraft.network.protocol.game.ClientboundLevelChunkPacketData;
+ import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
+ import net.minecraft.network.protocol.game.ClientboundLightUpdatePacketData;
+@@ -52,7 +54,6 @@ public final class ExtendedViewDistance {
+     }
+ 
+     private CompletableFuture<Result> startBuild(final int chunkX, final int chunkZ) {
+-        final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
+         final CompletableFuture<Result> future = new CompletableFuture<>();
+ 
+         try {
+@@ -63,14 +64,12 @@ public final class ExtendedViewDistance {
+                 chunkZ,
+                 MoonriseRegionFileIO.RegionFileType.CHUNK_DATA,
+                 (tag, throwable) -> PACKET_BUILD_EXECUTOR.queueTask(
+-                    () -> this.completeBuild(chunkKey, chunkX, chunkZ, future, tag, throwable), Priority.IDLE
++                    () -> this.completeBuild(chunkX, chunkZ, future, tag, throwable), Priority.IDLE
+                 ),
+                 false,
+                 Priority.IDLE // use idle, i dont give a fuck about this
+             );
+         } catch (final Throwable thrown) {
+-            this.cache.remove(chunkKey, future);
+-
+             // ruh roh :(
+             future.complete(new Result.Failure(thrown));
+         }
+@@ -79,7 +78,6 @@ public final class ExtendedViewDistance {
+     }
+ 
+     private void completeBuild(
+-        final long chunkKey,
+         final int chunkX,
+         final int chunkZ,
+         final CompletableFuture<Result> future,
+@@ -89,14 +87,14 @@ public final class ExtendedViewDistance {
+         final Throwable ioThrowable
+     ) {
+         if (ioThrowable != null) {
+-            // failed, remove from cache and return
+-            this.cache.remove(chunkKey, future);
++            // failed, the cache keeps the failure for a while so it is not read again every tick
+             future.complete(new Result.Failure(ioThrowable));
+             return;
+         }
+ 
+         try {
+-            if (tag != null) {
++            // parsing a chunk saved by a newer version stops the server, so never build one
++            if (tag != null && NbtUtils.getDataVersion(tag) <= SharedConstants.getCurrentVersion().dataVersion().version()) {
+                 final CompoundTag upgraded = this.world.getChunkSource().chunkMap.upgradeChunkTag(tag);
+ 
+                 // parse the tag and then try and create the packet
+@@ -122,7 +120,6 @@ public final class ExtendedViewDistance {
+             }
+ 
+             // not generated or something
+-            this.cache.remove(chunkKey, future);
+             future.complete(Result.NotGenerated.INSTANCE);
+         } catch (final Throwable thrown) {
+             LOGGER.warn(
+@@ -133,8 +130,7 @@ public final class ExtendedViewDistance {
+                 thrown
+             );
+ 
+-            // remove from cache and report failure
+-            this.cache.remove(chunkKey, future);
++            // report failure
+             future.complete(new Result.Failure(thrown));
+         }
+     }
+diff --git a/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java b/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java
+index 568faeca6f97e23a30b661bb26749f50e519e156..c9356d1ad2475c4545a568967cbfe5027512d2e8 100644
+--- a/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java
++++ b/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java
+@@ -1,5 +1,6 @@
+ package io.canvasmc.canvas.extendedview;
+ 
++import ca.spottedleaf.moonrise.patches.starlight.light.SWMRNibbleArray;
+ import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+ import java.util.BitSet;
+ import java.util.function.Predicate;
+@@ -29,7 +30,19 @@ public class PacketConstructorUtils {
+         || state.is(Blocks.REDSTONE_ORE)
+         || state.is(Blocks.DEEPSLATE_REDSTONE_ORE)
+         || state.is(Blocks.DIAMOND_ORE)
+-        || state.is(Blocks.DEEPSLATE_DIAMOND_ORE);
++        || state.is(Blocks.DEEPSLATE_DIAMOND_ORE)
++        || state.is(Blocks.EMERALD_ORE)
++        || state.is(Blocks.DEEPSLATE_EMERALD_ORE);
++
++    private static final Predicate<BlockState> IS_DEEPSLATE_ORE = (state) ->
++        state.is(Blocks.DEEPSLATE_COPPER_ORE)
++        || state.is(Blocks.DEEPSLATE_IRON_ORE)
++        || state.is(Blocks.DEEPSLATE_GOLD_ORE)
++        || state.is(Blocks.DEEPSLATE_COAL_ORE)
++        || state.is(Blocks.DEEPSLATE_LAPIS_ORE)
++        || state.is(Blocks.DEEPSLATE_REDSTONE_ORE)
++        || state.is(Blocks.DEEPSLATE_DIAMOND_ORE)
++        || state.is(Blocks.DEEPSLATE_EMERALD_ORE);
+ 
+     public static void clearOres(final LevelChunkSection[] sections) {
+         for (final LevelChunkSection section : sections) {
+@@ -46,17 +59,15 @@ public class PacketConstructorUtils {
+                             continue;
+                         }
+ 
+-                        if (IS_ORE.test(state)) {
+-                            // is an ore, replace with stone
+-                            // we already truncate the bottom half of the world, so we can
+-                            // do stone without worrying about blending with deepslate
+-                            section.setBlockState(x, y, z, Blocks.STONE.defaultBlockState(), false);
++                        // the nether ores sit in netherrack, gold's among the gold ores
++                        if (state.is(Blocks.NETHER_GOLD_ORE) || state.is(Blocks.NETHER_QUARTZ_ORE) || state.is(Blocks.ANCIENT_DEBRIS)) {
++                            section.setBlockState(x, y, z, Blocks.NETHERRACK.defaultBlockState(), false);
+                             continue;
+                         }
+ 
+-                        // netherite needs a special case because that's for the nether only
+-                        if (state.is(Blocks.ANCIENT_DEBRIS)) {
+-                            section.setBlockState(x, y, z, Blocks.NETHERRACK.defaultBlockState(), false);
++                        if (IS_ORE.test(state)) {
++                            // is an ore, replace with the stone it sits in
++                            section.setBlockState(x, y, z, (IS_DEEPSLATE_ORE.test(state) ? Blocks.DEEPSLATE : Blocks.STONE).defaultBlockState(), false);
+                         }
+                     }
+                 }
+@@ -159,11 +170,17 @@ public class PacketConstructorUtils {
+         for (int lIdx = 0; lIdx < sectionCount; ++lIdx) {
+             final SerializableChunkData.SectionData stored = byY[lIdx];
+ 
+-            recordLayer(stored == null ? null : stored.blockLight(), lIdx, blockMask, emptyBlockMask, blockUpdates);
++            recordLayer(
++                stored == null ? null : stored.blockLight(), stored == null ? -1 : stored.starlight$getBlockLightState(),
++                lIdx, blockMask, emptyBlockMask, blockUpdates
++            );
+ 
+             // only record skylight if the dimension HAS skylight
+             if (hasSkyLight) {
+-                recordLayer(stored == null ? null : stored.skyLight(), lIdx, skyMask, emptySkyMask, skyUpdates);
++                recordLayer(
++                    stored == null ? null : stored.skyLight(), stored == null ? -1 : stored.starlight$getSkyLightState(),
++                    lIdx, skyMask, emptySkyMask, skyUpdates
++                );
+             }
+         }
+ 
+@@ -180,18 +197,30 @@ public class PacketConstructorUtils {
+     private static void recordLayer(
+         @Nullable
+         final DataLayer layer,
++        final int state,
+         final int idx,
+         final BitSet mask,
+         final BitSet emptyMask,
+         final ObjectArrayList<byte[]> updates
+     ) {
+-        if (layer != null) {
+-            mask.set(idx);
+-            updates.add(layer.copy().getData());
++        // send what the live light engine would, leaving out what it leaves out,
++        // since the client lights a section with no data from the sections above it
++        if (state < 0) {
++            return;
+         }
+-        else {
++
++        final DataLayer visible = new SWMRNibbleArray(layer == null ? null : layer.getData(), state).toVanillaNibble();
++        if (visible == null) {
++            return;
++        }
++
++        if (visible.isEmpty()) {
+             emptyMask.set(idx);
+         }
++        else {
++            mask.set(idx);
++            updates.add(visible.getData());
++        }
+     }
+ 
+     private static boolean inSection(
+diff --git a/io/canvasmc/canvas/extendedview/VVChunkCache.java b/io/canvasmc/canvas/extendedview/VVChunkCache.java
+index c38705a6c646fcccdd7cf94644d6ca830462b121..0db4a6a54e15e9f91f9c53cb66b1fe9ff05bd589 100644
+--- a/io/canvasmc/canvas/extendedview/VVChunkCache.java
++++ b/io/canvasmc/canvas/extendedview/VVChunkCache.java
+@@ -1,129 +1,49 @@
+ package io.canvasmc.canvas.extendedview;
+ 
+-import ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue;
+ import ca.spottedleaf.concurrentutil.map.concurrent.longs.ConcurrentChainedLong2ReferenceHashTable;
+ import java.util.concurrent.CompletableFuture;
+ import java.util.concurrent.TimeUnit;
+ 
+ public final class VVChunkCache {
+     private static final long REMOVE_DELAY_NANOS = TimeUnit.SECONDS.toNanos(5);
+-    private static final int DRAIN_INTERVAL = 16;
+-    private static final int MAX_DRAIN_PER_CALL = 5;
++    private static final int SWEEP_INTERVAL = 20;
+ 
+     private final ConcurrentChainedLong2ReferenceHashTable<Entry> cache = new ConcurrentChainedLong2ReferenceHashTable<>();
+-    private final MultiThreadedQueue<Long> order = new MultiThreadedQueue<>();
+ 
+-    private long maybeDrainCounter;
++    private int ticks;
+ 
+     public CompletableFuture<Result> computeIfAbsent(
+         final long chunkKey,
+         final ConcurrentChainedLong2ReferenceHashTable.BiLongObjectFunction<? extends CompletableFuture<Result>> builder
+     ) {
+-        this.maybeDrain();
+-        return this.cache.computeIfAbsent(chunkKey, (key) -> new Entry(builder.apply(key))).future;
+-    }
+-
+-    public void remove(final long chunkKey, final CompletableFuture<Result> expect) {
+-        this.cache.removeIf(chunkKey, (entry) -> entry.future == expect);
+-    }
+-
+-    public void watch(final long chunkKey) {
+-        this.maybeDrain();
+-        this.cache.compute(
+-            chunkKey, (_, entry) -> {
+-                final Entry current = entry != null ? entry : new Entry(null);
+-                ++current.watchers;
+-                current.expireAtNanos = 0L;
+-                return current;
+-            }
+-        );
+-    }
+-
+-    public void unwatch(final long chunkKey) {
+-        this.maybeDrain();
+-        this.cache.computeIfPresent(
+-            chunkKey, (_, entry) -> {
+-                if (--entry.watchers <= 0 && entry.expireAtNanos == 0L) {
+-                    entry.expireAtNanos = System.nanoTime() + REMOVE_DELAY_NANOS;
+-                    this.order.add(chunkKey);
+-                }
+-                return entry;
+-            }
+-        );
+-    }
+-
+-    public void evictIfUnwatched(final long chunkKey) {
+-        this.maybeDrain();
+-        this.cache.computeIfPresent(
+-            chunkKey, (_, entry) -> {
+-                if (entry.watchers <= 0 && entry.expireAtNanos == 0L) {
+-                    entry.expireAtNanos = System.nanoTime() + REMOVE_DELAY_NANOS;
+-                    this.order.add(chunkKey);
+-                }
+-                return entry;
+-            }
+-        );
+-    }
+-
+-    private void maybeDrain() {
+-        if ((this.maybeDrainCounter++ % DRAIN_INTERVAL) == 0) {
+-            this.drainExpired();
+-        }
+-    }
+-
+-    public void drainExpired() {
+-        this.drainExpired(MAX_DRAIN_PER_CALL);
++        final Entry entry = this.cache.computeIfAbsent(chunkKey, (key) -> new Entry(builder.apply(key)));
++        entry.lastAccessNanos = System.nanoTime();
++        return entry.future;
+     }
+ 
+     public void tick() {
+-        this.drainExpired(Integer.MAX_VALUE);
+-    }
++        if (++this.ticks % SWEEP_INTERVAL != 0) {
++            return;
++        }
+ 
+-    private void drainExpired(final int maxToProcess) {
+         final long now = System.nanoTime();
+-        final boolean[] notDue = {false};
+-
+-        final ConcurrentChainedLong2ReferenceHashTable.BiLongObjectObjectFunction<Entry, Entry> check = (_, entry) -> {
+-            if (entry.expireAtNanos == 0L) {
+-                // cancelled, it got rewatched or already processed
+-                return entry;
+-            }
+-
+-            // check if it's due
+-            if (now - entry.expireAtNanos < 0L) {
+-                notDue[0] = true;
+-                return entry;
+-            }
+-
+-            // it's due, remove if there are still no watchers
+-            return entry.watchers <= 0 ? null : entry;
+-        };
+-
+-        for (int remaining = maxToProcess; remaining > 0; --remaining) {
+-            final Long chunkKey = this.order.poll();
+-            if (chunkKey == null) {
+-                return;
+-            }
+-
+-            //noinspection DataFlowIssue - "redundant assignment" - bad IntelliJ
+-            notDue[0] = false;
+-            this.cache.computeIfPresent(chunkKey, check);
++        for (final ConcurrentChainedLong2ReferenceHashTable.TableEntry<Entry> tableEntry : this.cache) {
++            final Entry entry = tableEntry.getValue();
+ 
+-            if (notDue[0]) {
+-                // not due yet
+-                this.order.add(chunkKey);
+-                return;
++            // keep builds in flight, and anything a player asked for in the last few seconds
++            if (entry.future.isDone() && now - entry.lastAccessNanos > REMOVE_DELAY_NANOS) {
++                this.cache.remove(tableEntry.getKey(), entry);
+             }
+         }
+     }
+ 
+     private static final class Entry {
+         final CompletableFuture<Result> future;
+-        int watchers;
+-        long expireAtNanos;
++        volatile long lastAccessNanos;
+ 
+         Entry(final CompletableFuture<Result> future) {
+             this.future = future;
++            this.lastAccessNanos = System.nanoTime();
+         }
+     }
+ }
