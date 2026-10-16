@@ -452,6 +452,8 @@ public class GlobalConfiguration extends Part {
                     ).greaterThanOrEqualTo(0.0F);
                 option("hollowChunks")
                     .docs("Hollows out the \"fake chunks\" loaded by the server to reduce bandwidth");
+                option("hideOres")
+                    .docs("Replaces the ores in the \"fake chunks\" with the stone around them, so they can't be seen from afar");
             }
 
             // TODO - hide grass - foliage-like blocks are hard to see from far away, not needed
