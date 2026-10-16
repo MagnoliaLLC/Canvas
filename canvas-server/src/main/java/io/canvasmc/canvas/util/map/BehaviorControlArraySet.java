@@ -1,5 +1,6 @@
 package io.canvasmc.canvas.util.map;
 
+import io.canvasmc.canvas.util.MemoryGate;
 import it.unimi.dsi.fastutil.objects.AbstractObjectSet;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import java.util.NoSuchElementException;
@@ -12,16 +13,24 @@ import org.jspecify.annotations.Nullable;
 public final class BehaviorControlArraySet<E extends LivingEntity> extends AbstractObjectSet<BehaviorControl<? super E>> {
 
     private static final BehaviorControl[] EMPTY_ARRAY = {};
+    private static final @Nullable MemoryGate[] EMPTY_GATES = {};
     private int running;
     private transient @Nullable BehaviorControl<? super E>[] a;
+    // each behavior's memory gate at the same index, kept beside them so the brain loop reads it without a call
+    private transient @Nullable MemoryGate[] gates;
     private int size;
 
     public BehaviorControlArraySet() {
         this.a = EMPTY_ARRAY;
+        this.gates = EMPTY_GATES;
     }
 
     public @Nullable BehaviorControl<? super E>[] raw() {
         return a;
+    }
+
+    public @Nullable MemoryGate[] gates() {
+        return gates;
     }
 
     public void inc() {
@@ -79,7 +88,9 @@ public final class BehaviorControlArraySet<E extends LivingEntity> extends Abstr
                 curr = -1;
                 final int tail = size-- - next--;
                 System.arraycopy(a, next + 1, a, next, tail);
+                System.arraycopy(gates, next + 1, gates, next, tail);
                 a[size] = null;
+                gates[size] = null;
             }
 
             @Override
@@ -128,7 +139,9 @@ public final class BehaviorControlArraySet<E extends LivingEntity> extends Abstr
             final @Nullable BehaviorControl<? super E>[] b = new BehaviorControl[size == 0 ? 2 : size * 2];
             for (int i = size; i-- != 0; ) b[i] = a[i];
             a = b;
+            gates = java.util.Arrays.copyOf(gates, b.length);
         }
+        gates[size] = k.canvas$memoryGate();
         a[size++] = k;
         return true;
     }
@@ -138,15 +151,20 @@ public final class BehaviorControlArraySet<E extends LivingEntity> extends Abstr
         final int pos = findKey(k);
         if (pos == -1) return false;
         final int tail = size - pos - 1;
-        for (int i = 0; i < tail; i++) a[pos + i] = a[pos + i + 1];
+        for (int i = 0; i < tail; i++) {
+            a[pos + i] = a[pos + i + 1];
+            gates[pos + i] = gates[pos + i + 1];
+        }
         size--;
         a[size] = null;
+        gates[size] = null;
         return true;
     }
 
     @Override
     public void clear() {
         java.util.Arrays.fill(a, 0, size, null);
+        java.util.Arrays.fill(gates, 0, size, null);
         size = 0;
     }
 }

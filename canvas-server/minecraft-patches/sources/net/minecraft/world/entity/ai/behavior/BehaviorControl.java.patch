@@ -1,0 +1,13 @@
+--- a/net/minecraft/world/entity/ai/behavior/BehaviorControl.java
++++ b/net/minecraft/world/entity/ai/behavior/BehaviorControl.java
+@@ -17,4 +_,10 @@
+     void doStop(ServerLevel level, E body, long timestamp);
+ 
+     String debugString();
++
++    // Canvas start - memory gate
++    default io.canvasmc.canvas.util.@org.jspecify.annotations.Nullable MemoryGate canvas$memoryGate() {
++        return null;
++    }
++    // Canvas end - memory gate
+ }

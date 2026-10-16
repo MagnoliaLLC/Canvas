@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/entity/ai/Brain.java
 +++ b/net/minecraft/world/entity/ai/Brain.java
-@@ -37,16 +_,34 @@
+@@ -37,16 +_,41 @@
  
  public class Brain<E extends LivingEntity> {
      private static final int SCHEDULE_UPDATE_DELAY = 20;
@@ -39,10 +39,17 @@
 +        this.memoryModCount++;
 +    }
 +    // Canvas end - optimize brain
++    // Canvas start - memory gate
++    private MemorySlot<?>[] canvas$memorySlots = new MemorySlot<?>[0];
++
++    public MemorySlot<?>[] canvas$memorySlots() {
++        return this.canvas$memorySlots;
++    }
++    // Canvas end - memory gate
  
      public static <E extends LivingEntity> Brain.Provider<E> provider(final Collection<? extends SensorType<? extends Sensor<? super E>>> sensorTypes) {
          return new Brain.Provider<>(ImmutableList.of(), sensorTypes, var0 -> List.of());
-@@ -99,10 +_,12 @@
+@@ -99,10 +_,19 @@
  
          this.setCoreActivities(ImmutableSet.of(Activity.CORE));
          this.useDefaultActivity();
@@ -51,6 +58,13 @@
  
      private void registerMemory(final MemoryModuleType<?> memoryType) {
          this.memories.putIfAbsent(memoryType, MemorySlot.create());
++        // Canvas start - memory gate
++        final int index = memoryType.canvas$index;
++        if (index >= this.canvas$memorySlots.length) {
++            this.canvas$memorySlots = java.util.Arrays.copyOf(this.canvas$memorySlots, index + 1);
++        }
++        this.canvas$memorySlots[index] = this.memories.get(memoryType);
++        // Canvas end - memory gate
 +        this.lithium$onMemoryModified(); // Canvas - optimize brain
      }
  
@@ -134,7 +148,7 @@
      }
  
      public boolean isActive(final Activity activity) {
-@@ -396,48 +_,111 @@
+@@ -396,48 +_,118 @@
      }
  
      private void forgetOutdatedMemories() {
@@ -230,7 +244,14 @@
 +            if (index >= activeBehaviors.length) break; // Canvas - ensure bounds are kept, odd race condition that makes activeBehaviors empty during iteration of this
 +            var behaviorControls = activeBehaviors[index];
 +            var behaviorControlsRaw = behaviorControls.raw();
++            var behaviorControlGates = behaviorControls.gates(); // Canvas - memory gate
 +            for (int i = 0, size1 = behaviorControls.size(); i < size1; i++) {
++                // Canvas start - memory gate - a behavior whose memory checks fail cannot start, read the body's brain as tryStart would
++                final io.canvasmc.canvas.util.MemoryGate gate = behaviorControlGates[i];
++                if (gate != null && !gate.test(body.getBrain())) {
++                    continue;
++                }
++                // Canvas end - memory gate
 +                BehaviorControl<? super E> behaviorControl = behaviorControlsRaw[i];
 +                if (behaviorControl.getStatus() == Behavior.Status.STOPPED) {
 +                    if (behaviorControl.tryStart(level, body, time)) {
