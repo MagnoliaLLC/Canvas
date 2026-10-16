@@ -1,5 +1,32 @@
 --- a/net/minecraft/server/level/ServerEntity.java
 +++ b/net/minecraft/server/level/ServerEntity.java
+@@ -58,6 +_,7 @@
+     private static final int TOLERANCE_LEVEL_ROTATION = 1;
+     private static final double TOLERANCE_LEVEL_POSITION = 7.6293945E-6F;
+     public static final int FORCED_POS_UPDATE_PERIOD = 60;
++    private static final int SETTLED_UPDATES = 60; // Canvas - optimize movement packets
+     private static final int FORCED_TELEPORT_PERIOD = 400;
+     private final ServerLevel level;
+     private final Entity entity;
+@@ -81,6 +_,10 @@
+     private final Set<ServerPlayer> mapFrameViewers = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>();
+     private @Nullable MapId viewedMapId;
+     // Paper end - Rework map holder tracking
++    // Canvas start - optimize movement packets
++    private @Nullable ClientboundEntityPositionSyncPacket canvas$lastSync;
++    private int canvas$settledUpdates;
++    // Canvas end - optimize movement packets
+ 
+     public ServerEntity(
+         final ServerLevel level,
+@@ -172,6 +_,7 @@
+                 this.positionCodec.setBase(currentPosition);
+                 this.sendDirtyEntityData();
+                 this.wasRiding = true;
++                this.canvas$moved(); // Canvas - optimize movement packets
+             } else if (this.entity instanceof AbstractMinecart minecart && minecart.getBehavior() instanceof NewMinecartBehavior newMinecartBehavior) {
+                 this.handleMinecartPosRot(newMinecartBehavior, yRotn, xRotn, shouldSendRotation);
+             } else {
 @@ -179,6 +_,7 @@
                  PositionPath position = this.interpolationTracker.getPositionPath(currentPosition);
                  this.interpolationTracker.clear();
@@ -17,7 +44,7 @@
                      packet = this.createMovePacket(position, yRotn, xRotn, shouldSendPosition, shouldSendRotation);
                  }
  
-@@ -208,9 +_,44 @@
+@@ -208,14 +_,53 @@
                                          )
                                      )
                                  );
@@ -63,3 +90,57 @@
                      }
                  }
  
+                 if (packet != null) {
+-                    this.synchronizer.sendToTrackingPlayers(packet);
++                    // Canvas start - optimize movement packets
++                    if (!this.canvas$changesNothing(packet)) {
++                        this.synchronizer.sendToTrackingPlayers(packet);
++                    }
++                    // Canvas end - optimize movement packets
+                     this.sendDirtyEntityData();
+                     if (packet.hasPosition()) {
+                         this.positionCodec.setBase(currentPosition);
+@@ -243,6 +_,7 @@
+         }
+ 
+         this.tickCount++;
++        this.canvas$settledUpdates = Math.min(this.canvas$settledUpdates + 1, SETTLED_UPDATES); // Canvas - optimize movement packets
+         if (this.entity.syncVelocity) {
+             // CraftBukkit start - Create PlayerVelocity event
+             boolean cancelled = false;
+@@ -267,6 +_,35 @@
+             this.synchronizer.sendToTrackingPlayersAndSelf(new ClientboundSetEntityMotionPacket(this.entity));
+         }
+     }
++
++    // Canvas start - optimize movement packets
++    private boolean canvas$changesNothing(final MovementPacket<ClientGamePacketListener> packet) {
++        final boolean unchanged = switch (packet) {
++            case ClientboundEntityPositionSyncPacket sync -> sync.equals(this.canvas$lastSync);
++            case ClientboundMoveEntityPacket.Pos pos -> VecDelta.ZERO.equals(pos.getPositionDelta());
++            default -> false;
++        };
++        final boolean skip = unchanged
++            && this.canvas$settledUpdates >= SETTLED_UPDATES
++            && !this.forceStateResync
++            && !this.wasRiding
++            && !this.entity.getRequiresPrecisePosition()
++            && this.entity.getMoveSimulationType() == net.minecraft.world.entity.MoveSimulationType.AUTHORITATIVE_SIDE;
++
++        if (!skip) {
++            if (!unchanged) {
++                this.canvas$settledUpdates = 0;
++            }
++            this.canvas$lastSync = packet instanceof ClientboundEntityPositionSyncPacket sync ? sync : null;
++        }
++        return skip;
++    }
++
++    private void canvas$moved() {
++        this.canvas$lastSync = null;
++        this.canvas$settledUpdates = 0;
++    }
++    // Canvas end - optimize movement packets
+ 
+     private @Nullable MovementPacket<ClientGamePacketListener> createMovePacket(
+         final PositionPath position, final byte yRotn, final byte xRotn, final boolean shouldSendPosition, final boolean shouldSendRotation
