@@ -531,21 +531,21 @@ index fad788a6541a7e9edd42f699d2968897d446a353..6d11d9282b82a7f5ccbbec63ea0e21fa
              this.flushDelayedTicketOps();
 diff --git a/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java b/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..2d9edc4a13122ed1c7859e466685762c3f85d1ad
+index 0000000000000000000000000000000000000000..ce50b8b50f726370f28218ac36285d9b1866c018
 --- /dev/null
 +++ b/io/canvasmc/canvas/extendedview/ExtendedViewDistance.java
-@@ -0,0 +1,192 @@
+@@ -0,0 +1,195 @@
 +package io.canvasmc.canvas.extendedview;
 +
-+import ca.spottedleaf.concurrentutil.executor.PrioritisedExecutor;
 +import ca.spottedleaf.concurrentutil.util.Priority;
 +import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
-+import ca.spottedleaf.moonrise.common.util.MoonriseCommon;
 +import ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO;
 +import com.mojang.logging.LogUtils;
 +import io.canvasmc.canvas.GlobalConfiguration;
 +import io.canvasmc.canvas.util.Util;
 +import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.Executor;
++import java.util.concurrent.Executors;
 +import net.minecraft.SharedConstants;
 +import net.minecraft.nbt.CompoundTag;
 +import net.minecraft.nbt.NbtUtils;
@@ -568,8 +568,11 @@ index 0000000000000000000000000000000000000000..2d9edc4a13122ed1c7859e466685762c
 +
 +    public static final Logger LOGGER = LogUtils.getLogger();
 +
-+    // we use our own executor in the worker pool for building data after the io read
-+    private static final PrioritisedExecutor PACKET_BUILD_EXECUTOR = MoonriseCommon.SERVER_GROUP.createExecutor();
++    // our own threads, the worker pool would only reach these once nothing else loads
++    private static final Executor PACKET_BUILD_EXECUTOR = Executors.newFixedThreadPool(
++        Math.max(1, Runtime.getRuntime().availableProcessors() / 4),
++        Thread.ofPlatform().name("Canvas Visual View Builder #", 0).daemon().priority(Thread.NORM_PRIORITY - 1).factory()
++    );
 +
 +    public final VVChunkCache cache = new VVChunkCache();
 +
@@ -600,8 +603,8 @@ index 0000000000000000000000000000000000000000..2d9edc4a13122ed1c7859e466685762c
 +                chunkX,
 +                chunkZ,
 +                MoonriseRegionFileIO.RegionFileType.CHUNK_DATA,
-+                (tag, throwable) -> PACKET_BUILD_EXECUTOR.queueTask(
-+                    () -> this.completeBuild(chunkX, chunkZ, future, tag, throwable), Priority.IDLE
++                (tag, throwable) -> PACKET_BUILD_EXECUTOR.execute(
++                    () -> this.completeBuild(chunkX, chunkZ, future, tag, throwable)
 +                ),
 +                false,
 +                Priority.IDLE // use idle, i dont give a fuck about this
@@ -701,7 +704,7 @@ index 0000000000000000000000000000000000000000..2d9edc4a13122ed1c7859e466685762c
 +        // try hollow chunks before we create the actual chunk object
 +        if (GlobalConfiguration.getInstance().chunkSystem.visualViewDistance.hollowChunks) {
 +            //noinspection NullableProblems - we made "sections" nonnull above
-+            PacketConstructorUtils.carveChunk(sections, this.world, this.airSection);
++            PacketConstructorUtils.carveChunk(sections);
 +        }
 +
 +        // remove the ores if asked of us
@@ -729,10 +732,10 @@ index 0000000000000000000000000000000000000000..2d9edc4a13122ed1c7859e466685762c
 +}
 diff --git a/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java b/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..f19e83ccb714c45a3618781ecc5106e7158bd18a
+index 0000000000000000000000000000000000000000..944ccec76b64155de4448b85d1dd0a34f598a0da
 --- /dev/null
 +++ b/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java
-@@ -0,0 +1,238 @@
+@@ -0,0 +1,231 @@
 +package io.canvasmc.canvas.extendedview;
 +
 +import ca.spottedleaf.moonrise.patches.starlight.light.SWMRNibbleArray;
@@ -810,13 +813,8 @@ index 0000000000000000000000000000000000000000..f19e83ccb714c45a3618781ecc5106e7
 +        }
 +    }
 +
-+    public static void carveChunk(
-+        final LevelChunkSection[] sections,
-+        final ServerLevel world,
-+        final LevelChunkSection airSection
-+    ) {
++    public static void carveChunk(final LevelChunkSection[] sections) {
 +        final int sectionCount = sections.length;
-+        final int minSectionY = world.getMinSectionY();
 +        final BlockState air = Blocks.AIR.defaultBlockState();
 +
 +        @Nullable final BitSet[] translucentInSection = new BitSet[sectionCount];
@@ -825,8 +823,7 @@ index 0000000000000000000000000000000000000000..f19e83ccb714c45a3618781ecc5106e7
 +        // modify in the same pass then we get weird inaccurate carving
 +
 +        for (int index = 0; index < sectionCount; ++index) {
-+            final int sectionBaseY = (index + minSectionY) << 4;
-+            final LevelChunkSection section = sectionBaseY + 15 <= 0 ? (sections[index] = airSection) : sections[index];
++            final LevelChunkSection section = sections[index];
 +            if (section.hasOnlyAir()) {
 +                continue;
 +            }
@@ -852,12 +849,11 @@ index 0000000000000000000000000000000000000000..f19e83ccb714c45a3618781ecc5106e7
 +                continue;
 +            }
 +
-+            final int sectionBaseY = (index + minSectionY) << 4;
 +            final BitSet below = index > 0 ? translucentInSection[index - 1] : null;
 +            final BitSet above = index < sectionCount - 1 ? translucentInSection[index + 1] : null;
 +            final LevelChunkSection section = sections[index];
 +
-+            for (int y = Math.max(0, 1 - sectionBaseY); y < 16; ++y) {
++            for (int y = 0; y < 16; ++y) {
 +                for (int x = 1; x < 15; ++x) {
 +                    for (int z = 1; z < 15; ++z) {
 +                        final int pos = localPos(x, y, z);
@@ -1177,7 +1173,7 @@ index d97c4f93b9beb704e158a2c01026fdf058b9c06c..556a897b203880d2aa78918770c325ef
  
      // Folia start - region threading
 diff --git a/net/minecraft/world/level/block/state/BlockBehaviour.java b/net/minecraft/world/level/block/state/BlockBehaviour.java
-index 70417762b2999ab822e2d511e1a721303453cee2..dd200d4d03e08dfae84fb4eeab2abc6948ee6f91 100644
+index 70417762b2999ab822e2d511e1a721303453cee2..dd9d3d944dda25c911cbeace3273c08857feda5a 100644
 --- a/net/minecraft/world/level/block/state/BlockBehaviour.java
 +++ b/net/minecraft/world/level/block/state/BlockBehaviour.java
 @@ -807,6 +807,13 @@ public abstract class BlockBehaviour implements FeatureElement {
@@ -1186,9 +1182,9 @@ index 70417762b2999ab822e2d511e1a721303453cee2..dd200d4d03e08dfae84fb4eeab2abc69
          }
 +        // Canvas start - extended view distance
 +
-+        // air is see through, non-occluding blocks are see through, and SOME fluids too
++        // anything short of an opaque full block can be seen through or past, and SOME fluids too
 +        public final boolean isSeeThrough() {
-+            return this.isAir || !this.canOcclude || !this.getFluidState().isEmpty();
++            return !this.solidRender || !this.getFluidState().isEmpty();
 +        }
 +        // Canvas end - extended view distance
  
