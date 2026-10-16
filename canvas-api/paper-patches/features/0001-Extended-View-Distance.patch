@@ -5,7 +5,7 @@ Subject: [PATCH] Extended View Distance
 
 
 diff --git a/src/main/java/org/bukkit/entity/Player.java b/src/main/java/org/bukkit/entity/Player.java
-index e763c44f999df2814be8fbc2dfb9eceead2e77db..af474b6feb33b2ba624ff98d9b4b7131617986eb 100644
+index e763c44f999df2814be8fbc2dfb9eceead2e77db..23c54670cf4e526fe618ebc05c2d1e707b8536ee 100644
 --- a/src/main/java/org/bukkit/entity/Player.java
 +++ b/src/main/java/org/bukkit/entity/Player.java
 @@ -3543,6 +3543,26 @@ public interface Player extends HumanEntity, Conversable, OfflinePlayer, PluginM
@@ -28,7 +28,7 @@ index e763c44f999df2814be8fbc2dfb9eceead2e77db..af474b6feb33b2ba624ff98d9b4b7131
 +     * <p>
 +     * Visual view distance is the view distance where chunks will load in for players as fake chunks
 +     * </p>
-+     * @param vvDistance view distance in [2, 32] or -1
++     * @param vvDistance view distance in [0, 32], where 0 or at most the send distance sends no fake chunks, or -1 to use the world's
 +     */
 +    public void setVisualViewDistance(int vvDistance);
 +    // Canvas end - extended view distance
