@@ -1,11 +1,12 @@
 --- a/net/minecraft/world/entity/ai/behavior/Behavior.java
 +++ b/net/minecraft/world/entity/ai/behavior/Behavior.java
-@@ -16,6 +_,8 @@
+@@ -16,6 +_,9 @@
      private final int minDuration;
      private final int maxDuration;
      private final String configKey; // Paper - configurable behavior tick rate and timings
 +    private long lithium$cachedMemoryModCount = -1; // Canvas - optimize brain
 +    private boolean lithium$cachedHasRequiredMemoryState; // Canvas - optimize brain
++    private net.minecraft.world.entity.ai.@org.jspecify.annotations.Nullable Brain<?> canvas$cachedBrain; // Canvas - optimize brain
  
      public Behavior(final Map<MemoryModuleType<?>, MemoryStatus> entryCondition) {
          this(entryCondition, DEFAULT_DURATION);
@@ -49,7 +50,7 @@
          if (tickRate > -1 && timestamp < this.endTimestamp + tickRate) {
              return false;
          }
-@@ -110,15 +_,24 @@
+@@ -110,15 +_,26 @@
      }
  
      protected boolean hasRequiredMemories(final E body) {
@@ -61,10 +62,12 @@
 +        // Canvas start - optimize brain
 +        net.minecraft.world.entity.ai.Brain<?> brain = body.getBrain();
 +        long modCount = brain.lithium$getMemoryValueModCount();
-+        if (this.lithium$cachedMemoryModCount == modCount) {
++        // the count is per brain: a villager changing profession swaps brains mid-loop, and the old brain's behaviors then ask the new one
++        if (this.lithium$cachedMemoryModCount == modCount && this.canvas$cachedBrain == brain) {
 +            return this.lithium$cachedHasRequiredMemoryState;
 +        }
 +        this.lithium$cachedMemoryModCount = modCount;
++        this.canvas$cachedBrain = brain;
 +
 +        it.unimi.dsi.fastutil.objects.ObjectIterator<it.unimi.dsi.fastutil.objects.Reference2ObjectMap.Entry<net.minecraft.world.entity.ai.memory.MemoryModuleType<?>, net.minecraft.world.entity.ai.memory.MemoryStatus>> fastIterator = ((it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap<net.minecraft.world.entity.ai.memory.MemoryModuleType<?>, net.minecraft.world.entity.ai.memory.MemoryStatus>) this.entryCondition).reference2ObjectEntrySet().fastIterator();
 +        while (fastIterator.hasNext()) {
