@@ -71,7 +71,7 @@
              if (!result && entity.level.spigotConfig.hopperCheck > 1) {
                  entity.setCooldown(entity.level.spigotConfig.hopperCheck);
              }
-@@ -156,8 +_,20 @@
+@@ -156,8 +_,22 @@
      private static final int HOPPER_EMPTY = 0;
      private static final int HOPPER_HAS_ITEMS = 1;
      private static final int HOPPER_IS_FULL = 2;
@@ -82,6 +82,8 @@
 +    private @Nullable BooleanSupplier suckInAction; // Canvas - reuse the hopper's suck-in action
 +    private final CanvasTransferMemo canvas$pushMemo = new CanvasTransferMemo(); // Canvas - remember failed hopper transfers
 +    private final CanvasTransferMemo canvas$pullMemo = new CanvasTransferMemo(); // Canvas - remember failed hopper transfers
++    private final CanvasContainerCache canvas$sourceCache = new CanvasContainerCache(); // Canvas - cache hopper container lookups
++    private final CanvasContainerCache canvas$attachedCache = new CanvasContainerCache(); // Canvas - cache hopper container lookups
 +
 +    @Override
 +    public void setChanged() {
@@ -380,12 +382,40 @@
              return false;
          } else {
              boolean isBlocked = hopper.isGridAligned()
-@@ -728,7 +_,7 @@
+@@ -677,7 +_,7 @@
+     private static @Nullable Container getAttachedContainer(final Level level, final BlockPos blockPos, final HopperBlockEntity self) {
+         // Paper start
+         BlockPos searchPosition = blockPos.relative(self.facing);
+-        Container inventory = getContainerAt(level, searchPosition);
++        Container inventory = getContainerAt(level, searchPosition, level.getBlockState(searchPosition), searchPosition.getX() + 0.5, searchPosition.getY() + 0.5, searchPosition.getZ() + 0.5, true, self.canvas$attachedCache); // Canvas - cache hopper container lookups
+         if (org.bukkit.event.inventory.HopperInventorySearchEvent.getHandlerList().getRegisteredListeners().length == 0) return inventory;
+ 
+         org.bukkit.craftbukkit.block.CraftBlock hopper = org.bukkit.craftbukkit.block.CraftBlock.at(level, blockPos);
+@@ -693,7 +_,7 @@
+ 
+     private static @Nullable Container getSourceContainer(final Level level, final Hopper hopper, final BlockPos pos, final BlockState state) {
+         // Paper start
+-        final Container inventory = HopperBlockEntity.getContainerAt(level, pos, state, hopper.getLevelX(), hopper.getLevelY() + 1.0, hopper.getLevelZ());
++        final Container inventory = HopperBlockEntity.getContainerAt(level, pos, state, hopper.getLevelX(), hopper.getLevelY() + 1.0, hopper.getLevelZ(), false, hopper instanceof HopperBlockEntity hopperBlockEntity ? hopperBlockEntity.canvas$sourceCache : null); // Canvas - cache hopper container lookups
+         if (org.bukkit.event.inventory.HopperInventorySearchEvent.getHandlerList().getRegisteredListeners().length == 0) return inventory;
+ 
+         final BlockPos hopperPos = BlockPos.containing(hopper.getLevelX(), hopper.getLevelY(), hopper.getLevelZ());
+@@ -727,8 +_,17 @@
+         final Level level, final BlockPos pos, final BlockState state, final double x, final double y, final double z,
          final boolean optimizeEntities
      ) {
++        // Canvas start - cache hopper container lookups
++        return getContainerAt(level, pos, state, x, y, z, optimizeEntities, null);
++    }
++
++    private static @Nullable Container getContainerAt(
++        final Level level, final BlockPos pos, final BlockState state, final double x, final double y, final double z,
++        final boolean optimizeEntities, final @Nullable CanvasContainerCache cache
++    ) {
++        // Canvas end - cache hopper container lookups
          // Paper end - Perf: Optimize Hoppers
 -        Container result = getBlockContainer(level, pos, state);
-+        Container result = state.hasBlockEntity() || state.getBlock() instanceof WorldlyContainerHolder ? getBlockContainer(level, pos, state) : null; // Canvas - optimize hoppers - if the block has no block entity, why check it
++        Container result = state.hasBlockEntity() || state.getBlock() instanceof WorldlyContainerHolder ? (cache == null ? getBlockContainer(level, pos, state) : cache.blockContainer(level, pos, state)) : null; // Canvas - optimize hoppers - if the block has no block entity, why check it // Canvas - cache hopper container lookups
          if (result == null && (!optimizeEntities || !level.paperConfig().hopper.ignoreOccludingBlocks || !state.getBukkitMaterial().isOccluding())) { // Paper - Perf: Optimize Hoppers
              result = getEntityContainer(level, x, y, z);
          }
@@ -398,6 +428,97 @@
              }
  
              return container;
+@@ -759,6 +_,90 @@
+         return !entities.isEmpty() ? (Container)entities.get(level.getRandom().nextInt(entities.size())) : null;
+     }
+ 
++    // Canvas start - cache hopper container lookups
++    // the block container a hopper last found at one position, kept while the facts it was found from hold: the same
++    // block state, its block entity not removed (the chunk marks one removed when it is replaced, broken or unloaded), and
++    // for a chest half the same state beside it and that half not removed either. A position next to a ticking hopper is
++    // always in a loaded chunk, so the chunk check is answered too. A block building its container per call (a composter)
++    // and a chest whose partner state pairs it without a partner chest are never kept
++    private static final class CanvasContainerCache {
++        private long pos;
++        private @Nullable BlockState state;
++        private @Nullable BlockEntity blockEntity;
++        private boolean paired;
++        private @Nullable BlockPos partnerPos;
++        private @Nullable BlockState partnerState;
++        private @Nullable BlockEntity partner;
++        private @Nullable Container container;
++
++        private @Nullable Container blockContainer(final Level level, final BlockPos pos, final BlockState state) {
++            if (this.holds(level, pos, state)) {
++                return this.container;
++            }
++            final Container found = getBlockContainer(level, pos, state);
++            this.record(level, pos, state, found);
++            return found;
++        }
++
++        private boolean holds(final Level level, final BlockPos pos, final BlockState state) {
++            if (this.container == null || state != this.state || pos.asLong() != this.pos || this.blockEntity.isRemoved()) {
++                return false;
++            }
++            if (!this.paired) {
++                return true;
++            }
++            return level.getBlockStateIfLoaded(this.partnerPos) == this.partnerState && (this.partner == null || !this.partner.isRemoved());
++        }
++
++        private void record(final Level level, final BlockPos pos, final BlockState state, final @Nullable Container found) {
++            this.container = null;
++            this.blockEntity = null;
++            this.partner = null;
++            this.partnerPos = null;
++            this.partnerState = null;
++            this.paired = false;
++            if (found == null || state.getBlock() instanceof WorldlyContainerHolder) {
++                return;
++            }
++            final BlockEntity own = level.getBlockEntity(pos);
++            if (own == null) {
++                return;
++            }
++            if (state.getBlock() instanceof ChestBlock && ChestBlock.getBlockType(state) != net.minecraft.world.level.block.DoubleBlockCombiner.BlockType.SINGLE) {
++                final BlockPos partnerPos = pos.relative(ChestBlock.getConnectedDirection(state));
++                final BlockState partnerState = level.getBlockStateIfLoaded(partnerPos);
++                if (found instanceof net.minecraft.world.CompoundContainer compound) {
++                    final BlockEntity partner = level.getBlockEntity(partnerPos);
++                    if (partner == null || (compound.container1 != own || compound.container2 != partner) && (compound.container2 != own || compound.container1 != partner)) {
++                        return;
++                    }
++                    this.partner = partner;
++                } else if (found != own || canvas$pairs(state, partnerState)) {
++                    return;
++                }
++                this.paired = true;
++                this.partnerPos = partnerPos;
++                this.partnerState = partnerState;
++            } else if (found != own) {
++                return;
++            }
++            this.pos = pos.asLong();
++            this.state = state;
++            this.blockEntity = own;
++            this.container = found;
++        }
++
++        // whether a chest half's neighbor state would pair with it, as DoubleBlockCombiner decides
++        private static boolean canvas$pairs(final BlockState state, final @Nullable BlockState partnerState) {
++            return partnerState != null
++                && partnerState.is(state.getBlock())
++                && ChestBlock.getBlockType(partnerState) != net.minecraft.world.level.block.DoubleBlockCombiner.BlockType.SINGLE
++                && ChestBlock.getBlockType(partnerState) != ChestBlock.getBlockType(state)
++                && partnerState.getValue(ChestBlock.FACING) == state.getValue(ChestBlock.FACING);
++        }
++    }
++    // Canvas end - cache hopper container lookups
++
+     private static boolean canMergeItems(final ItemStack a, final ItemStack b) {
+         return a.getCount() < a.getMaxStackSize() && ItemStack.isSameItemSameComponents(a, b); // Paper - Perf: Optimize Hoppers; used to return true for full itemstacks?!
+     }
 @@ -803,6 +_,7 @@
      @Override
      protected void setItems(final NonNullList<ItemStack> items) {
