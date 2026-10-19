@@ -1,0 +1,42 @@
+--- a/net/minecraft/world/level/pathfinder/PathfindingContext.java
++++ b/net/minecraft/world/level/pathfinder/PathfindingContext.java
+@@ -33,6 +_,39 @@
+         return this.level.getBlockState(pos);
+     }
+ 
++    // Canvas start - skip the neighbor scan when nothing in the block's section is a danger to a neighbor
++    private net.minecraft.world.level.chunk.@Nullable LevelChunkSection canvas$checkedSection;
++    private boolean canvas$checkedSectionSafe;
++
++    // true when the 3x3x3 around the block lies in its section and no state there is a danger to a neighbor, so
++    // checkNeighbourBlocks answers its fallback; also when the chunk is not loaded here (each read answers BLOCKED) or
++    // the section is outside the world (each read answers air). Blocks do not change during one search, so the
++    // verdict of the last section is kept
++    public boolean canvas$neighborsSafe(final int x, final int y, final int z) {
++        if (((x + 1) & 15) < 2 || ((y + 1) & 15) < 2 || ((z + 1) & 15) < 2 || !(this.level instanceof net.minecraft.world.level.PathNavigationRegion region)) {
++            return false;
++        }
++        final net.minecraft.world.level.chunk.ChunkAccess chunk = region.canvas$chunkIfLoaded(x >> 4, z >> 4);
++        if (chunk == null) {
++            return true;
++        }
++        if (!(chunk instanceof net.minecraft.world.level.chunk.LevelChunk)) {
++            return false;
++        }
++        final net.minecraft.world.level.chunk.LevelChunkSection[] sections = chunk.getSections();
++        final int sectionIndex = chunk.getSectionIndex(y);
++        if (sectionIndex < 0 || sectionIndex >= sections.length) {
++            return true;
++        }
++        final net.minecraft.world.level.chunk.LevelChunkSection section = sections[sectionIndex];
++        if (section != this.canvas$checkedSection) {
++            this.canvas$checkedSection = section;
++            this.canvas$checkedSectionSafe = section.hasOnlyAir() || !section.maybeHas(state -> state.canvas$neighborDanger);
++        }
++        return this.canvas$checkedSectionSafe;
++    }
++    // Canvas end - skip the neighbor scan when nothing in the block's section is a danger to a neighbor
++
+     public CollisionGetter level() {
+         return this.level;
+     }

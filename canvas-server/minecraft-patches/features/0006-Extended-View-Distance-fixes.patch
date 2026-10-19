@@ -626,10 +626,10 @@ index c38705a6c646fcccdd7cf94644d6ca830462b121..0db4a6a54e15e9f91f9c53cb66b1fe9f
      }
  }
 diff --git a/net/minecraft/world/level/block/state/BlockBehaviour.java b/net/minecraft/world/level/block/state/BlockBehaviour.java
-index 94b306fa4c5b00339433f7666b818098e82ad0a2..f8cc5b1601411d57c8e650c72484cbc293b8e26a 100644
+index 04216ba70cc86633583bb0c7e751cfdfae8c251e..84d08673f3b0eb8dd67a87e1a1436a3f30336ada 100644
 --- a/net/minecraft/world/level/block/state/BlockBehaviour.java
 +++ b/net/minecraft/world/level/block/state/BlockBehaviour.java
-@@ -809,9 +809,9 @@ public abstract class BlockBehaviour implements FeatureElement {
+@@ -811,9 +811,9 @@ public abstract class BlockBehaviour implements FeatureElement {
          }
          // Canvas start - extended view distance
  

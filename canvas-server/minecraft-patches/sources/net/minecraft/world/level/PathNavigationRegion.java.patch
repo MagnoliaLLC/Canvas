@@ -1,0 +1,15 @@
+--- a/net/minecraft/world/level/PathNavigationRegion.java
++++ b/net/minecraft/world/level/PathNavigationRegion.java
+@@ -87,6 +_,12 @@
+         return null;
+     }
+ 
++    // Canvas start - skip the neighbor scan when nothing in the block's section is a danger to a neighbor
++    public @Nullable ChunkAccess canvas$chunkIfLoaded(final int chunkX, final int chunkZ) {
++        return this.getChunkIfLoaded(chunkX, chunkZ);
++    }
++    // Canvas end - skip the neighbor scan when nothing in the block's section is a danger to a neighbor
++
+     @Nullable
+     @Override
+     public final FluidState getFluidIfLoaded(BlockPos pos) {
