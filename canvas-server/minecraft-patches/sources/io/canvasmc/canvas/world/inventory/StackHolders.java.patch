@@ -1,0 +1,89 @@
+--- /dev/null
++++ b/io/canvasmc/canvas/world/inventory/StackHolders.java
+@@ -1,0 +_,86 @@
++package io.canvasmc.canvas.world.inventory;
++
++import java.util.Arrays;
++import net.minecraft.world.item.ItemStack;
++import org.jspecify.annotations.Nullable;
++
++/**
++ * The holders of a stack, kept on its component map as null, one {@link StackHolder} or an array of them: a stack is
++ * normally held in one place, and for a moment in two while a hopper moves it (the moved stack enters the target before
++ * the hopper's slot takes a copy).
++ */
++public final class StackHolders {
++
++    private StackHolders() {
++    }
++
++    public static void notify(final @Nullable Object holders) {
++        if (holders == null) {
++            return;
++        }
++        if (holders instanceof StackHolder holder) {
++            holder.canvas$stackChanged();
++            return;
++        }
++        for (final StackHolder holder : (StackHolder[]) holders) {
++            holder.canvas$stackChanged();
++        }
++    }
++
++    // the shared empty stack is never claimed: nothing can change it
++    public static void claim(final ItemStack stack, final StackHolder holder) {
++        if (stack == ItemStack.EMPTY) {
++            return;
++        }
++        final Object holders = stack.canvas$holders();
++        if (holders == null) {
++            stack.canvas$setHolders(holder);
++        } else if (holders instanceof StackHolder single) {
++            if (single != holder) {
++                stack.canvas$setHolders(new StackHolder[] {single, holder});
++            }
++        } else {
++            final StackHolder[] many = (StackHolder[]) holders;
++            for (final StackHolder existing : many) {
++                if (existing == holder) {
++                    return;
++                }
++            }
++            final StackHolder[] more = Arrays.copyOf(many, many.length + 1);
++            more[many.length] = holder;
++            stack.canvas$setHolders(more);
++        }
++    }
++
++    public static void release(final ItemStack stack, final StackHolder holder) {
++        final Object holders = stack.canvas$holders();
++        if (holders == null) {
++            return;
++        }
++        if (holders instanceof StackHolder single) {
++            if (single == holder) {
++                stack.canvas$setHolders(null);
++            }
++            return;
++        }
++        final StackHolder[] many = (StackHolder[]) holders;
++        int index = -1;
++        for (int i = 0; i < many.length; ++i) {
++            if (many[i] == holder) {
++                index = i;
++                break;
++            }
++        }
++        if (index < 0) {
++            return;
++        }
++        if (many.length == 2) {
++            stack.canvas$setHolders(many[1 - index]);
++            return;
++        }
++        final StackHolder[] fewer = new StackHolder[many.length - 1];
++        System.arraycopy(many, 0, fewer, 0, index);
++        System.arraycopy(many, index + 1, fewer, index, many.length - index - 1);
++        stack.canvas$setHolders(fewer);
++    }
++}

@@ -1,5 +1,27 @@
 --- a/net/minecraft/world/item/ItemStack.java
 +++ b/net/minecraft/world/item/ItemStack.java
+@@ -157,6 +_,21 @@
+     @Deprecated
+     private @Nullable Holder<Item> item;
+     private PatchedDataComponentMap components;
++    // Canvas start - track changes to held stacks
++    // what holds this stack (see StackHolders), told before every change to its count, item or components; kept on the
++    // component map, whose padding has room for it under compact object headers where a field here would grow every stack
++    public @Nullable Object canvas$holders() {
++        return this.components.canvas$holders;
++    }
++
++    public void canvas$setHolders(final @Nullable Object holders) {
++        this.components.canvas$holders = holders;
++    }
++
++    private void canvas$changed() {
++        io.canvasmc.canvas.world.inventory.StackHolders.notify(this.components.canvas$holders);
++    }
++    // Canvas end - track changes to held stacks
+ 
+     public static DataResult<ItemStack> validateStrict(final ItemStack itemStack) {
+         DataResult<?> result = validateComponents(itemStack.getComponents());
 @@ -843,11 +_,11 @@
      }
  
@@ -14,3 +36,75 @@
      }
  
      public static boolean matchesIgnoringComponents(final ItemStack a, final ItemStack b, final Predicate<DataComponentType<?>> ignoredPredicate) {
+@@ -966,15 +_,18 @@
+ 
+     // CraftBukkit start
+     public void restorePatch(DataComponentPatch datacomponentpatch) {
++        this.canvas$changed(); // Canvas - track changes to held stacks
+         this.components.restorePatch(datacomponentpatch);
+     }
+     // CraftBukkit end
+ 
+     public <T> @Nullable T set(final DataComponentType<T> type, final @Nullable T value) {
++        this.canvas$changed(); // Canvas - track changes to held stacks
+         return this.components.set(type, value);
+     }
+ 
+     public <T> @Nullable T set(final TypedDataComponent<T> value) {
++        this.canvas$changed(); // Canvas - track changes to held stacks
+         return this.components.set(value);
+     }
+ 
+@@ -992,11 +_,13 @@
+     }
+ 
+     public <T> @Nullable T remove(final DataComponentType<? extends T> type) {
++        this.canvas$changed(); // Canvas - track changes to held stacks
+         return this.components.remove(type);
+     }
+ 
+     public void applyComponentsAndValidate(final DataComponentPatch patch) {
+         DataComponentPatch oldPatch = this.components.asPatch();
++        this.canvas$changed(); // Canvas - track changes to held stacks
+         this.components.applyPatch(patch);
+         Optional<Error<ItemStack>> validationError = validateStrict(this).error();
+         if (validationError.isPresent()) {
+@@ -1006,10 +_,12 @@
+     }
+ 
+     public void applyComponents(final DataComponentPatch patch) {
++        this.canvas$changed(); // Canvas - track changes to held stacks
+         this.components.applyPatch(patch);
+     }
+ 
+     public void applyComponents(final DataComponentMap components) {
++        this.canvas$changed(); // Canvas - track changes to held stacks
+         this.components.setAll(components);
+     }
+ 
+@@ -1245,10 +_,13 @@
+     // CraftBukkit start
+     @Deprecated
+     public void setItem(Item item) {
++        this.canvas$changed(); // Canvas - track changes to held stacks
+         this.item = item.builtInRegistryHolder();
+         // Paper start - change base component prototype
+         final DataComponentPatch patch = this.getComponentsPatch();
++        final Object canvas$holders = this.components.canvas$holders; // Canvas - track changes to held stacks
+         this.components = new PatchedDataComponentMap(this.item.components());
++        this.components.canvas$holders = canvas$holders; // Canvas - track changes to held stacks
+         this.applyComponents(patch);
+         // Paper end - change base component prototype
+     }
+@@ -1304,6 +_,11 @@
+     }
+ 
+     public void setCount(final int count) {
++        // Canvas start - track changes to held stacks
++        if (count != this.count) {
++            this.canvas$changed();
++        }
++        // Canvas end - track changes to held stacks
+         this.count = count;
+     }
+ 
