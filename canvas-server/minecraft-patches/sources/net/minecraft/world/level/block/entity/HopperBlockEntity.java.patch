@@ -1,6 +1,20 @@
 --- a/net/minecraft/world/level/block/entity/HopperBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
-@@ -95,6 +_,7 @@
+@@ -34,7 +_,7 @@
+     private static final int[][] CACHED_SLOTS = new int[54][];
+     private static final int NO_COOLDOWN_TIME = -1;
+     private static final Component DEFAULT_NAME = Component.translatable("container.hopper");
+-    private NonNullList<ItemStack> items = NonNullList.withSize(5, ItemStack.EMPTY);
++    private NonNullList<ItemStack> items = io.canvasmc.canvas.world.inventory.TrackedStackList.withSize(5); // Canvas - optimize hoppers
+     public int cooldownTime = -1;
+     private long tickedGameTime = Long.MIN_VALUE; // Folia - region threading
+     private Direction facing;
+@@ -91,10 +_,11 @@
+     @Override
+     protected void loadAdditional(final ValueInput input) {
+         super.loadAdditional(input);
+-        this.items = NonNullList.withSize(this.getContainerSize(), ItemStack.EMPTY);
++        this.items = io.canvasmc.canvas.world.inventory.TrackedStackList.withSize(this.getContainerSize()); // Canvas - optimize hoppers
          if (!this.tryLoadLootTable(input)) {
              ContainerHelper.loadAllItems(input, this.items);
          }
@@ -57,7 +71,7 @@
              if (!result && entity.level.spigotConfig.hopperCheck > 1) {
                  entity.setCooldown(entity.level.spigotConfig.hopperCheck);
              }
-@@ -156,8 +_,18 @@
+@@ -156,8 +_,20 @@
      private static final int HOPPER_EMPTY = 0;
      private static final int HOPPER_HAS_ITEMS = 1;
      private static final int HOPPER_IS_FULL = 2;
@@ -66,6 +80,8 @@
 +    // Canvas start - optimize hoppers
 +    private int fullState = -1;
 +    private @Nullable BooleanSupplier suckInAction; // Canvas - optimize hoppers
++    private final CanvasTransferMemo canvas$pushMemo = new CanvasTransferMemo(); // Canvas - optimize hoppers
++    private final CanvasTransferMemo canvas$pullMemo = new CanvasTransferMemo(); // Canvas - optimize hoppers
 +
 +    @Override
 +    public void setChanged() {
@@ -112,7 +128,49 @@
              if (fullState != HOPPER_EMPTY) { // Paper - Perf: Optimize Hoppers
                  changed = ejectItems(level, pos, entity);
              }
-@@ -500,7 +_,46 @@
+@@ -426,16 +_,39 @@
+     private static boolean ejectItems(final Level level, final BlockPos blockPos, final HopperBlockEntity self) {
+         Container container = getAttachedContainer(level, blockPos, self);
+         if (container == null) {
++            self.canvas$pushMemo.forget(); // Canvas - optimize hoppers
+             return false;
+         }
+ 
++        // Canvas start - optimize hoppers
++        final boolean quiet = canvas$quiet(level);
++        if (quiet && self.canvas$pushMemo.matches(self, container, level.spigotConfig.hopperAmount)) {
++            self.canvas$pushMemo.replayPush(level, self);
++            return false;
++        }
++        // Canvas end - optimize hoppers
+         Direction direction = self.facing.getOpposite();
+         if (isFullContainer(container, direction)) {
++            self.canvas$rememberPush(level, container, quiet, false); // Canvas - optimize hoppers
+             return false;
+         }
+ 
+-        return hopperPush(level, container, direction, self); // Paper - Perf: Optimize Hoppers
+-    }
++        // Canvas start - optimize hoppers
++        final boolean pushed = hopperPush(level, container, direction, self); // Paper - Perf: Optimize Hoppers
++        self.canvas$rememberPush(level, container, quiet && !pushed, true);
++        return pushed;
++        // Canvas end - optimize hoppers
++    }
++
++    // Canvas start - optimize hoppers
++    private void canvas$rememberPush(final Level level, final Container container, final boolean failedQuietly, final boolean tried) {
++        if (failedQuietly) {
++            this.canvas$pushMemo.record(this, container, level.spigotConfig.hopperAmount, tried);
++        } else {
++            this.canvas$pushMemo.forget();
++        }
++    }
++    // Canvas end - optimize hoppers
+ 
+     // Paper start - Add PrepareHopperTransferEvent
+     private static long callPrepareTransferEvent(final Level level, final Container source, final Container destination, final boolean didSourceInitiate) {
+@@ -500,7 +_,169 @@
          return slots;
      }
  
@@ -146,6 +204,129 @@
 +    }
 +    // Canvas end - optimize hoppers
 +
++    // Canvas start - optimize hoppers
++    // a failed transfer between plain containers fails the same way until one side changes
++    private static boolean canvas$quiet(final Level level) {
++        return level.paperConfig().hopper.disableMoveEvent
++            || (level.getCurrentWorldData().skipHopperEvents
++                && io.papermc.paper.event.inventory.PrepareHopperTransferEvent.getHandlerList().getRegisteredListeners().length == 0);
++    }
++
++    private static io.canvasmc.canvas.world.inventory.@Nullable TrackedStackList canvas$trackedSlots(final Container container) {
++        if (!canvas$plain(container) || container.getMaxStackSize() < Container.MAX_STACK || ((RandomizableContainerBlockEntity) container).getLootTable() != null) {
++            return null;
++        }
++        return ((BaseContainerBlockEntity) container).getItems() instanceof io.canvasmc.canvas.world.inventory.TrackedStackList slots ? slots : null;
++    }
++
++    private static int canvas$occupied(final net.minecraft.core.NonNullList<ItemStack> slots) {
++        int occupied = 0;
++        for (int i = 0, size = slots.size(); i < size; ++i) {
++            if (!slots.get(i).isEmpty()) {
++                ++occupied;
++            }
++        }
++        return occupied;
++    }
++
++    private static final class CanvasTransferMemo {
++        private boolean known;
++        private @Nullable Container first;
++        private @Nullable Container second;
++        private io.canvasmc.canvas.world.inventory.@Nullable TrackedStackList firstSlots;
++        private io.canvasmc.canvas.world.inventory.@Nullable TrackedStackList secondSlots;
++        private io.canvasmc.canvas.world.inventory.@Nullable TrackedStackList ownSlots;
++        private int firstVersion;
++        private int secondVersion;
++        private int ownVersion;
++        private int amount;
++        // a failed push or pull still cools the hopper down
++        private boolean foundItem;
++        private int firstTried;
++        private int secondTried;
++
++        private boolean matches(final HopperBlockEntity hopper, final Container other, final int amount) {
++            if (!this.known || this.amount != amount) {
++                return false;
++            }
++            final io.canvasmc.canvas.world.inventory.TrackedStackList own = canvas$trackedSlots(hopper);
++            if (own == null || own != this.ownSlots || own.version() != this.ownVersion) {
++                return false;
++            }
++            final Container first = other instanceof net.minecraft.world.CompoundContainer compound ? compound.container1 : other;
++            final Container second = other instanceof net.minecraft.world.CompoundContainer compound ? compound.container2 : null;
++            if (first != this.first || second != this.second) {
++                return false;
++            }
++            final io.canvasmc.canvas.world.inventory.TrackedStackList firstSlots = canvas$trackedSlots(first);
++            if (firstSlots == null || firstSlots != this.firstSlots || firstSlots.version() != this.firstVersion) {
++                return false;
++            }
++            if (second == null) {
++                return true;
++            }
++            final io.canvasmc.canvas.world.inventory.TrackedStackList secondSlots = canvas$trackedSlots(second);
++            return secondSlots != null && secondSlots == this.secondSlots && secondSlots.version() == this.secondVersion;
++        }
++
++        private void record(final HopperBlockEntity hopper, final Container other, final int amount, final boolean push) {
++            this.forget();
++            final Container first = other instanceof net.minecraft.world.CompoundContainer compound ? compound.container1 : other;
++            final Container second = other instanceof net.minecraft.world.CompoundContainer compound ? compound.container2 : null;
++            final io.canvasmc.canvas.world.inventory.TrackedStackList own = canvas$trackedSlots(hopper);
++            final io.canvasmc.canvas.world.inventory.TrackedStackList firstSlots = canvas$trackedSlots(first);
++            final io.canvasmc.canvas.world.inventory.TrackedStackList secondSlots = second == null ? null : canvas$trackedSlots(second);
++            if (own == null || firstSlots == null || (second != null && secondSlots == null)) {
++                return;
++            }
++            this.known = true;
++            this.first = first;
++            this.second = second;
++            this.firstSlots = firstSlots;
++            this.secondSlots = secondSlots;
++            this.ownSlots = own;
++            this.firstVersion = firstSlots.version();
++            this.secondVersion = secondSlots == null ? 0 : secondSlots.version();
++            this.ownVersion = own.version();
++            this.amount = amount;
++            this.foundItem = push && canvas$occupied(own) != 0;
++            this.firstTried = push ? 0 : canvas$occupied(firstSlots);
++            this.secondTried = push || secondSlots == null ? 0 : canvas$occupied(secondSlots);
++        }
++
++        private void forget() {
++            this.known = false;
++            this.first = null;
++            this.second = null;
++            this.firstSlots = null;
++            this.secondSlots = null;
++            this.ownSlots = null;
++        }
++
++        private void replayPush(final Level level, final HopperBlockEntity hopper) {
++            if (this.foundItem && level.paperConfig().hopper.cooldownWhenFull) {
++                hopper.setCooldown(level.spigotConfig.hopperTransfer);
++            }
++        }
++
++        private void replayPull(final Level level, final HopperBlockEntity hopper) {
++            final boolean cool = level.paperConfig().hopper.cooldownWhenFull;
++            for (int i = 0; i < this.firstTried; ++i) {
++                this.first.setChanged();
++                if (cool) {
++                    applyCooldown(hopper);
++                }
++            }
++            for (int i = 0; i < this.secondTried; ++i) {
++                this.second.setChanged();
++                if (cool) {
++                    applyCooldown(hopper);
++                }
++            }
++        }
++    }
++    // Canvas end - optimize hoppers
++
      private static boolean isFullContainer(final Container container, final Direction direction) {
 +        // Canvas start - optimize hoppers
 +        if (container instanceof net.minecraft.world.CompoundContainer compound) {
@@ -159,6 +340,38 @@
          int[] slots = getSlots(container, direction);
  
          for (int slot : slots) {
+@@ -521,15 +_,31 @@
+         if (container != null) {
+             Direction direction = Direction.DOWN;
+             worldData.skipPullModeEventFire = worldData.skipHopperEvents; // Paper - Perf: Optimize Hoppers // Folia - region threading
++            // Canvas start - optimize hoppers
++            final HopperBlockEntity hopperEntity = hopper instanceof HopperBlockEntity hopperBlockEntity ? hopperBlockEntity : null;
++            final boolean quiet = hopperEntity != null && canvas$quiet(level);
++            if (quiet && hopperEntity.canvas$pullMemo.matches(hopperEntity, container, level.spigotConfig.hopperAmount)) {
++                hopperEntity.canvas$pullMemo.replayPull(level, hopperEntity);
++                return false;
++            }
++            // Canvas end - optimize hoppers
+             final long disallowedSlots = callPrepareTransferEvent(level, container, hopper, false); // Paper - Add PrepareHopperTransferEvent
+ 
+             for (int slot : getSlots(container, direction)) {
+                 if (isSlotDisallowed(disallowedSlots, slot)) continue; // Paper - Add PrepareHopperTransferEvent
+                 if (tryTakeInItemFromSlot(hopper, container, slot, direction, level)) { // Spigot
++                    if (hopperEntity != null) hopperEntity.canvas$pullMemo.forget(); // Canvas - optimize hoppers
+                     return true;
+                 }
+             }
+ 
++            // Canvas start - optimize hoppers
++            if (quiet) {
++                hopperEntity.canvas$pullMemo.record(hopperEntity, container, level.spigotConfig.hopperAmount, false);
++            } else if (hopperEntity != null) {
++                hopperEntity.canvas$pullMemo.forget();
++            }
++            // Canvas end - optimize hoppers
+             return false;
+         } else {
+             boolean isBlocked = hopper.isGridAligned()
 @@ -728,7 +_,7 @@
          final boolean optimizeEntities
      ) {
