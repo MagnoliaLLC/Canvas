@@ -1,0 +1,22 @@
+--- a/net/minecraft/world/entity/EntityFluidInteraction.java
++++ b/net/minecraft/world/entity/EntityFluidInteraction.java
+@@ -173,7 +_,8 @@
+     public double getFluidHeight(final TagKey<Fluid> fluid) {
+         double height = 0.0;
+ 
+-        for (EntityFluidInteraction.Tracker tracker : this.fluidTrackers) {
++        for (int i = 0, size = this.fluidTrackers.size(); i < size; ++i) { // Canvas - index the trackers rather than allocate an iterator
++            final EntityFluidInteraction.Tracker tracker = this.fluidTrackers.get(i); // Canvas - index the trackers rather than allocate an iterator
+             if (tracker.height > height && tracker.fluidType.is(fluid)) {
+                 height = tracker.height;
+             }
+@@ -187,7 +_,8 @@
+     }
+ 
+     public boolean isEyeInFluid(final TagKey<Fluid> fluid) {
+-        for (EntityFluidInteraction.Tracker tracker : this.fluidTrackers) {
++        for (int i = 0, size = this.fluidTrackers.size(); i < size; ++i) { // Canvas - index the trackers rather than allocate an iterator
++            final EntityFluidInteraction.Tracker tracker = this.fluidTrackers.get(i); // Canvas - index the trackers rather than allocate an iterator
+             if (tracker.eyesInside && tracker.fluidType.is(fluid)) {
+                 return true;
+             }
