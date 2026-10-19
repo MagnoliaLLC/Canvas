@@ -1,0 +1,16 @@
+--- /dev/null
++++ b/io/canvasmc/canvas/world/inventory/StackHolder.java
+@@ -1,0 +_,13 @@
++package io.canvasmc.canvas.world.inventory;
++
++/**
++ * Holds item stacks and is told whenever one of them changes its count, item or components, so that a check over
++ * what it holds can be skipped while nothing changed.
++ */
++public interface StackHolder {
++
++    /**
++     * Called before a held stack changes its count, item or components.
++     */
++    void canvas$stackChanged();
++}
