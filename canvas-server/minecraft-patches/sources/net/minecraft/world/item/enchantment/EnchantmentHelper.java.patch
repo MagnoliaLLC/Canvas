@@ -15,7 +15,7 @@
 +
 +            for (Entry<Holder<Enchantment>> entry : itemEnchantments.entrySet()) {
 +                Enchantment enchantment = entry.getKey().value();
-+                if (enchantment.matchingSlot(slot) && enchantment.effects().has(EnchantmentEffectComponents.TICK)) {
++                if (enchantment.effects().has(EnchantmentEffectComponents.TICK) && enchantment.matchingSlot(slot)) {
 +                    if (itemInUse == null) itemInUse = new EnchantedItemInUse(piece, slot, entity);
 +                    enchantment.tick(serverLevel, entry.getIntValue(), itemInUse, entity);
 +                }
