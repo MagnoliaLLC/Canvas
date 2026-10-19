@@ -1,0 +1,104 @@
+--- /dev/null
++++ b/io/canvasmc/canvas/world/entities/RestFingerprint.java
+@@ -1,0 +_,101 @@
++package io.canvasmc.canvas.world.entities;
++
++import net.minecraft.util.Mth;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.chunk.ChunkAccess;
++import net.minecraft.world.level.chunk.LevelChunk;
++import net.minecraft.world.level.chunk.LevelChunkSection;
++import net.minecraft.world.phys.AABB;
++import net.minecraft.world.phys.Vec3;
++import org.jspecify.annotations.Nullable;
++
++/**
++ * What a resting entity's travel was read from: its position, size and speed, the friction, drag and gravity it fell with,
++ * and the chunk sections around it with their block write counts. While all of them hold, the travel would compute
++ * the same result again.
++ */
++public final class RestFingerprint {
++
++    public final double friction;
++    public final double drag;
++    public final double gravity;
++    public @Nullable Boolean insideEffectFree;
++    public int restedTick = Integer.MIN_VALUE;
++    private final double x;
++    private final double y;
++    private final double z;
++    private final Vec3 velocity;
++    private final AABB box;
++    private final LevelChunkSection[] sections;
++    private final int[] changes;
++
++    private RestFingerprint(final double x, final double y, final double z, final Vec3 velocity, final AABB box, final double friction,
++                            final double drag, final double gravity, final LevelChunkSection[] sections, final int[] changes) {
++        this.x = x;
++        this.y = y;
++        this.z = z;
++        this.velocity = velocity;
++        this.box = box;
++        this.friction = friction;
++        this.drag = drag;
++        this.gravity = gravity;
++        this.sections = sections;
++        this.changes = changes;
++    }
++
++    // the sections holding every block within one of the box sideways, two below it and one above, which covers each
++    // block its fall, its footing, its friction and the fluid it stands in are read from; none when they reach past the
++    // world's height, past eight sections, or into a chunk not loaded
++    public static @Nullable RestFingerprint of(final Level level, final AABB box, final double x, final double y, final double z, final Vec3 velocity,
++                                               final double friction, final double drag, final double gravity) {
++        final int minSectionX = (Mth.floor(box.minX) - 1) >> 4;
++        final int maxSectionX = (Mth.floor(box.maxX) + 1) >> 4;
++        final int minSectionY = (Mth.floor(box.minY) - 2) >> 4;
++        final int maxSectionY = (Mth.floor(box.maxY) + 1) >> 4;
++        final int minSectionZ = (Mth.floor(box.minZ) - 1) >> 4;
++        final int maxSectionZ = (Mth.floor(box.maxZ) + 1) >> 4;
++        if (minSectionY < level.getMinSectionY() || maxSectionY > level.getMaxSectionY()) {
++            return null;
++        }
++        final int count = (maxSectionX - minSectionX + 1) * (maxSectionY - minSectionY + 1) * (maxSectionZ - minSectionZ + 1);
++        if (count > 8) {
++            return null;
++        }
++        final LevelChunkSection[] sections = new LevelChunkSection[count];
++        final int[] changes = new int[count];
++        int index = 0;
++        for (int chunkX = minSectionX; chunkX <= maxSectionX; ++chunkX) {
++            for (int chunkZ = minSectionZ; chunkZ <= maxSectionZ; ++chunkZ) {
++                final ChunkAccess chunk = level.getChunkIfLoadedImmediately(chunkX, chunkZ);
++                if (!(chunk instanceof LevelChunk)) {
++                    return null;
++                }
++                final LevelChunkSection[] chunkSections = chunk.getSections();
++                for (int sectionY = minSectionY; sectionY <= maxSectionY; ++sectionY) {
++                    final LevelChunkSection section = chunkSections[sectionY - level.getMinSectionY()];
++                    sections[index] = section;
++                    changes[index] = section.canvas$changes;
++                    ++index;
++                }
++            }
++        }
++        return new RestFingerprint(x, y, z, velocity, box, friction, drag, gravity, sections, changes);
++    }
++
++    public boolean holds(final double x, final double y, final double z, final Vec3 velocity, final AABB box) {
++        return velocity.equals(this.velocity) && this.areaHolds(x, y, z, box);
++    }
++
++    // the same place, size and blocks around, whatever the speed: what a fluid check reads
++    public boolean areaHolds(final double x, final double y, final double z, final AABB box) {
++        if (x != this.x || y != this.y || z != this.z || !box.equals(this.box)) {
++            return false;
++        }
++        for (int i = 0; i < this.sections.length; ++i) {
++            if (this.sections[i].canvas$changes != this.changes[i]) {
++                return false;
++            }
++        }
++        return true;
++    }
++}

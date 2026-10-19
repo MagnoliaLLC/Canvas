@@ -35,7 +35,7 @@
                  this.clearFire();
              }
  
-@@ -1909,8 +_,113 @@
+@@ -1909,8 +_,134 @@
          return SoundEvents.GENERIC_SPLASH;
      }
  
@@ -71,6 +71,22 @@
 +        }
 +    };
 +    private final boolean canvas$ownBox = CANVAS_OWN_BOX.get(this.getClass());
++
++    // Canvas start - skip travel while resting
++    // the verdict a resting entity keeps for a tick its travel was skipped in, or null to check
++    protected @Nullable Boolean canvas$insideEffectFreeAtRest() {
++        return null;
++    }
++
++    protected void canvas$noteInsideEffectFree(final boolean free) {
++    }
++
++    // whether this entity rests where its last fluid check found none and nothing around it changed since, so the check
++    // would find none again (it touches no fluid, so it keeps nothing a check would reset)
++    protected boolean canvas$dryAtRest() {
++        return false;
++    }
++    // Canvas end - skip travel while resting
 +
 +    private boolean canvas$insideEffectFree(final List<Entity.Movement> movements) {
 +        if (this.level instanceof ServerLevel serverLevel && serverLevel.getServer().debugSubscribers().hasAnySubscriberFor(DebugSubscriptions.ENTITY_BLOCK_INTERSECTIONS)) {
@@ -142,9 +158,14 @@
      private void checkInsideBlocks(final List<Entity.Movement> movements, final InsideBlockEffectApplier.StepBasedCollector effectCollector) {
          if (this.isAffectedByBlocks()) {
 +            // Canvas start - skip inside-block checks when no block can act
-+            if (this.canvas$insideEffectFree(movements)) {
++            // Canvas start - skip travel while resting
++            final Boolean canvas$keptFree = this.canvas$insideEffectFreeAtRest();
++            final boolean canvas$free = canvas$keptFree != null ? canvas$keptFree : this.canvas$insideEffectFree(movements);
++            this.canvas$noteInsideEffectFree(canvas$free);
++            if (canvas$free) {
 +                return;
 +            }
++            // Canvas end - skip travel while resting
 +            // Canvas end - skip inside-block checks when no block can act
              LongSet visitedBlocks = this.visitedBlocks;
  
@@ -210,6 +231,18 @@
          AABB fluidAABB = fluidState.getAABB(this.level(), blockPos);
          return fluidAABB != null && this.collidedWithShapeMovingFrom(from, to, List.of(fluidAABB));
      }
+@@ -2286,6 +_,11 @@
+     }
+ 
+     protected boolean updateFluidInteraction() {
++        // Canvas start - skip travel while resting
++        if (this.canvas$dryAtRest()) {
++            return false;
++        }
++        // Canvas end - skip travel while resting
+         boolean inAnyFluid = this.fluidInteraction.update(this, !this.isPushedByFluid());
+         boolean inWater = this.fluidInteraction.isInFluid(FluidTags.WATER);
+         boolean inLava = this.fluidInteraction.isInFluid(FluidTags.LAVA);
 @@ -2326,6 +_,7 @@
  
          float yt = Mth.floor(this.getY());
@@ -252,7 +285,7 @@
          if (level instanceof ServerLevel serverLevel) {
              RandomSource random = level.getRandom();
  
-@@ -5627,6 +_,7 @@
+@@ -5632,6 +_,7 @@
              return;
          }
  
@@ -260,7 +293,7 @@
          final List<Entity> indirectPassengers = (List<Entity>)this.getIndirectPassengers();
          final List<ChunkPos> positions = new java.util.ArrayList<>(indirectPassengers.size() + 1);
  
-@@ -5699,6 +_,19 @@
+@@ -5704,6 +_,19 @@
          );
      }
  
@@ -280,7 +313,7 @@
      // Folia & Canvas end - region threading
      public @Nullable Entity teleport(TeleportTransition transition) { // Paper - remove param final
          // Folia start - region threading
-@@ -5913,6 +_,7 @@
+@@ -5918,6 +_,7 @@
  
      public void placePortalTicket(final BlockPos ticketPosition) {
          if (this.level() instanceof ServerLevel serverLevel) {
