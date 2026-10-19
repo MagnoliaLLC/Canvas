@@ -420,12 +420,26 @@
              }
  
              return container;
-@@ -759,6 +_,85 @@
+@@ -753,12 +_,98 @@
+     }
+ 
+     private static @Nullable Container getEntityContainer(final Level level, final double x, final double y, final double z) {
++        // Canvas start - optimize hoppers
++        final AABB box = new AABB(x - 0.5, y - 0.5, z - 0.5, x + 0.5, y + 0.5, z + 0.5);
++        if (((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel) level).moonrise$getEntityLookup().canvas$noneOfClass(CONTAINER_CLASS_INDEX, (Class) Container.class, box)) {
++            return null;
++        }
++        // Canvas end - optimize hoppers
+         List<Entity> entities = level.getEntitiesOfClass( // Paper - Perf: Optimize hoppers
+-            (Class) Container.class, new AABB(x - 0.5, y - 0.5, z - 0.5, x + 0.5, y + 0.5, z + 0.5), EntitySelector.CONTAINER_ENTITY_SELECTOR // Paper - Perf: Optimize hoppers
++            (Class) Container.class, box, EntitySelector.CONTAINER_ENTITY_SELECTOR // Paper - Perf: Optimize hoppers // Canvas - optimize hoppers
+         );
          return !entities.isEmpty() ? (Container)entities.get(level.getRandom().nextInt(entities.size())) : null;
      }
  
 +    // Canvas start - optimize hoppers
-+    // kept while the block state holds and its block entity isn't removed
++    private static final int CONTAINER_CLASS_INDEX = io.canvasmc.canvas.util.EntityClassIndex.of(Container.class);
++
 +    private static final class CanvasContainerCache {
 +        private long pos;
 +        private @Nullable BlockState state;
