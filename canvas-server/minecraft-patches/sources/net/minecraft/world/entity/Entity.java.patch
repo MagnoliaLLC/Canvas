@@ -35,7 +35,7 @@
                  this.clearFire();
              }
  
-@@ -1910,8 +_,106 @@
+@@ -1910,8 +_,122 @@
          return SoundEvents.GENERIC_SPLASH;
      }
  
@@ -132,10 +132,26 @@
 +    }
 +    // Canvas end - optimize checkInsideBlocks
 +
++    // Canvas start - optimize resting entities
++    protected @Nullable Boolean canvas$insideEffectFreeAtRest() {
++        return null;
++    }
++
++    protected void canvas$noteInsideEffectFree(final boolean free) {
++    }
++
++    protected boolean canvas$dryAtRest() {
++        return false;
++    }
++    // Canvas end - optimize resting entities
++
      private void checkInsideBlocks(final List<Entity.Movement> movements, final InsideBlockEffectApplier.StepBasedCollector effectCollector) {
          if (this.isAffectedByBlocks()) {
 +            // Canvas start - optimize checkInsideBlocks
-+            if (this.canvas$insideEffectFree(movements)) {
++            final Boolean keptFree = this.canvas$insideEffectFreeAtRest(); // Canvas - optimize resting entities
++            final boolean free = keptFree != null ? keptFree : this.canvas$insideEffectFree(movements); // Canvas - optimize resting entities
++            this.canvas$noteInsideEffectFree(free); // Canvas - optimize resting entities
++            if (free) { // Canvas - optimize resting entities
 +                return;
 +            }
 +            // Canvas end - optimize checkInsideBlocks
@@ -203,6 +219,18 @@
          AABB fluidAABB = fluidState.getAABB(this.level(), blockPos);
          return fluidAABB != null && this.collidedWithShapeMovingFrom(from, to, List.of(fluidAABB));
      }
+@@ -2292,6 +_,11 @@
+     }
+ 
+     protected boolean updateFluidInteraction() {
++        // Canvas start - optimize resting entities
++        if (this.canvas$dryAtRest()) {
++            return false;
++        }
++        // Canvas end - optimize resting entities
+         boolean inAnyFluid = this.fluidInteraction.update(this, !this.isPushedByFluid());
+         boolean inWater = this.fluidInteraction.isInFluid(FluidTags.WATER);
+         boolean inLava = this.fluidInteraction.isInFluid(FluidTags.LAVA);
 @@ -2332,6 +_,7 @@
  
          float yt = Mth.floor(this.getY());

@@ -178,6 +178,132 @@
          Map<EquipmentSlot, ItemStack> changedItems = this.collectEquipmentChanges(this.lastEquipmentItems);
          if (changedItems != null) {
              this.handleHandSwap(changedItems);
+@@ -3716,6 +_,105 @@
+         return 50.0F;
+     }
+ 
++    // Canvas start - optimize resting entities
++    // a mob at rest travels to the same place every tick, so travel is skipped while its fingerprint holds
++    private static final ClassValue<Boolean> BASE_TRAVEL = new ClassValue<>() {
++        @Override
++        protected Boolean computeValue(final Class<?> type) {
++            for (Class<?> current = type; current != null && current != LivingEntity.class; current = current.getSuperclass()) {
++                try {
++                    current.getDeclaredMethod("travel", Vec3.class);
++                    return Boolean.FALSE;
++                } catch (final NoSuchMethodException ignored) {
++                }
++            }
++            return Boolean.TRUE;
++        }
++    };
++    public io.canvasmc.canvas.world.entities.@Nullable RestFingerprint canvas$rest;
++
++    private boolean canvas$mayRest(final Vec3 input) {
++        return input.x == 0.0 && input.y == 0.0 && input.z == 0.0
++            && !this.jumping
++            && !this.noPhysics
++            && !this.isTemporarilyActive
++            && !this.isPassenger()
++            && !this.isInWater()
++            && !this.isInLava()
++            && !this.isFallFlying()
++            && this.stuckSpeedMultiplier.lengthSqr() <= 1.0E-7
++            && this.onGround()
++            && !this.hasEffect(MobEffects.LEVITATION)
++            && this.level().getWorldBorder().getDistanceToBorder(this) > 2.0;
++    }
++
++    private boolean canvas$stillResting(final Vec3 input) {
++        final io.canvasmc.canvas.world.entities.RestFingerprint rest = this.canvas$rest;
++        if (rest == null) {
++            return false;
++        }
++        if (!rest.holds(this.getX(), this.getY(), this.getZ(), this.getDeltaMovement(), this.getBoundingBox())
++            || !this.canvas$atRestState()
++            || !this.canvas$mayRest(input)
++            || rest.friction != this.getAttributeValue(Attributes.FRICTION_MODIFIER)
++            || rest.drag != this.getAttributeValue(Attributes.AIR_DRAG_MODIFIER)
++            || rest.gravity != this.getEffectiveGravity()) {
++            this.canvas$rest = null;
++            return false;
++        }
++        rest.restedTick = this.tickCount;
++        return true;
++    }
++
++    // the check reads the same blocks as on the rest's first tick
++    @Override
++    protected @Nullable Boolean canvas$insideEffectFreeAtRest() {
++        final io.canvasmc.canvas.world.entities.RestFingerprint rest = this.canvas$rest;
++        return rest != null && rest.restedTick == this.tickCount ? rest.insideEffectFree : null;
++    }
++
++    @Override
++    protected boolean canvas$dryAtRest() {
++        final io.canvasmc.canvas.world.entities.RestFingerprint rest = this.canvas$rest;
++        return rest != null && rest.areaHolds(this.getX(), this.getY(), this.getZ(), this.getBoundingBox());
++    }
++
++    @Override
++    protected void canvas$noteInsideEffectFree(final boolean free) {
++        final io.canvasmc.canvas.world.entities.RestFingerprint rest = this.canvas$rest;
++        if (rest != null && rest.restedTick == this.tickCount && rest.insideEffectFree == null) {
++            rest.insideEffectFree = free;
++        }
++    }
++
++    // something between ticks may have changed these, so a travel puts them back
++    private boolean canvas$atRestState() {
++        return this.fallDistance == 0.0
++            && this.verticalCollision
++            && this.verticalCollisionBelow
++            && !this.horizontalCollision
++            && !this.minorHorizontalCollision;
++    }
++
++    private void canvas$noteRest(final Vec3 input, final double x, final double y, final double z, final Vec3 before) {
++        this.canvas$rest = null;
++        if (this instanceof Player
++            || !BASE_TRAVEL.get(this.getClass())
++            || this.getX() != x || this.getY() != y || this.getZ() != z
++            || !this.getDeltaMovement().equals(before)
++            || !this.canvas$atRestState()
++            || this.mainSupportingBlockPos.isEmpty()
++            || !this.canvas$mayRest(input)
++            || this.onClimbable()) {
++            return;
++        }
++        this.canvas$rest = io.canvasmc.canvas.world.entities.RestFingerprint.of(
++            this.level(), this.getBoundingBox(), x, y, z, this.getDeltaMovement(),
++            this.getAttributeValue(Attributes.FRICTION_MODIFIER), this.getAttributeValue(Attributes.AIR_DRAG_MODIFIER), this.getEffectiveGravity()
++        );
++    }
++    // Canvas end - optimize resting entities
++
+     public void aiStep() {
+         if (this.noJumpDelay > 0) {
+             this.noJumpDelay--;
+@@ -3805,7 +_,18 @@
+         if (this.getControllingPassenger() instanceof Player controller && this.isAlive()) {
+             this.travelRidden(controller, input);
+         } else if (this.canSimulateMovement() && this.isEffectiveAi()) {
+-            this.travel(input);
++            // Canvas start - optimize resting entities
++            if (!this.canvas$stillResting(input)) {
++                final double x = this.getX();
++                final double y = this.getY();
++                final double z = this.getZ();
++                final Vec3 before = this.getDeltaMovement();
++                this.travel(input);
++                this.canvas$noteRest(input, x, y, z, before);
++            }
++            // Canvas end - optimize resting entities
++        } else {
++            this.canvas$rest = null; // Canvas - optimize resting entities
+         }
+ 
+         if (!this.level().isClientSide() || this.isLocalInstanceAuthoritative()) {
 @@ -3833,7 +_,7 @@
              this.checkAutoSpinAttack(beforeTravelBox, this.getBoundingBox());
          }
