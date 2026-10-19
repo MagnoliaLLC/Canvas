@@ -1,0 +1,133 @@
+--- a/net/minecraft/world/entity/EntityEquipment.java
++++ b/net/minecraft/world/entity/EntityEquipment.java
+@@ -8,7 +_,7 @@
+ import net.minecraft.world.entity.item.ItemEntity;
+ import net.minecraft.world.item.ItemStack;
+ 
+-public class EntityEquipment {
++public class EntityEquipment implements io.canvasmc.canvas.world.inventory.StackHolder { // Canvas - skip equipment checks while nothing held changed
+     public static final Codec<EntityEquipment> CODEC = Codec.unboundedMap(EquipmentSlot.CODEC, ItemStack.CODEC).xmap(items -> {
+         EnumMap<EquipmentSlot, ItemStack> map = new EnumMap<>(EquipmentSlot.class);
+         map.putAll((Map<? extends EquipmentSlot, ? extends ItemStack>)items);
+@@ -22,14 +_,96 @@
+ 
+     private EntityEquipment(final EnumMap<EquipmentSlot, ItemStack> items) {
+         this.items = items;
+-    }
++        this.canvas$claimAll(); // Canvas - skip equipment checks while nothing held changed
++    }
++
++    // Canvas start - skip equipment checks while nothing held changed
++    // every stack held here (but the shared empty one) names this among its holders and reports its changes, so an owner
++    // may skip its equipment comparison and its enchantment tick while nothing changed
++    public boolean canvas$alwaysCheck;
++    private boolean canvas$changedSinceCompared = true;
++    private boolean canvas$tickVerdictKnown;
++    private boolean canvas$mayTickEnchantments;
++
++    public void canvas$changed() {
++        this.canvas$changedSinceCompared = true;
++        this.canvas$tickVerdictKnown = false;
++    }
++
++    @Override
++    public void canvas$stackChanged() {
++        this.canvas$changed();
++    }
++
++    // true when the owner's comparison would find every slot unchanged; otherwise starts the next comparison
++    public boolean canvas$unchangedSinceCompared() {
++        if (!this.canvas$changedSinceCompared && !this.canvas$alwaysCheck) {
++            return true;
++        }
++        this.canvas$changedSinceCompared = false;
++        return false;
++    }
++
++    // false when no held stack has an enchantment with a tick effect, where EnchantmentHelper.tickEffects does nothing
++    public boolean canvas$mayTickEnchantments() {
++        if (this.canvas$alwaysCheck) {
++            return true;
++        }
++        if (!this.canvas$tickVerdictKnown) {
++            this.canvas$tickVerdictKnown = true;
++            this.canvas$mayTickEnchantments = false;
++            for (final ItemStack item : this.items.values()) {
++                if (net.minecraft.world.item.enchantment.EnchantmentHelper.canvas$hasTickEffect(item)) {
++                    this.canvas$mayTickEnchantments = true;
++                    break;
++                }
++            }
++        }
++        return this.canvas$mayTickEnchantments;
++    }
++
++    private void canvas$claim(final ItemStack item) {
++        io.canvasmc.canvas.world.inventory.StackHolders.claim(item, this);
++    }
++
++    // a stack held in another slot too stays claimed
++    private void canvas$release(final ItemStack item) {
++        for (final ItemStack held : this.items.values()) {
++            if (held == item) {
++                return;
++            }
++        }
++        io.canvasmc.canvas.world.inventory.StackHolders.release(item, this);
++    }
++
++    private void canvas$claimAll() {
++        for (final ItemStack item : this.items.values()) {
++            this.canvas$claim(item);
++        }
++        this.canvas$changed();
++    }
++
++    private void canvas$releaseAll(final java.util.Collection<ItemStack> items) {
++        for (final ItemStack item : items) {
++            this.canvas$release(item);
++        }
++    }
++    // Canvas end - skip equipment checks while nothing held changed
+ 
+     public EntityEquipment() {
+         this(new EnumMap<>(EquipmentSlot.class));
+     }
+ 
+     public ItemStack set(final EquipmentSlot slot, final ItemStack itemStack) {
+-        return Objects.requireNonNullElse(this.items.put(slot, itemStack), ItemStack.EMPTY);
++        // Canvas start - skip equipment checks while nothing held changed
++        final ItemStack previous = this.items.put(slot, itemStack);
++        this.canvas$claim(itemStack);
++        if (previous != null && previous != itemStack) {
++            this.canvas$release(previous);
++        }
++        this.canvas$changed();
++        return Objects.requireNonNullElse(previous, ItemStack.EMPTY);
++        // Canvas end - skip equipment checks while nothing held changed
+     }
+ 
+     public ItemStack get(final EquipmentSlot slot) {
+@@ -56,8 +_,11 @@
+     }
+ 
+     public void setAll(final EntityEquipment equipment) {
++        final java.util.List<ItemStack> previous = java.util.List.copyOf(this.items.values()); // Canvas - skip equipment checks while nothing held changed
+         this.items.clear();
+         this.items.putAll(equipment.items);
++        this.canvas$releaseAll(previous); // Canvas - skip equipment checks while nothing held changed
++        this.canvas$claimAll(); // Canvas - skip equipment checks while nothing held changed
+     }
+ 
+     public void dropAll(final LivingEntity dropper) {
+@@ -72,7 +_,10 @@
+     }
+ 
+     public void clear() {
++        final java.util.List<ItemStack> previous = java.util.List.copyOf(this.items.values()); // Canvas - skip equipment checks while nothing held changed
+         this.items.replaceAll((s, v) -> ItemStack.EMPTY);
++        this.canvas$releaseAll(previous); // Canvas - skip equipment checks while nothing held changed
++        this.canvas$changed(); // Canvas - skip equipment checks while nothing held changed
+     }
+ 
+     // Paper start - EntityDeathEvent
