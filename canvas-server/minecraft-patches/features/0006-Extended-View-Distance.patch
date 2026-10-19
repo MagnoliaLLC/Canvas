@@ -1338,7 +1338,7 @@ index 41176326afeda91806f502c20d71a749b6c4fefb..2853d8cc6a2e30a843823fa867c90f74
          public boolean ignitedByLava() {
              return this.ignitedByLava;
 diff --git a/net/minecraft/world/level/chunk/LevelChunkSection.java b/net/minecraft/world/level/chunk/LevelChunkSection.java
-index 5e4a3c6c631cb316686180f486c25801858e134b..daa4a129dd17ab2128cbe67e59145731513b6172 100644
+index 15d4d112e4435356b3a9d75d132199443e6603c4..c9ec8e4b278e4c1f8248c070e231d89b2563db77 100644
 --- a/net/minecraft/world/level/chunk/LevelChunkSection.java
 +++ b/net/minecraft/world/level/chunk/LevelChunkSection.java
 @@ -45,6 +45,11 @@ public class LevelChunkSection implements ca.spottedleaf.moonrise.patches.block_
