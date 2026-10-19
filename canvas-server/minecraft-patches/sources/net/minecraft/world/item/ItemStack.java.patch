@@ -1,5 +1,26 @@
 --- a/net/minecraft/world/item/ItemStack.java
 +++ b/net/minecraft/world/item/ItemStack.java
+@@ -157,6 +_,20 @@
+     @Deprecated
+     private @Nullable Holder<Item> item;
+     private PatchedDataComponentMap components;
++    // Canvas start - optimize equipment checks
++    // kept on the component map, whose padding fits it where a field would grow every stack
++    public @Nullable Object canvas$holders() {
++        return this.components.canvas$holders;
++    }
++
++    public void canvas$setHolders(final @Nullable Object holders) {
++        this.components.canvas$holders = holders;
++    }
++
++    private void canvas$changed() {
++        io.canvasmc.canvas.world.inventory.StackHolders.notify(this.components.canvas$holders);
++    }
++    // Canvas end - optimize equipment checks
+ 
+     public static DataResult<ItemStack> validateStrict(final ItemStack itemStack) {
+         DataResult<?> result = validateComponents(itemStack.getComponents());
 @@ -844,11 +_,11 @@
      }
  
@@ -14,3 +35,75 @@
      }
  
      public static boolean matchesIgnoringComponents(final ItemStack a, final ItemStack b, final Predicate<DataComponentType<?>> ignoredPredicate) {
+@@ -967,15 +_,18 @@
+ 
+     // CraftBukkit start
+     public void restorePatch(DataComponentPatch datacomponentpatch) {
++        this.canvas$changed(); // Canvas - optimize equipment checks
+         this.components.restorePatch(datacomponentpatch);
+     }
+     // CraftBukkit end
+ 
+     public <T> @Nullable T set(final DataComponentType<T> type, final @Nullable T value) {
++        this.canvas$changed(); // Canvas - optimize equipment checks
+         return this.components.set(type, value);
+     }
+ 
+     public <T> @Nullable T set(final TypedDataComponent<T> value) {
++        this.canvas$changed(); // Canvas - optimize equipment checks
+         return this.components.set(value);
+     }
+ 
+@@ -993,11 +_,13 @@
+     }
+ 
+     public <T> @Nullable T remove(final DataComponentType<? extends T> type) {
++        this.canvas$changed(); // Canvas - optimize equipment checks
+         return this.components.remove(type);
+     }
+ 
+     public void applyComponentsAndValidate(final DataComponentPatch patch) {
+         DataComponentPatch oldPatch = this.components.asPatch();
++        this.canvas$changed(); // Canvas - optimize equipment checks
+         this.components.applyPatch(patch);
+         Optional<Error<ItemStack>> validationError = validateStrict(this).error();
+         if (validationError.isPresent()) {
+@@ -1007,10 +_,12 @@
+     }
+ 
+     public void applyComponents(final DataComponentPatch patch) {
++        this.canvas$changed(); // Canvas - optimize equipment checks
+         this.components.applyPatch(patch);
+     }
+ 
+     public void applyComponents(final DataComponentMap components) {
++        this.canvas$changed(); // Canvas - optimize equipment checks
+         this.components.setAll(components);
+     }
+ 
+@@ -1246,10 +_,13 @@
+     // CraftBukkit start
+     @Deprecated
+     public void setItem(Item item) {
++        this.canvas$changed(); // Canvas - optimize equipment checks
+         this.item = item.builtInRegistryHolder();
+         // Paper start - change base component prototype
+         final DataComponentPatch patch = this.getComponentsPatch();
++        final Object holders = this.components.canvas$holders; // Canvas - optimize equipment checks
+         this.components = new PatchedDataComponentMap(this.item.components());
++        this.components.canvas$holders = holders; // Canvas - optimize equipment checks
+         this.applyComponents(patch);
+         // Paper end - change base component prototype
+     }
+@@ -1305,6 +_,11 @@
+     }
+ 
+     public void setCount(final int count) {
++        // Canvas start - optimize equipment checks
++        if (count != this.count) {
++            this.canvas$changed();
++        }
++        // Canvas end - optimize equipment checks
+         this.count = count;
+     }
+ 

@@ -31,7 +31,15 @@
                  // CraftBukkit end - visibility API
              }
          }
-@@ -482,7 +_,7 @@
+@@ -475,14 +_,14 @@
+             });
+         }
+ 
+-        if (this.level() instanceof ServerLevel serverLevel) {
++        if (this.level() instanceof ServerLevel serverLevel && this.equipment.canvas$mayTickEnchantments()) { // Canvas - optimize equipment checks
+             EnchantmentHelper.tickEffects(serverLevel, this);
+         }
+ 
          super.baseTick();
          if (this.isAlive() && this.level() instanceof ServerLevel level) {
              boolean isPlayer = this instanceof Player;
@@ -158,7 +166,19 @@
              slowDown += (0.54600006F - slowDown) * waterWalker;
              speed += (this.getSpeed() - speed) * waterWalker;
          }
-@@ -3834,7 +_,7 @@
+@@ -3594,6 +_,11 @@
+     }
+ 
+     public void detectEquipmentUpdates() {
++        // Canvas start - optimize equipment checks
++        if (this.equipment.canvas$unchangedSinceCompared()) {
++            return;
++        }
++        // Canvas end - optimize equipment checks
+         Map<EquipmentSlot, ItemStack> changedItems = this.collectEquipmentChanges(this.lastEquipmentItems);
+         if (changedItems != null) {
+             this.handleHandSwap(changedItems);
+@@ -3833,7 +_,7 @@
              this.checkAutoSpinAttack(beforeTravelBox, this.getBoundingBox());
          }
  
