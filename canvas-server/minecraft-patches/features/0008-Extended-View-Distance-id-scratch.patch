@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: RootBeer <rootb33rman@gmail.com>
+Date: Sun, 18 Oct 2026 22:42:09 -0400
+Subject: [PATCH] Extended View Distance id scratch
+
+
+diff --git a/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java b/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java
+index a531dd6c03bf074a92390f1a1ef043c992808f3b..8dcaaa0a9b086eeaf572f5502e3f77cc99feaac4 100644
+--- a/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java
++++ b/io/canvasmc/canvas/extendedview/PacketConstructorUtils.java
+@@ -23,6 +23,8 @@ public class PacketConstructorUtils {
+     public static final int MASK_SIZE = 4096; // 16^3
+     private static final int MASK_LONGS = MASK_SIZE >>> 6;
+     private static final int INNER_ROW = 0x7FFE; // x 1 to 14
++    // every builder thread unpacks block ids into the same arrays, since unpacking overwrites all of them
++    private static final ThreadLocal<int[][]> ID_SCRATCH = new ThreadLocal<>();
+ 
+     private static final Predicate<BlockState> IS_ORE = (state) ->
+         state.is(BlockTags.COPPER_ORES)
+@@ -57,6 +59,11 @@ public class PacketConstructorUtils {
+     public static void shapeSections(final LevelChunkSection[] sections, final boolean hollow, final boolean hideOres) {
+         final int sectionCount = sections.length;
+         final int[] @Nullable [] ids = new int[sectionCount][];
++        int[][] scratch = ID_SCRATCH.get();
++        if (scratch == null || scratch.length < sectionCount) {
++            scratch = new int[sectionCount][MASK_SIZE];
++            ID_SCRATCH.set(scratch);
++        }
+         final long[] @Nullable [] seeThrough = new long[sectionCount][];
+ 
+         // read every section before changing any, since hollowing one looks into its neighbors
+@@ -67,7 +74,7 @@ public class PacketConstructorUtils {
+             }
+ 
+             final PalettedContainer.Data<BlockState> data = section.getStates().data;
+-            final int[] sectionIds = new int[MASK_SIZE];
++            final int[] sectionIds = scratch[index];
+             data.storage().unpack(sectionIds);
+             ids[index] = sectionIds;
+ 
