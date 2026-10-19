@@ -1,0 +1,10 @@
+--- /dev/null
++++ b/io/canvasmc/canvas/world/inventory/package-info.java
+@@ -1,0 +_,7 @@
++/**
++ * Change tracking for item stacks held by entities and containers
++ */
++@NullMarked
++package io.canvasmc.canvas.world.inventory;
++
++import org.jspecify.annotations.NullMarked;

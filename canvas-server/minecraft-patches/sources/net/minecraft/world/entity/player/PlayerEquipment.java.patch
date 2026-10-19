@@ -1,0 +1,10 @@
+--- a/net/minecraft/world/entity/player/PlayerEquipment.java
++++ b/net/minecraft/world/entity/player/PlayerEquipment.java
+@@ -9,6 +_,7 @@
+ 
+     public PlayerEquipment(final Player player) {
+         this.player = player;
++        this.canvas$alwaysCheck = true; // Canvas - skip equipment checks while nothing held changed: the main hand is the inventory's selected slot
+     }
+ 
+     @Override

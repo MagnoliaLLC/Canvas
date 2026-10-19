@@ -1,0 +1,10 @@
+--- a/net/minecraft/core/component/PatchedDataComponentMap.java
++++ b/net/minecraft/core/component/PatchedDataComponentMap.java
+@@ -17,6 +_,7 @@
+     private final DataComponentMap prototype;
+     private Reference2ObjectMap<DataComponentType<?>, Object> patch;
+     private boolean copyOnWrite;
++    public @Nullable Object canvas$holders; // Canvas - track changes to held stacks: what holds the stack owning this map, never copied
+ 
+     public PatchedDataComponentMap(final DataComponentMap prototype) {
+         this(prototype, Reference2ObjectMaps.emptyMap(), true);

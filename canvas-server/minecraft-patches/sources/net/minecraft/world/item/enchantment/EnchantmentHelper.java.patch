@@ -1,8 +1,28 @@
 --- a/net/minecraft/world/item/enchantment/EnchantmentHelper.java
 +++ b/net/minecraft/world/item/enchantment/EnchantmentHelper.java
-@@ -285,7 +_,23 @@
+@@ -284,8 +_,43 @@
+         runIterationOnItem(stack, slot, entity, (enchantment, level, item) -> enchantment.value().stopLocationBasedEffects(level, item, entity));
      }
  
++    // Canvas start - skip equipment checks while nothing held changed
++    // whether tickEffects may act on this stack: it acts only on an enchantment with a tick effect
++    public static boolean canvas$hasTickEffect(final ItemStack piece) {
++        if (piece.isEmpty()) {
++            return false;
++        }
++        final ItemEnchantments itemEnchantments = piece.get(DataComponents.ENCHANTMENTS);
++        if (itemEnchantments == null || itemEnchantments.isEmpty()) {
++            return false;
++        }
++        for (final Holder<Enchantment> enchantment : itemEnchantments.keySet()) {
++            if (enchantment.value().effects().has(EnchantmentEffectComponents.TICK)) {
++                return true;
++            }
++        }
++        return false;
++    }
++    // Canvas end - skip equipment checks while nothing held changed
++
      public static void tickEffects(final ServerLevel serverLevel, final LivingEntity entity) {
 -        runIterationOnEquipment(entity, (enchantment, level, item) -> enchantment.value().tick(serverLevel, level, item, entity));
 +        // Canvas start - skip enchantments without tick effects
