@@ -37,6 +37,18 @@
      }
  
      @Override
+@@ -483,6 +_,11 @@
+     }
+ 
+     public static PathType checkNeighbourBlocks(final PathfindingContext context, final int x, final int y, final int z, final PathType blockPathType) {
++        // Canvas start - skip the neighbor scan when nothing in the block's section is a danger to a neighbor
++        if (context.canvas$neighborsSafe(x, y, z)) {
++            return blockPathType;
++        }
++        // Canvas end - skip the neighbor scan when nothing in the block's section is a danger to a neighbor
+         for (int dx = -1; dx <= 1; dx++) {
+             for (int dy = -1; dy <= 1; dy++) {
+                 for (int dz = -1; dz <= 1; dz++) {
 @@ -511,6 +_,8 @@
          return blockPathType;
      }
@@ -46,12 +58,19 @@
      protected static PathType getPathTypeFromState(final BlockGetter level, final BlockPos pos) {
          // Paper start - Do not load chunks during pathfinding
          BlockState blockState = level.getBlockStateIfLoaded(pos);
-@@ -518,6 +_,11 @@
+@@ -518,6 +_,18 @@
              return PathType.BLOCKED;
          }
          // Paper end
 +        return PATH_TYPES[blockState.pathType];
 +    }
++
++    // Canvas start - skip the neighbor scan when nothing in the block's section is a danger to a neighbor
++    // the path types checkNeighbourBlocks answers a danger for
++    public static boolean canvas$isNeighborDanger(final PathType pathType) {
++        return pathType == PathType.DAMAGING || pathType == PathType.FIRE || pathType == PathType.LAVA || pathType == PathType.WATER || pathType == PathType.DAMAGE_CAUTIOUS;
++    }
++    // Canvas end - skip the neighbor scan when nothing in the block's section is a danger to a neighbor
 +
 +    public static PathType canvas$getPathTypeFromBlockState(final BlockState blockState) {
 +    // Canvas end - optimize path type cache

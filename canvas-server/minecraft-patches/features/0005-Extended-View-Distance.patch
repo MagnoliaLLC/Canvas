@@ -1207,7 +1207,7 @@ index 3493916a5f64e8d930a6144be3d72136392da184..26f885c5acb5a6282a9d1c9a965db3fd
          // Canvas start - region threading
  
 diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
-index 9fa1291dc7e2bbc5096c3a8235b0348ec06fe228..f30c3f273bed871cdd03aae3d42368dd0f97fbe9 100644
+index 3b96c28cdb52e0c03e2573c9e2aff0589735d740..afb95032dff869165204b40ad42fbdbe1a58d297 100644
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
 @@ -374,6 +374,14 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
@@ -1245,10 +1245,10 @@ index 9fa1291dc7e2bbc5096c3a8235b0348ec06fe228..f30c3f273bed871cdd03aae3d42368dd
  
      // Folia start - region threading
 diff --git a/net/minecraft/world/level/block/state/BlockBehaviour.java b/net/minecraft/world/level/block/state/BlockBehaviour.java
-index ea9e8fb4921aeeea5f84ccfc8ba39e0cff02a287..94b306fa4c5b00339433f7666b818098e82ad0a2 100644
+index 319a486493a8fb62163380924d880d7122bce53c..04216ba70cc86633583bb0c7e751cfdfae8c251e 100644
 --- a/net/minecraft/world/level/block/state/BlockBehaviour.java
 +++ b/net/minecraft/world/level/block/state/BlockBehaviour.java
-@@ -807,6 +807,13 @@ public abstract class BlockBehaviour implements FeatureElement {
+@@ -809,6 +809,13 @@ public abstract class BlockBehaviour implements FeatureElement {
          public final boolean isAir() { // Paper - Perf: Final for inlining
              return this.isAir;
          }
