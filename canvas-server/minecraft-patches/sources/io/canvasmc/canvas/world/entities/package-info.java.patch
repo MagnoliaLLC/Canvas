@@ -1,0 +1,10 @@
+--- /dev/null
++++ b/io/canvasmc/canvas/world/entities/package-info.java
+@@ -1,0 +_,7 @@
++/**
++ * Entity state kept across ticks to skip work whose result cannot have changed
++ */
++@NullMarked
++package io.canvasmc.canvas.world.entities;
++
++import org.jspecify.annotations.NullMarked;
