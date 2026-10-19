@@ -35,7 +35,7 @@
                  this.clearFire();
              }
  
-@@ -1910,8 +_,81 @@
+@@ -1910,8 +_,106 @@
          return SoundEvents.GENERIC_SPLASH;
      }
  
@@ -44,16 +44,26 @@
 +    private static final ClassValue<Boolean> OVERRIDES_ON_INSIDE_BLOCK = new ClassValue<>() {
 +        @Override
 +        protected Boolean computeValue(final Class<?> type) {
-+            for (Class<?> current = type; current != null && current != Entity.class; current = current.getSuperclass()) {
-+                try {
-+                    current.getDeclaredMethod("onInsideBlock", BlockState.class);
-+                    return Boolean.TRUE;
-+                } catch (final NoSuchMethodException ignored) {
-+                }
-+            }
-+            return Boolean.FALSE;
++            return canvas$declares(type, "onInsideBlock", BlockState.class);
 +        }
 +    };
++    private static final ClassValue<Boolean> OVERRIDES_MAKE_BOUNDING_BOX = new ClassValue<>() {
++        @Override
++        protected Boolean computeValue(final Class<?> type) {
++            return canvas$declares(type, "makeBoundingBox", Vec3.class);
++        }
++    };
++
++    private static boolean canvas$declares(final Class<?> type, final String name, final Class<?>... parameterTypes) {
++        for (Class<?> current = type; current != null && current != Entity.class; current = current.getSuperclass()) {
++            try {
++                current.getDeclaredMethod(name, parameterTypes);
++                return true;
++            } catch (final NoSuchMethodException ignored) {
++            }
++        }
++        return false;
++    }
 +
 +    private boolean canvas$insideEffectFree(final List<Entity.Movement> movements) {
 +        if (this.level instanceof ServerLevel serverLevel && serverLevel.getServer().debugSubscribers().hasAnySubscriberFor(DebugSubscriptions.ENTITY_BLOCK_INTERSECTIONS)) {
@@ -65,15 +75,30 @@
 +        double maxX = Double.NEGATIVE_INFINITY;
 +        double maxY = Double.NEGATIVE_INFINITY;
 +        double maxZ = Double.NEGATIVE_INFINITY;
-+        for (final Entity.Movement movement : movements) {
-+            final AABB fromBox = this.makeBoundingBox(movement.from());
-+            final AABB toBox = this.makeBoundingBox(movement.to());
-+            minX = Math.min(minX, Math.min(fromBox.minX, toBox.minX));
-+            minY = Math.min(minY, Math.min(fromBox.minY, toBox.minY));
-+            minZ = Math.min(minZ, Math.min(fromBox.minZ, toBox.minZ));
-+            maxX = Math.max(maxX, Math.max(fromBox.maxX, toBox.maxX));
-+            maxY = Math.max(maxY, Math.max(fromBox.maxY, toBox.maxY));
-+            maxZ = Math.max(maxZ, Math.max(fromBox.maxZ, toBox.maxZ));
++        final boolean ownBox = OVERRIDES_MAKE_BOUNDING_BOX.get(this.getClass());
++        for (int i = 0, len = movements.size(); i < len; ++i) {
++            final Entity.Movement movement = movements.get(i);
++            if (ownBox) {
++                final AABB fromBox = this.makeBoundingBox(movement.from());
++                final AABB toBox = this.makeBoundingBox(movement.to());
++                minX = Math.min(minX, Math.min(fromBox.minX, toBox.minX));
++                minY = Math.min(minY, Math.min(fromBox.minY, toBox.minY));
++                minZ = Math.min(minZ, Math.min(fromBox.minZ, toBox.minZ));
++                maxX = Math.max(maxX, Math.max(fromBox.maxX, toBox.maxX));
++                maxY = Math.max(maxY, Math.max(fromBox.maxY, toBox.maxY));
++                maxZ = Math.max(maxZ, Math.max(fromBox.maxZ, toBox.maxZ));
++                continue;
++            }
++            final float halfWidth = this.dimensions.width() / 2.0F;
++            final float height = this.dimensions.height();
++            final Vec3 from = movement.from();
++            final Vec3 to = movement.to();
++            minX = Math.min(minX, Math.min(Math.min(from.x - halfWidth, from.x + halfWidth), Math.min(to.x - halfWidth, to.x + halfWidth)));
++            minY = Math.min(minY, Math.min(Math.min(from.y, from.y + height), Math.min(to.y, to.y + height)));
++            minZ = Math.min(minZ, Math.min(Math.min(from.z - halfWidth, from.z + halfWidth), Math.min(to.z - halfWidth, to.z + halfWidth)));
++            maxX = Math.max(maxX, Math.max(Math.max(from.x - halfWidth, from.x + halfWidth), Math.max(to.x - halfWidth, to.x + halfWidth)));
++            maxY = Math.max(maxY, Math.max(Math.max(from.y, from.y + height), Math.max(to.y, to.y + height)));
++            maxZ = Math.max(maxZ, Math.max(Math.max(from.z - halfWidth, from.z + halfWidth), Math.max(to.z - halfWidth, to.z + halfWidth)));
 +        }
 +        if (!(maxX - minX < 8.0 && maxY - minY < 8.0 && maxZ - minZ < 8.0)) {
 +            return false;
