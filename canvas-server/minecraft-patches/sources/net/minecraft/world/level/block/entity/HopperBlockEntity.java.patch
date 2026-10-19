@@ -172,7 +172,7 @@
  
      // Paper start - Add PrepareHopperTransferEvent
      private static long callPrepareTransferEvent(final Level level, final Container source, final Container destination, final boolean didSourceInitiate) {
-@@ -481,7 +_,177 @@
+@@ -500,7 +_,177 @@
          return slots;
      }
  
@@ -428,10 +428,27 @@
              }
  
              return container;
-@@ -759,6 +_,90 @@
+@@ -753,12 +_,106 @@
+     }
+ 
+     private static @Nullable Container getEntityContainer(final Level level, final double x, final double y, final double z) {
++        // Canvas start - skip empty container entity searches
++        final AABB box = new AABB(x - 0.5, y - 0.5, z - 0.5, x + 0.5, y + 0.5, z + 0.5);
++        if (((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel) level).moonrise$getEntityLookup().canvas$noneOfClass(CANVAS_CONTAINER_CLASS_INDEX, (Class) Container.class, box)) {
++            return null;
++        }
++        // Canvas end - skip empty container entity searches
+         List<Entity> entities = level.getEntitiesOfClass( // Paper - Perf: Optimize hoppers
+-            (Class) Container.class, new AABB(x - 0.5, y - 0.5, z - 0.5, x + 0.5, y + 0.5, z + 0.5), EntitySelector.CONTAINER_ENTITY_SELECTOR // Paper - Perf: Optimize hoppers
++            (Class) Container.class, box, EntitySelector.CONTAINER_ENTITY_SELECTOR // Paper - Perf: Optimize hoppers // Canvas - skip empty container entity searches
+         );
          return !entities.isEmpty() ? (Container)entities.get(level.getRandom().nextInt(entities.size())) : null;
      }
  
++    // Canvas start - skip empty container entity searches
++    private static final int CANVAS_CONTAINER_CLASS_INDEX = io.canvasmc.canvas.util.EntityClassIndex.of(Container.class);
++    // Canvas end - skip empty container entity searches
++
 +    // Canvas start - cache hopper container lookups
 +    // the block container a hopper last found at one position, kept while the facts it was found from hold: the same
 +    // block state, its block entity not removed (the chunk marks one removed when it is replaced, broken or unloaded), and
