@@ -1,0 +1,19 @@
+--- a/net/minecraft/world/level/block/entity/BarrelBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/BarrelBlockEntity.java
+@@ -96,6 +_,7 @@
+ 
+     public BarrelBlockEntity(final BlockPos worldPosition, final BlockState blockState) {
+         super(BlockEntityTypes.BARREL, worldPosition, blockState);
++        this.items = io.canvasmc.canvas.world.inventory.TrackedStackList.withSize(this.getContainerSize()); // Canvas - remember failed hopper transfers
+     }
+ 
+     @Override
+@@ -109,7 +_,7 @@
+     @Override
+     protected void loadAdditional(final ValueInput input) {
+         super.loadAdditional(input);
+-        this.items = NonNullList.withSize(this.getContainerSize(), ItemStack.EMPTY);
++        this.items = io.canvasmc.canvas.world.inventory.TrackedStackList.withSize(this.getContainerSize()); // Canvas - remember failed hopper transfers
+         if (!this.tryLoadLootTable(input)) {
+             ContainerHelper.loadAllItems(input, this.items);
+         }

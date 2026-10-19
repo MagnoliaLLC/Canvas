@@ -1,0 +1,20 @@
+--- a/net/minecraft/world/level/block/entity/DispenserBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/DispenserBlockEntity.java
+@@ -16,7 +_,7 @@
+ public class DispenserBlockEntity extends RandomizableContainerBlockEntity {
+     public static final int CONTAINER_SIZE = 9;
+     private static final Component DEFAULT_NAME = Component.translatable("container.dispenser");
+-    private NonNullList<ItemStack> items = NonNullList.withSize(9, ItemStack.EMPTY);
++    private NonNullList<ItemStack> items = io.canvasmc.canvas.world.inventory.TrackedStackList.withSize(9); // Canvas - remember failed hopper transfers
+ 
+     // CraftBukkit start - add fields and methods
+     public java.util.List<org.bukkit.entity.HumanEntity> transaction = new java.util.ArrayList<>();
+@@ -113,7 +_,7 @@
+     @Override
+     protected void loadAdditional(final ValueInput input) {
+         super.loadAdditional(input);
+-        this.items = NonNullList.withSize(this.getContainerSize(), ItemStack.EMPTY);
++        this.items = io.canvasmc.canvas.world.inventory.TrackedStackList.withSize(this.getContainerSize()); // Canvas - remember failed hopper transfers
+         if (!this.tryLoadLootTable(input)) {
+             ContainerHelper.loadAllItems(input, this.items);
+         }
