@@ -35,7 +35,7 @@
                  this.clearFire();
              }
  
-@@ -1910,8 +_,83 @@
+@@ -1910,8 +_,113 @@
          return SoundEvents.GENERIC_SPLASH;
      }
  
@@ -56,6 +56,21 @@
 +            return Boolean.FALSE;
 +        }
 +    };
++    // an entity whose box is its dimensions around its position: the swept box is then figured without making boxes
++    private static final ClassValue<Boolean> CANVAS_OWN_BOX = new ClassValue<>() {
++        @Override
++        protected Boolean computeValue(final Class<?> type) {
++            for (Class<?> current = type; current != null && current != Entity.class; current = current.getSuperclass()) {
++                try {
++                    current.getDeclaredMethod("makeBoundingBox", Vec3.class);
++                    return Boolean.TRUE;
++                } catch (final NoSuchMethodException ignored) {
++                }
++            }
++            return Boolean.FALSE;
++        }
++    };
++    private final boolean canvas$ownBox = CANVAS_OWN_BOX.get(this.getClass());
 +
 +    private boolean canvas$insideEffectFree(final List<Entity.Movement> movements) {
 +        if (this.level instanceof ServerLevel serverLevel && serverLevel.getServer().debugSubscribers().hasAnySubscriberFor(DebugSubscriptions.ENTITY_BLOCK_INTERSECTIONS)) {
@@ -67,15 +82,30 @@
 +        double maxX = Double.NEGATIVE_INFINITY;
 +        double maxY = Double.NEGATIVE_INFINITY;
 +        double maxZ = Double.NEGATIVE_INFINITY;
-+        for (final Entity.Movement movement : movements) {
-+            final AABB fromBox = this.makeBoundingBox(movement.from());
-+            final AABB toBox = this.makeBoundingBox(movement.to());
-+            minX = Math.min(minX, Math.min(fromBox.minX, toBox.minX));
-+            minY = Math.min(minY, Math.min(fromBox.minY, toBox.minY));
-+            minZ = Math.min(minZ, Math.min(fromBox.minZ, toBox.minZ));
-+            maxX = Math.max(maxX, Math.max(fromBox.maxX, toBox.maxX));
-+            maxY = Math.max(maxY, Math.max(fromBox.maxY, toBox.maxY));
-+            maxZ = Math.max(maxZ, Math.max(fromBox.maxZ, toBox.maxZ));
++        for (int i = 0, size = movements.size(); i < size; ++i) {
++            final Entity.Movement movement = movements.get(i);
++            if (this.canvas$ownBox) {
++                final AABB fromBox = this.makeBoundingBox(movement.from());
++                final AABB toBox = this.makeBoundingBox(movement.to());
++                minX = Math.min(minX, Math.min(fromBox.minX, toBox.minX));
++                minY = Math.min(minY, Math.min(fromBox.minY, toBox.minY));
++                minZ = Math.min(minZ, Math.min(fromBox.minZ, toBox.minZ));
++                maxX = Math.max(maxX, Math.max(fromBox.maxX, toBox.maxX));
++                maxY = Math.max(maxY, Math.max(fromBox.maxY, toBox.maxY));
++                maxZ = Math.max(maxZ, Math.max(fromBox.maxZ, toBox.maxZ));
++                continue;
++            }
++            // the boxes EntityDimensions makes around both ends, without making them
++            final float halfWidth = this.dimensions.width() / 2.0F;
++            final float height = this.dimensions.height();
++            final Vec3 from = movement.from();
++            final Vec3 to = movement.to();
++            minX = Math.min(minX, Math.min(Math.min(from.x - halfWidth, from.x + halfWidth), Math.min(to.x - halfWidth, to.x + halfWidth)));
++            minY = Math.min(minY, Math.min(Math.min(from.y, from.y + height), Math.min(to.y, to.y + height)));
++            minZ = Math.min(minZ, Math.min(Math.min(from.z - halfWidth, from.z + halfWidth), Math.min(to.z - halfWidth, to.z + halfWidth)));
++            maxX = Math.max(maxX, Math.max(Math.max(from.x - halfWidth, from.x + halfWidth), Math.max(to.x - halfWidth, to.x + halfWidth)));
++            maxY = Math.max(maxY, Math.max(Math.max(from.y, from.y + height), Math.max(to.y, to.y + height)));
++            maxZ = Math.max(maxZ, Math.max(Math.max(from.z - halfWidth, from.z + halfWidth), Math.max(to.z - halfWidth, to.z + halfWidth)));
 +        }
 +        if (!(maxX - minX < 8.0 && maxY - minY < 8.0 && maxZ - minZ < 8.0)) {
 +            return false;
@@ -222,7 +252,7 @@
          if (level instanceof ServerLevel serverLevel) {
              RandomSource random = level.getRandom();
  
-@@ -5620,6 +_,7 @@
+@@ -5628,6 +_,7 @@
              return;
          }
  
@@ -230,7 +260,7 @@
          final List<Entity> indirectPassengers = (List<Entity>)this.getIndirectPassengers();
          final List<ChunkPos> positions = new java.util.ArrayList<>(indirectPassengers.size() + 1);
  
-@@ -5692,6 +_,19 @@
+@@ -5700,6 +_,19 @@
          );
      }
  
@@ -250,7 +280,7 @@
      // Folia & Canvas end - region threading
      public @Nullable Entity teleport(TeleportTransition transition) { // Paper - remove param final
          // Folia start - region threading
-@@ -5906,6 +_,7 @@
+@@ -5914,6 +_,7 @@
  
      public void placePortalTicket(final BlockPos ticketPosition) {
          if (this.level() instanceof ServerLevel serverLevel) {
