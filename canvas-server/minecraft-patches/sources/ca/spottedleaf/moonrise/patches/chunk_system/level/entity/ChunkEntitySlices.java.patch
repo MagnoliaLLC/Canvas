@@ -16,7 +16,7 @@
      private final EntityList entities = new EntityList();
  
      public FullChunkStatus status;
-@@ -376,27 +_,36 @@
+@@ -376,27 +_,42 @@
          return ret;
      }
  
@@ -63,8 +63,15 @@
 -            this.entitiesByClass.put(clazz, collection = this.initClass(clazz));
 -            return collection.getEntitiesLimited(except, box, (List)into, (Predicate)predicate, maxCount);
 -        }
+-    }
 +        return this.canvas$byClass(classIndex, clazz).getEntitiesLimited(except, box, (List)into, (Predicate)predicate, maxCount);
-     }
++    }
++
++    // Canvas start - skip empty container entity searches
++    public boolean canvas$noneOfClass(final int classIndex, final Class<? extends Entity> clazz) {
++        return this.canvas$byClass(classIndex, clazz).count == 0;
++    }
++    // Canvas end - skip empty container entity searches
 +    // Canvas end - index entity classes
  
      private static final class BasicEntityList<E extends Entity> {
