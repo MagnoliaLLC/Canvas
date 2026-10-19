@@ -1,0 +1,40 @@
+--- a/net/minecraft/world/inventory/AbstractContainerMenu.java
++++ b/net/minecraft/world/inventory/AbstractContainerMenu.java
+@@ -260,9 +_,10 @@
+     }
+ 
+     public void broadcastChanges() {
++        final CanvasSlotCopy currentCopy = new CanvasSlotCopy(); // Canvas - one lazy copy per broadcast, reset for each slot
+         for (int i = 0; i < this.slots.size(); i++) {
+             ItemStack current = this.slots.get(i).getItem();
+-            Supplier<ItemStack> currentCopy = Suppliers.memoize(current::copy);
++            currentCopy.reset(current); // Canvas - one lazy copy per broadcast, reset for each slot
+             this.triggerSlotListeners(i, current, currentCopy);
+             this.synchronizeSlotToRemote(i, current, currentCopy);
+         }
+@@ -994,4 +_,25 @@
+         return () -> context.createBlockHolder(this);
+     }
+     // Paper end - Add missing InventoryHolders
++
++    // Canvas start - one lazy copy per broadcast, reset for each slot
++    // copies the slot's stack the first time it is asked, at most once per slot, as the memoized copy did
++    private static final class CanvasSlotCopy implements Supplier<ItemStack> {
++        private ItemStack source = ItemStack.EMPTY;
++        private @Nullable ItemStack copy;
++
++        private void reset(final ItemStack source) {
++            this.source = source;
++            this.copy = null;
++        }
++
++        @Override
++        public ItemStack get() {
++            if (this.copy == null) {
++                this.copy = this.source.copy();
++            }
++            return this.copy;
++        }
++    }
++    // Canvas end - one lazy copy per broadcast, reset for each slot
+ }
