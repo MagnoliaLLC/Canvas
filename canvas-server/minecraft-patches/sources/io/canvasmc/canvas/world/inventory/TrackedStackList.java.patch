@@ -1,0 +1,78 @@
+--- /dev/null
++++ b/io/canvasmc/canvas/world/inventory/TrackedStackList.java
+@@ -1,0 +_,75 @@
++package io.canvasmc.canvas.world.inventory;
++
++import java.util.Arrays;
++import java.util.Objects;
++import net.minecraft.core.NonNullList;
++import net.minecraft.world.item.ItemStack;
++
++/**
++ * A fixed container's slots whose {@link #version()} moves on every change to what they hold: a slot written, or a held
++ * stack changing its count, item or components. A check over the slots that found nothing to do can be skipped while
++ * the version stays put.
++ */
++public final class TrackedStackList extends NonNullList<ItemStack> implements StackHolder {
++
++    private int version;
++
++    private TrackedStackList(final ItemStack[] slots) {
++        super(new it.unimi.dsi.fastutil.objects.ObjectArrayList<>(slots), ItemStack.EMPTY);
++    }
++
++    public static TrackedStackList withSize(final int size) {
++        final ItemStack[] slots = new ItemStack[size];
++        Arrays.fill(slots, ItemStack.EMPTY);
++        return new TrackedStackList(slots);
++    }
++
++    public int version() {
++        return this.version;
++    }
++
++    @Override
++    public void canvas$stackChanged() {
++        ++this.version;
++    }
++
++    @Override
++    public ItemStack set(final int index, final ItemStack element) {
++        Objects.requireNonNull(element);
++        final ItemStack previous = super.set(index, element);
++        if (previous != element) {
++            ++this.version;
++            StackHolders.claim(element, this);
++            this.releaseUnlessHeld(previous);
++        }
++        return previous;
++    }
++
++    @Override
++    public void add(final int index, final ItemStack element) {
++        super.add(index, element);
++        ++this.version;
++        StackHolders.claim(element, this);
++    }
++
++    @Override
++    public ItemStack remove(final int index) {
++        final ItemStack previous = super.remove(index);
++        ++this.version;
++        this.releaseUnlessHeld(previous);
++        return previous;
++    }
++
++    // a stack held in another slot too stays claimed: its changes still change this list
++    private void releaseUnlessHeld(final ItemStack stack) {
++        if (stack == ItemStack.EMPTY) {
++            return;
++        }
++        for (int i = 0, size = this.size(); i < size; ++i) {
++            if (this.get(i) == stack) {
++                return;
++            }
++        }
++        StackHolders.release(stack, this);
++    }
++}

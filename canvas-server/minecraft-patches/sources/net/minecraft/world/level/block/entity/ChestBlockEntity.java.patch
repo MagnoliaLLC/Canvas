@@ -1,0 +1,20 @@
+--- a/net/minecraft/world/level/block/entity/ChestBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/ChestBlockEntity.java
+@@ -28,7 +_,7 @@
+ public class ChestBlockEntity extends RandomizableContainerBlockEntity implements LidBlockEntity {
+     private static final int EVENT_SET_OPEN_COUNT = 1;
+     public static final Component DEFAULT_NAME = Component.translatable("container.chest");
+-    private NonNullList<ItemStack> items = NonNullList.withSize(27, ItemStack.EMPTY);
++    private NonNullList<ItemStack> items = io.canvasmc.canvas.world.inventory.TrackedStackList.withSize(27); // Canvas - remember failed hopper transfers
+     public final ContainerOpenersCounter openersCounter = new ContainerOpenersCounter() {
+         // Paper start - delay close callbacks
+         @Override
+@@ -124,7 +_,7 @@
+     @Override
+     protected void loadAdditional(final ValueInput input) {
+         super.loadAdditional(input);
+-        this.items = NonNullList.withSize(this.getContainerSize(), ItemStack.EMPTY);
++        this.items = io.canvasmc.canvas.world.inventory.TrackedStackList.withSize(this.getContainerSize()); // Canvas - remember failed hopper transfers
+         if (!this.tryLoadLootTable(input)) {
+             ContainerHelper.loadAllItems(input, this.items);
+         }
