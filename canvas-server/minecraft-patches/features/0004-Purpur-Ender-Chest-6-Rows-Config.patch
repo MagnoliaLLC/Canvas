@@ -186,7 +186,7 @@ index 34e6bb7d246f065698def3b1f7a0d237f304f2aa..df70fb3519613596a7422ce6e3d67c3e
      public BlockEntity newBlockEntity(final BlockPos worldPosition, final BlockState blockState) {
          return new EnderChestBlockEntity(worldPosition, blockState);
 diff --git a/net/minecraft/world/level/block/entity/BarrelBlockEntity.java b/net/minecraft/world/level/block/entity/BarrelBlockEntity.java
-index 5ddfc7c9df08e9abedcb0fbaa0f614a804ee4059..c6ca966b7d1e582dbe475e793137544635627418 100644
+index 183d4d8f975052f5192ba0fe032fd84c3dbdadfa..360535750fe55b54ff6c0ebd6a8c18d2dcad3a21 100644
 --- a/net/minecraft/world/level/block/entity/BarrelBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/BarrelBlockEntity.java
 @@ -58,7 +58,16 @@ public class BarrelBlockEntity extends RandomizableContainerBlockEntity {
@@ -207,7 +207,7 @@ index 5ddfc7c9df08e9abedcb0fbaa0f614a804ee4059..c6ca966b7d1e582dbe475e7931375446
      public final ContainerOpenersCounter openersCounter = new ContainerOpenersCounter() {
          // Paper start - delay close callbacks
          @Override
-@@ -117,7 +126,16 @@ public class BarrelBlockEntity extends RandomizableContainerBlockEntity {
+@@ -118,7 +127,16 @@ public class BarrelBlockEntity extends RandomizableContainerBlockEntity {
  
      @Override
      public int getContainerSize() {
@@ -225,7 +225,7 @@ index 5ddfc7c9df08e9abedcb0fbaa0f614a804ee4059..c6ca966b7d1e582dbe475e7931375446
      }
  
      @Override
-@@ -137,7 +155,16 @@ public class BarrelBlockEntity extends RandomizableContainerBlockEntity {
+@@ -138,7 +156,16 @@ public class BarrelBlockEntity extends RandomizableContainerBlockEntity {
  
      @Override
      protected AbstractContainerMenu createMenu(final int containerId, final Inventory inventory) {
