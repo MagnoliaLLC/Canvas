@@ -1,16 +1,11 @@
 --- a/net/minecraft/world/level/material/FlowingFluid.java
 +++ b/net/minecraft/world/level/material/FlowingFluid.java
-@@ -340,30 +_,122 @@
+@@ -340,30 +_,145 @@
          final LevelReader level, final BlockPos pos, final int pass, final Direction from, final BlockState state, final FlowingFluid.SpreadContext context
      ) {
          int lowest = 1000;
-+        // Leaf start - optimize fluid spread
-+        it.unimi.dsi.fastutil.longs.LongSet visited = ((ServerLevel) level).getCurrentWorldData().getCanvasWorldData().slopeDistanceCacheVisited;
-+        SlopeDistanceNodeDeque queue = ((ServerLevel) level).getCurrentWorldData().getCanvasWorldData().slopeDistanceCacheQueue;
-+        visited.clear();
-+        queue.clear();
- 
-         for (Direction direction : Direction.Plane.HORIZONTAL) {
+-
+-        for (Direction direction : Direction.Plane.HORIZONTAL) {
 -            if (direction != from) {
 -                BlockPos testPos = pos.relative(direction);
 -                BlockState testState = context.getBlockStateIfLoaded(testPos); // Paper - Prevent chunk loading from fluid flowing
@@ -27,9 +22,17 @@
 -                            lowest = v;
 -                        }
 -                    }
++        // Leaf start - optimize fluid spread
++        it.unimi.dsi.fastutil.longs.LongSet visited = ((ServerLevel) level).getCurrentWorldData().getCanvasWorldData().slopeDistanceCacheVisited;
++        SlopeDistanceNodeDeque queue = ((ServerLevel) level).getCurrentWorldData().getCanvasWorldData().slopeDistanceCacheQueue;
++        visited.clear();
++        queue.clear();
++        final BlockPos.MutableBlockPos testPos = new BlockPos.MutableBlockPos(); // Canvas - search without allocating positions
++
++        for (Direction direction : CANVAS_HORIZONTAL) { // Canvas - iterate the sides without allocating an iterator
 +            if (direction == from) continue;
 +
-+            BlockPos testPos = pos.relative(direction); // immutable
++            testPos.setWithOffset(pos, direction); // Canvas - search without allocating positions
 +            BlockState testState = context.getBlockStateIfLoaded(testPos); // Paper - Prevent chunk loading from fluid flowing
 +            if (testState == null) continue; // Paper - Prevent chunk loading from fluid flowing
 +
@@ -40,36 +43,43 @@
 +            }
 +            long visitKey = encodeSlopeNode(testPos, direction.getOpposite());
 +            if (visited.add(visitKey)) {
-+                queue.add(new FlowingFluid.SlopeDistanceNode(testPos, pass, direction.getOpposite(), testState));
++                queue.add(testPos.asLong(), pass, direction.getOpposite(), testState); // Canvas - queue nodes without allocating them
 +            }
 +        }
 +
 +        int slopeFindDistance = this.getSlopeFindDistance(level);
++        final BlockPos.MutableBlockPos currentPos = new BlockPos.MutableBlockPos(); // Canvas - search without allocating positions
 +
 +        // Process the queue
 +        while (!queue.isEmpty()) {
-+            FlowingFluid.SlopeDistanceNode current = queue.poll();
-+            if (context.isHole(current.pos)) {
-+                return current.pass;
++            // Canvas start - queue nodes without allocating them
++            final int head = queue.poll();
++            currentPos.set(queue.positions[head]);
++            final int currentPass = queue.passes[head];
++            final Direction currentFrom = queue.froms[head];
++            final BlockState currentState = queue.states[head];
++            // Canvas end - queue nodes without allocating them
++            if (context.isHole(currentPos)) {
++                return currentPass;
 +            }
 +
-+            if (current.pass >= slopeFindDistance) continue;
++            if (currentPass >= slopeFindDistance) continue;
 +
-+            for (Direction direction : Direction.Plane.HORIZONTAL) {
-+                if (direction == current.from) continue;
++            for (Direction direction : CANVAS_HORIZONTAL) { // Canvas - iterate the sides without allocating an iterator
++                if (direction == currentFrom) continue;
 +
-+                BlockPos nextTestPos = current.pos.relative(direction); // immutable
-+                BlockState nextTestState = context.getBlockStateIfLoaded(nextTestPos); // Paper - Prevent chunk loading from fluid flowing
++                testPos.setWithOffset(currentPos, direction); // Canvas - search without allocating positions
++                BlockState nextTestState = context.getBlockStateIfLoaded(testPos); // Paper - Prevent chunk loading from fluid flowing
 +                if (nextTestState == null) continue; // Paper - Prevent chunk loading from fluid flowing
 +
 +                FluidState nextTestFluidState = nextTestState.getFluidState();
-+                if (!this.canPassThrough(level, this.getFlowing(), current.pos, current.state, direction, nextTestPos, nextTestState, nextTestFluidState)) {
++                if (!this.canPassThrough(level, this.getFlowing(), currentPos, currentState, direction, testPos, nextTestState, nextTestFluidState)) {
 +                    continue;
                  }
 +
-+                long visitKey = encodeSlopeNode(nextTestPos, direction.getOpposite());
++                long visitKey = encodeSlopeNode(testPos, direction.getOpposite());
 +                if (visited.add(visitKey)) {
-+                    queue.add(new FlowingFluid.SlopeDistanceNode(nextTestPos, current.pass + 1, direction.getOpposite(), nextTestState));
++                    queue.add(testPos.asLong(), currentPass + 1, direction.getOpposite(), nextTestState); // Canvas - queue nodes without allocating them
 +                } // Leaf end - optimize fluid spread
              }
          }
@@ -82,59 +92,74 @@
 +        return ((pos.getX() & 67108863L) << 38) | ((pos.getZ() & 67108863L) << 12) | (from.ordinal() & 0x0F);
 +    }
 +
++    // Canvas start - queue nodes without allocating them
 +    public static class SlopeDistanceNodeDeque {
-+        private SlopeDistanceNode[] array;
++        private long[] positions;
++        private int[] passes;
++        private Direction[] froms;
++        private BlockState[] states;
 +        private int length;
 +        private int start;
 +        private int end;
 +
 +        public SlopeDistanceNodeDeque() {
-+            array = new SlopeDistanceNode[256];
-+            length = array.length;
++            this.positions = new long[256];
++            this.passes = new int[256];
++            this.froms = new Direction[256];
++            this.states = new BlockState[256];
++            this.length = 256;
 +        }
-+
-+            /*
-+        private int size() {
-+            int apparent = end - start;
-+            return apparent >= 0 ? apparent : length + apparent;
-+        }
-+        */
 +
 +        private void clear() {
-+            start = 0;
-+            end = 0;
++            this.start = 0;
++            this.end = 0;
 +        }
 +
 +        private boolean isEmpty() {
-+            return end == start || (end <= start && length == start - end);
++            return this.end == this.start || (this.end <= this.start && this.length == this.start - this.end);
 +        }
 +
-+        private SlopeDistanceNode poll() {
-+            final SlopeDistanceNode t = array[start];
-+            if (++start == length) start = 0;
-+            return t;
++        // the polled node's index, read before the next add can reuse it
++        private int poll() {
++            final int head = this.start;
++            if (++this.start == this.length) this.start = 0;
++            return head;
 +        }
 +
-+        private void add(final SlopeDistanceNode node) {
-+            array[end++] = node;
-+            if (end == length) end = 0;
-+            if (end == start) resize(length, 2 * length);
++        private void add(final long position, final int pass, final Direction from, final BlockState state) {
++            this.positions[this.end] = position;
++            this.passes[this.end] = pass;
++            this.froms[this.end] = from;
++            this.states[this.end] = state;
++            if (++this.end == this.length) this.end = 0;
++            if (this.end == this.start) this.resize(this.length, 2 * this.length);
 +        }
 +
 +        private void resize(final int size, final int newLength) {
-+            final SlopeDistanceNode[] newArray = new SlopeDistanceNode[newLength];
++            final long[] newPositions = new long[newLength];
++            final int[] newPasses = new int[newLength];
++            final Direction[] newFroms = new Direction[newLength];
++            final BlockState[] newStates = new BlockState[newLength];
 +            if (size != 0) {
-+                System.arraycopy(array, start, newArray, 0, length - start);
-+                System.arraycopy(array, 0, newArray, length - start, end);
++                System.arraycopy(this.positions, this.start, newPositions, 0, this.length - this.start);
++                System.arraycopy(this.positions, 0, newPositions, this.length - this.start, this.end);
++                System.arraycopy(this.passes, this.start, newPasses, 0, this.length - this.start);
++                System.arraycopy(this.passes, 0, newPasses, this.length - this.start, this.end);
++                System.arraycopy(this.froms, this.start, newFroms, 0, this.length - this.start);
++                System.arraycopy(this.froms, 0, newFroms, this.length - this.start, this.end);
++                System.arraycopy(this.states, this.start, newStates, 0, this.length - this.start);
++                System.arraycopy(this.states, 0, newStates, this.length - this.start, this.end);
 +            }
-+            start = 0;
-+            end = size;
-+            array = newArray;
-+            length = newLength;
++            this.start = 0;
++            this.end = size;
++            this.positions = newPositions;
++            this.passes = newPasses;
++            this.froms = newFroms;
++            this.states = newStates;
++            this.length = newLength;
 +        }
 +    }
-+
-+    private record SlopeDistanceNode(BlockPos pos, int pass, Direction from, BlockState state) {}
++    // Canvas end - queue nodes without allocating them
 +    // Leaf end - optimize fluid spread
  
      public boolean isWaterHole(
