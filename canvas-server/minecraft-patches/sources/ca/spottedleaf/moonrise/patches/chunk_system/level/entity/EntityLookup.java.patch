@@ -1,22 +1,133 @@
 --- a/ca/spottedleaf/moonrise/patches/chunk_system/level/entity/EntityLookup.java
 +++ b/ca/spottedleaf/moonrise/patches/chunk_system/level/entity/EntityLookup.java
-@@ -701,6 +_,7 @@
+@@ -701,43 +_,90 @@
  
      public <T extends Entity> void getEntities(final Class<? extends T> clazz, final Entity except, final AABB box, final List<? super T> into,
                                                 final Predicate<? super T> predicate) {
-+        final int classIndex = io.canvasmc.canvas.util.EntityClassIndex.of(clazz); // Canvas - index entity classes
-         final int minChunkX = (Mth.floor(box.minX) - 2) >> 4;
-         final int minChunkZ = (Mth.floor(box.minZ) - 2) >> 4;
-         final int maxChunkX = (Mth.floor(box.maxX) + 2) >> 4;
-@@ -732,7 +_,7 @@
-                             continue;
-                         }
- 
+-        final int minChunkX = (Mth.floor(box.minX) - 2) >> 4;
+-        final int minChunkZ = (Mth.floor(box.minZ) - 2) >> 4;
+-        final int maxChunkX = (Mth.floor(box.maxX) + 2) >> 4;
+-        final int maxChunkZ = (Mth.floor(box.maxZ) + 2) >> 4;
+-
+-        final int minRegionX = minChunkX >> REGION_SHIFT;
+-        final int minRegionZ = minChunkZ >> REGION_SHIFT;
+-        final int maxRegionX = maxChunkX >> REGION_SHIFT;
+-        final int maxRegionZ = maxChunkZ >> REGION_SHIFT;
+-
+-        for (int currRegionZ = minRegionZ; currRegionZ <= maxRegionZ; ++currRegionZ) {
+-            final int minZ = currRegionZ == minRegionZ ? minChunkZ & REGION_MASK : 0;
+-            final int maxZ = currRegionZ == maxRegionZ ? maxChunkZ & REGION_MASK : REGION_MASK;
+-
+-            for (int currRegionX = minRegionX; currRegionX <= maxRegionX; ++currRegionX) {
+-                final ChunkSlicesRegion region = this.getRegion(currRegionX, currRegionZ);
+-
+-                if (region == null) {
+-                    continue;
+-                }
+-
+-                final int minX = currRegionX == minRegionX ? minChunkX & REGION_MASK : 0;
+-                final int maxX = currRegionX == maxRegionX ? maxChunkX & REGION_MASK : REGION_MASK;
+-
+-                for (int currZ = minZ; currZ <= maxZ; ++currZ) {
+-                    for (int currX = minX; currX <= maxX; ++currX) {
+-                        final ChunkEntitySlices chunk = region.get(currX | (currZ << REGION_SHIFT));
+-                        if (chunk == null || !chunk.status.isOrAfter(FullChunkStatus.FULL)) {
+-                            continue;
+-                        }
+-
 -                        chunk.getEntities(clazz, except, box, into, predicate);
+-                    }
+-                }
+-            }
+-        }
+-    }
++        final int classIndex = io.canvasmc.canvas.util.EntityClassIndex.of(clazz); // Canvas - index entity classes
++        final int minChunkX = (Mth.floor(box.minX) - 2) >> 4;
++        final int minChunkZ = (Mth.floor(box.minZ) - 2) >> 4;
++        final int maxChunkX = (Mth.floor(box.maxX) + 2) >> 4;
++        final int maxChunkZ = (Mth.floor(box.maxZ) + 2) >> 4;
++
++        final int minRegionX = minChunkX >> REGION_SHIFT;
++        final int minRegionZ = minChunkZ >> REGION_SHIFT;
++        final int maxRegionX = maxChunkX >> REGION_SHIFT;
++        final int maxRegionZ = maxChunkZ >> REGION_SHIFT;
++
++        for (int currRegionZ = minRegionZ; currRegionZ <= maxRegionZ; ++currRegionZ) {
++            final int minZ = currRegionZ == minRegionZ ? minChunkZ & REGION_MASK : 0;
++            final int maxZ = currRegionZ == maxRegionZ ? maxChunkZ & REGION_MASK : REGION_MASK;
++
++            for (int currRegionX = minRegionX; currRegionX <= maxRegionX; ++currRegionX) {
++                final ChunkSlicesRegion region = this.getRegion(currRegionX, currRegionZ);
++
++                if (region == null) {
++                    continue;
++                }
++
++                final int minX = currRegionX == minRegionX ? minChunkX & REGION_MASK : 0;
++                final int maxX = currRegionX == maxRegionX ? maxChunkX & REGION_MASK : REGION_MASK;
++
++                for (int currZ = minZ; currZ <= maxZ; ++currZ) {
++                    for (int currX = minX; currX <= maxX; ++currX) {
++                        final ChunkEntitySlices chunk = region.get(currX | (currZ << REGION_SHIFT));
++                        if (chunk == null || !chunk.status.isOrAfter(FullChunkStatus.FULL)) {
++                            continue;
++                        }
++
 +                        chunk.getEntities(classIndex, clazz, except, box, into, predicate); // Canvas - index entity classes
-                     }
-                 }
-             }
++                    }
++                }
++            }
++        }
++    }
++
++    // Canvas start - skip empty container entity searches
++    // true when no full chunk the class search over this box walks holds an entity of the class, so the search finds none
++    public boolean canvas$noneOfClass(final int classIndex, final Class<? extends Entity> clazz, final AABB box) {
++        final int minChunkX = (Mth.floor(box.minX) - 2) >> 4;
++        final int minChunkZ = (Mth.floor(box.minZ) - 2) >> 4;
++        final int maxChunkX = (Mth.floor(box.maxX) + 2) >> 4;
++        final int maxChunkZ = (Mth.floor(box.maxZ) + 2) >> 4;
++
++        final int minRegionX = minChunkX >> REGION_SHIFT;
++        final int minRegionZ = minChunkZ >> REGION_SHIFT;
++        final int maxRegionX = maxChunkX >> REGION_SHIFT;
++        final int maxRegionZ = maxChunkZ >> REGION_SHIFT;
++
++        for (int currRegionZ = minRegionZ; currRegionZ <= maxRegionZ; ++currRegionZ) {
++            final int minZ = currRegionZ == minRegionZ ? minChunkZ & REGION_MASK : 0;
++            final int maxZ = currRegionZ == maxRegionZ ? maxChunkZ & REGION_MASK : REGION_MASK;
++
++            for (int currRegionX = minRegionX; currRegionX <= maxRegionX; ++currRegionX) {
++                final ChunkSlicesRegion region = this.getRegion(currRegionX, currRegionZ);
++
++                if (region == null) {
++                    continue;
++                }
++
++                final int minX = currRegionX == minRegionX ? minChunkX & REGION_MASK : 0;
++                final int maxX = currRegionX == maxRegionX ? maxChunkX & REGION_MASK : REGION_MASK;
++
++                for (int currZ = minZ; currZ <= maxZ; ++currZ) {
++                    for (int currX = minX; currX <= maxX; ++currX) {
++                        final ChunkEntitySlices chunk = region.get(currX | (currZ << REGION_SHIFT));
++                        if (chunk == null || !chunk.status.isOrAfter(FullChunkStatus.FULL)) {
++                            continue;
++                        }
++
++                        if (!chunk.canvas$noneOfClass(classIndex, clazz)) {
++                            return false;
++                        }
++                    }
++                }
++            }
++        }
++
++        return true;
++    }
++    // Canvas end - skip empty container entity searches
+ 
+     //////// Limited ////////
+ 
 @@ -827,6 +_,7 @@
  
      public <T extends Entity> void getEntities(final Class<? extends T> clazz, final Entity except, final AABB box, final List<? super T> into,
