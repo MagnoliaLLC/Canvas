@@ -1,12 +1,13 @@
 --- a/net/minecraft/world/level/block/state/BlockBehaviour.java
 +++ b/net/minecraft/world/level/block/state/BlockBehaviour.java
-@@ -490,6 +_,44 @@
+@@ -490,6 +_,46 @@
          private boolean emptyConstantCollisionShape;
          private VoxelShape constantCollisionShape;
          private boolean isSpecialCollidingBlock;
 +        // Canvas start - optimize path type cache
 +        // inspired by Cache-block-state-tags patch from Leaf
 +        public byte pathType; // 8bit, better this enum, as it only has 25 values
++        public boolean canvas$neighborDanger; // Canvas - skip the neighbor scan when nothing in the block's section is a danger to a neighbor
 +        public int tagFlag; // caches blockstate flags
 +
 +        // Canvas start - skip inside-block checks when no block can act
@@ -32,6 +33,7 @@
 +            this.tagFlag = io.canvasmc.canvas.world.block.BlockTags.init(asState());
 +            this.canvas$noInsideEffect = (this.tagFlag & io.canvasmc.canvas.world.block.BlockTags.FLUID) == 0 && !CANVAS_ENTITY_INSIDE.get(this.getBlock().getClass()); // Canvas - skip inside-block checks when no block can act
 +            this.pathType = (byte) net.minecraft.world.level.pathfinder.WalkNodeEvaluator.canvas$getPathTypeFromBlockState(this.asState()).ordinal();
++            this.canvas$neighborDanger = net.minecraft.world.level.pathfinder.WalkNodeEvaluator.canvas$isNeighborDanger(net.minecraft.world.level.pathfinder.PathType.values()[this.pathType]); // Canvas - skip the neighbor scan when nothing in the block's section is a danger to a neighbor
 +        }
 +
 +        public static void canvas$initPathTypeCache() {
