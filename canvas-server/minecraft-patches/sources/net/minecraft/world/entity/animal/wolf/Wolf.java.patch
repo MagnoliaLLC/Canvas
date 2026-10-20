@@ -1,0 +1,42 @@
+--- a/net/minecraft/world/entity/animal/wolf/Wolf.java
++++ b/net/minecraft/world/entity/animal/wolf/Wolf.java
+@@ -316,6 +_,7 @@
+ 
+         if (!this.level().isClientSide()) {
+             this.updatePersistentAnger((ServerLevel)this.level(), true);
++            this.canvas$syncAnger(); // Canvas - sync an anger extension only when the client's copy runs low
+         }
+     }
+ 
+@@ -576,14 +_,29 @@
+         return 8;
+     }
+ 
++    // Canvas start - sync an anger extension only when the client's copy runs low
++    private static final long CANVAS_ANGER_SYNC_MARGIN = 100L;
++    private long canvas$angerEndTime = -1L;
++
++    private void canvas$syncAnger() {
++        final long synced = this.entityData.get(DATA_ANGER_END_TIME);
++        if (this.canvas$angerEndTime < synced || synced - this.level().getGameTime() <= CANVAS_ANGER_SYNC_MARGIN) {
++            this.entityData.set(DATA_ANGER_END_TIME, this.canvas$angerEndTime);
++        }
++    }
++    // Canvas end - sync an anger extension only when the client's copy runs low
++
+     @Override
+     public long getPersistentAngerEndTime() {
+-        return this.entityData.get(DATA_ANGER_END_TIME);
++        return this.canvas$angerEndTime; // Canvas - sync an anger extension only when the client's copy runs low
+     }
+ 
+     @Override
+     public void setPersistentAngerEndTime(final long endTime) {
+-        this.entityData.set(DATA_ANGER_END_TIME, endTime);
++        // Canvas start - sync an anger extension only when the client's copy runs low
++        this.canvas$angerEndTime = endTime;
++        this.canvas$syncAnger();
++        // Canvas end - sync an anger extension only when the client's copy runs low
+     }
+ 
+     @Override
