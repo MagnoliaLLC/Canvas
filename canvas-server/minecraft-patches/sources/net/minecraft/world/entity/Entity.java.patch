@@ -306,6 +306,23 @@
              }
  
              this.setPose(Pose.STANDING);
+@@ -3978,6 +_,16 @@
+             newAmount = event.getAmount();
+         }
+ 
++        // Canvas start - keep a mob's air supply off the wire
++        if (!(this instanceof ServerPlayer)) {
++            final SynchedEntityData.DataItem<Integer> item = this.entityData.getItem(DATA_AIR_SUPPLY_ID);
++            if (item.getValue() != newAmount) {
++                item.setValue(newAmount);
++                this.onSyncedDataUpdated(DATA_AIR_SUPPLY_ID);
++            }
++            return;
++        }
++        // Canvas end - keep a mob's air supply off the wire
+         this.entityData.set(DATA_AIR_SUPPLY_ID, newAmount);
+         // Paper end - EntityAirChangeEvent
+     }
 @@ -4065,6 +_,7 @@
      }
  
