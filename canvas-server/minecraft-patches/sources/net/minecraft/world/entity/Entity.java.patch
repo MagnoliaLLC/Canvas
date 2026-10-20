@@ -269,6 +269,35 @@
                  if (this.level.paperConfig().collisions.onlyPlayersCollide && !(entity instanceof ServerPlayer || this instanceof ServerPlayer)) return; // Paper - Collision option for requiring a player participant
                  // Paper start - Add EntityCollideWithEntity Event
                  if (io.papermc.paper.event.entity.EntityCollideWithEntityEvent.getHandlerList().getRegisteredListeners().length != 0 &&
+@@ -2546,16 +_,26 @@
+                     xa *= 0.05F;
+                     za *= 0.05F;
+                     if (!this.isVehicle() && this.isPushable()) {
+-                        this.push(-xa, 0.0, -za);
++                        this.canvas$collisionPush(-xa, -za); // Canvas - collision pushes wait for the next tracker update
+                     }
+ 
+                     if (!entity.isVehicle() && entity.isPushable()) {
+-                        entity.push(xa, 0.0, za);
++                        entity.canvas$collisionPush(xa, za); // Canvas - collision pushes wait for the next tracker update
+                     }
+                 }
+             }
+         }
+     }
++
++    // Canvas start - collision pushes wait for the next tracker update
++    private void canvas$collisionPush(final double xa, final double za) {
++        final boolean needsSync = this.needsSync;
++        this.push(xa, 0.0, za);
++        if (!(this instanceof ServerPlayer) && this.getType().hasUpdateInterval()) {
++            this.needsSync = needsSync;
++        }
++    }
++    // Canvas end - collision pushes wait for the next tracker update
+ 
+     public void push(final Vec3 impulse) {
+         if (impulse.isFinite()) {
 @@ -3518,6 +_,7 @@
              } // Folia - region threading - suppress entire event logic during worldgen
              if (this.isPassenger()) {
