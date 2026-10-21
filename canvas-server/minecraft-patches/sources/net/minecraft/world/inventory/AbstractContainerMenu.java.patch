@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/inventory/AbstractContainerMenu.java
 +++ b/net/minecraft/world/inventory/AbstractContainerMenu.java
-@@ -260,9 +_,10 @@
+@@ -260,9 +_,11 @@
      }
  
      public void broadcastChanges() {
@@ -8,6 +8,7 @@
          for (int i = 0; i < this.slots.size(); i++) {
              ItemStack current = this.slots.get(i).getItem();
 -            Supplier<ItemStack> currentCopy = Suppliers.memoize(current::copy);
++            if (ItemStack.matches(this.lastSlots.get(i), current) && (this.suppressRemoteUpdates || this.remoteSlots.get(i).matches(current))) continue; // Canvas - skip slots that changed for nobody
 +            currentCopy.reset(current); // Canvas - one lazy copy per broadcast, reset for each slot
              this.triggerSlotListeners(i, current, currentCopy);
              this.synchronizeSlotToRemote(i, current, currentCopy);
