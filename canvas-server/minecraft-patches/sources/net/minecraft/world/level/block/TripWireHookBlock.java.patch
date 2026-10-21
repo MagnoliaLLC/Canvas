@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/block/TripWireHookBlock.java
++++ b/net/minecraft/world/level/block/TripWireHookBlock.java
+@@ -130,7 +_,7 @@
+                     break;
+                 }
+ 
+-                if (!wireState.is(Blocks.TRIPWIRE) && i != wireSource) {
++                if ((!wireState.is(Blocks.TRIPWIRE) || wireState.getValue(TripWireBlock.DISARMED)) && i != wireSource) { // Canvas - keep disarmed wires static
+                     wireStates[i] = null;
+                     attached = false;
+                 } else {
