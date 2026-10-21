@@ -1,5 +1,19 @@
 --- a/src/main/java/io/papermc/paper/adventure/AdventureComponent.java
 +++ b/src/main/java/io/papermc/paper/adventure/AdventureComponent.java
+@@ -57,6 +_,13 @@
+         return this.deepConverted().getSiblings();
+     }
+ 
++    // Canvas start - answer whether an adventure component is plain text without converting it
++    @Override
++    public @Nullable String tryCollapseToString() {
++        return this.adventure instanceof TextComponent text && text.children().isEmpty() && text.style().isEmpty() ? text.content() : null;
++    }
++    // Canvas end - answer whether an adventure component is plain text without converting it
++
+     @Override
+     public MutableComponent plainCopy() {
+         return this.deepConverted().plainCopy();
 @@ -83,6 +_,7 @@
  
      @Override
