@@ -1,5 +1,34 @@
 --- a/src/main/java/io/papermc/paper/adventure/AdventureComponent.java
 +++ b/src/main/java/io/papermc/paper/adventure/AdventureComponent.java
+@@ -13,6 +_,13 @@
+ import org.jetbrains.annotations.Nullable;
+ 
+ public final class AdventureComponent implements net.minecraft.network.chat.Component {
++    // Canvas start - optimize component conversion
++    private static final com.google.common.cache.Cache<Component, net.minecraft.network.chat.Component> CONVERTED = com.google.common.cache.CacheBuilder.newBuilder()
++        .maximumSize(8192L)
++        .weakKeys()
++        .concurrencyLevel(16)
++        .build();
++    // Canvas end - optimize component conversion
+     final Component adventure;
+     private net.minecraft.network.chat.@MonotonicNonNull Component vanilla;
+ 
+@@ -23,7 +_,13 @@
+     public net.minecraft.network.chat.Component deepConverted() {
+         net.minecraft.network.chat.Component vanilla = this.vanilla;
+         if (vanilla == null) {
+-            vanilla = PaperAdventure.WRAPPER_AWARE_SERIALIZER.serialize(this.adventure);
++            // Canvas start - optimize component conversion
++            vanilla = CONVERTED.getIfPresent(this.adventure);
++            if (vanilla == null) {
++                vanilla = PaperAdventure.WRAPPER_AWARE_SERIALIZER.serialize(this.adventure);
++                CONVERTED.put(this.adventure, vanilla);
++            }
++            // Canvas end - optimize component conversion
+             this.vanilla = vanilla;
+         }
+         return vanilla;
 @@ -57,6 +_,13 @@
          return this.deepConverted().getSiblings();
      }
