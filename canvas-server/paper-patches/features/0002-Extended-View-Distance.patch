@@ -5,10 +5,10 @@ Subject: [PATCH] Extended View Distance
 
 
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-index 09107cf88f5b24803ce912c47c9cd4a0ff215fe7..06cef55ea7d34ae6e4471e5f04e5fa82db055616 100644
+index 83ea3a70e5d5b0589e2fb860c1fd92bbb9439c93..167af25488247d59a3156daa02fa24e7b03e5bbb 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-@@ -3369,6 +3369,18 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3370,6 +3370,18 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
      public void setSendViewDistance(final int viewDistance) {
          FeatureHooks.setSendViewDistance(this.getHandle(), viewDistance); // Paper - chunk system
      }
