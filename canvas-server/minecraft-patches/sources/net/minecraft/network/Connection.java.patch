@@ -1,0 +1,93 @@
+--- a/net/minecraft/network/Connection.java
++++ b/net/minecraft/network/Connection.java
+@@ -578,6 +_,29 @@
+         }
+     }
+ 
++    // Canvas start - optimize packet sending
++    private void sendPackets(final java.util.List<PacketSendAction> sends) {
++        if (sends.size() == 1) {
++            final PacketSendAction send = sends.getFirst();
++            this.sendPacket(send.packet, send.listener, send.flush);
++            return;
++        }
++
++        this.sentPackets += sends.size();
++        this.channel.eventLoop().execute(() -> {
++            boolean flush = false;
++            for (final PacketSendAction send : sends) {
++                this.doSendPacket(send.packet, send.listener, false);
++                flush |= send.flush;
++            }
++
++            if (flush) {
++                this.channel.flush();
++            }
++        });
++    }
++    // Canvas end - optimize packet sending
++
+     private void doSendPacket(final Packet<?> packet, final @Nullable ChannelFutureListener listener, final boolean flush) {
+         // Paper start - Optimize network
+         final net.minecraft.server.level.ServerPlayer player = this.getPlayer();
+@@ -664,6 +_,10 @@
+                     queue = (ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue<WrappedConsumer>)this.pendingActions;
+ 
+                 WrappedConsumer holder;
++                // Canvas start - optimize packet sending
++                final boolean inEventLoop = this.channel.eventLoop().inEventLoop();
++                java.util.List<PacketSendAction> sends = null;
++                // Canvas end - optimize packet sending
+                 for (;;) {
+                     // synchronise so that queue clears appear atomic
+                     synchronized (queue) {
+@@ -673,9 +_,30 @@
+                         break;
+                     }
+ 
++                    // Canvas start - optimize packet sending
++                    if (!inEventLoop && holder instanceof PacketSendAction send) {
++                        if (sends == null) {
++                            sends = new java.util.ArrayList<>();
++                        }
++                        sends.add(send);
++                        continue;
++                    }
++
++                    if (sends != null) {
++                        this.sendPackets(sends);
++                        sends = null;
++                    }
++                    // Canvas end - optimize packet sending
++
+                     holder.accept(this);
+                 }
+ 
++                // Canvas start - optimize packet sending
++                if (sends != null) {
++                    this.sendPackets(sends);
++                }
++                // Canvas end - optimize packet sending
++
+             } finally {
+                 if (set) {
+                     this.flushingQueue.set(false);
+@@ -1139,10 +_,18 @@
+ 
+     private static final class PacketSendAction extends WrappedConsumer {
+         private final Packet<?> packet;
++        // Canvas start - optimize packet sending
++        private final @Nullable ChannelFutureListener listener;
++        private final boolean flush;
++        // Canvas end - optimize packet sending
+ 
+         private PacketSendAction(final Packet<?> packet, @Nullable final ChannelFutureListener channelFutureListener, final boolean flush) {
+             super(connection -> connection.sendPacket(packet, channelFutureListener, flush));
+             this.packet = packet;
++            // Canvas start - optimize packet sending
++            this.listener = channelFutureListener;
++            this.flush = flush;
++            // Canvas end - optimize packet sending
+         }
+     }
+     // Paper end - Optimize network
