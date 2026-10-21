@@ -1,5 +1,19 @@
 --- a/src/main/java/io/papermc/paper/adventure/AdventureComponent.java
 +++ b/src/main/java/io/papermc/paper/adventure/AdventureComponent.java
+@@ -57,6 +_,13 @@
+         return this.deepConverted().getSiblings();
+     }
+ 
++    // Canvas start - optimize component conversion
++    @Override
++    public @Nullable String tryCollapseToString() {
++        return this.adventure instanceof TextComponent text && text.children().isEmpty() && text.style().isEmpty() ? text.content() : null;
++    }
++    // Canvas end - optimize component conversion
++
+     @Override
+     public MutableComponent plainCopy() {
+         return this.deepConverted().plainCopy();
 @@ -83,6 +_,7 @@
  
      @Override
