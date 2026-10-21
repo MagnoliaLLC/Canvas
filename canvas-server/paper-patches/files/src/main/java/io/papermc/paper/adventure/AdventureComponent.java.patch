@@ -1,5 +1,28 @@
 --- a/src/main/java/io/papermc/paper/adventure/AdventureComponent.java
 +++ b/src/main/java/io/papermc/paper/adventure/AdventureComponent.java
+@@ -20,10 +_,21 @@
+         this.adventure = adventure;
+     }
+ 
++    // Canvas start - convert an adventure component once for every packet it is sent in
++    private static final com.google.common.cache.Cache<Component, net.minecraft.network.chat.Component> CONVERTED =
++        com.google.common.cache.CacheBuilder.newBuilder().weakKeys().maximumSize(8192).concurrencyLevel(16).build();
++    // Canvas end - convert an adventure component once for every packet it is sent in
++
+     public net.minecraft.network.chat.Component deepConverted() {
+         net.minecraft.network.chat.Component vanilla = this.vanilla;
+         if (vanilla == null) {
+-            vanilla = PaperAdventure.WRAPPER_AWARE_SERIALIZER.serialize(this.adventure);
++            // Canvas start - convert an adventure component once for every packet it is sent in
++            vanilla = CONVERTED.getIfPresent(this.adventure);
++            if (vanilla == null) {
++                vanilla = PaperAdventure.WRAPPER_AWARE_SERIALIZER.serialize(this.adventure);
++                CONVERTED.put(this.adventure, vanilla);
++            }
++            // Canvas end - convert an adventure component once for every packet it is sent in
+             this.vanilla = vanilla;
+         }
+         return vanilla;
 @@ -57,6 +_,13 @@
          return this.deepConverted().getSiblings();
      }
