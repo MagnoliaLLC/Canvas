@@ -1,0 +1,17 @@
+--- a/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java
++++ b/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java
+@@ -201,6 +_,14 @@
+                 map.put(EntityTypes.LLAMA_SPIT, IntOr.Disabled.DISABLED);
+             });
+ 
++            // Canvas start - look despawn ranges up by ordinal
++            // every mob reads its category's range each tick it may despawn; the values are the same pairs, only the lookup is an array index
++            @PostProcess
++            public void indexDespawnRanges() {
++                this.despawnRanges = new java.util.EnumMap<>(this.despawnRanges);
++            }
++            // Canvas end - look despawn ranges up by ordinal
++
+             @PostProcess
+             public void precomputeDespawnDistances() throws SerializationException {
+                 for (final Map.Entry<MobCategory, DespawnRangePair> entry : this.despawnRanges.entrySet()) {
