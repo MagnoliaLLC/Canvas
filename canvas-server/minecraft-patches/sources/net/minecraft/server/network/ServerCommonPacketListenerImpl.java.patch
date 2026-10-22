@@ -1,5 +1,22 @@
 --- a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
+@@ -120,12 +_,16 @@
+             if (ka.challengeId() == packet.getId()) {
+                 itr.remove();
+ 
++                if (this.canvas$keepAliveKickRequested) return; // Canvas - kick once per keepalive violation
++                this.canvas$keepAliveKickRequested = true; // Canvas - kick once per keepalive violation
+                 LOGGER.info("Disconnecting {} for sending keepalive response ({}) out-of-order!", this.playerProfile().name(), packet.getId());
+                 this.disconnectAsync(TIMEOUT_DISCONNECTION_MESSAGE, io.papermc.paper.connection.DisconnectionReason.TIMEOUT);
+                 return;
+             }
+         }
+ 
++        if (this.canvas$keepAliveKickRequested) return; // Canvas - kick once per keepalive violation
++        this.canvas$keepAliveKickRequested = true; // Canvas - kick once per keepalive violation
+         LOGGER.info("Disconnecting {} for sending keepalive response ({}) without matching challenge!", this.playerProfile().name(), packet.getId());
+         this.disconnectAsync(TIMEOUT_DISCONNECTION_MESSAGE, io.papermc.paper.connection.DisconnectionReason.TIMEOUT);
+         // Paper end - improve keepalives
 @@ -305,11 +_,47 @@
      }
      // Canvas end - optimize flush calls with region threading
@@ -49,3 +66,22 @@
          // CraftBukkit start
          if (packet == null) {
              return;
+@@ -348,6 +_,10 @@
+         // Paper end - kick event causes
+     }
+ 
++    // Canvas start - kick once per keepalive violation
++    private volatile boolean canvas$keepAliveKickRequested;
++    // Canvas end - kick once per keepalive violation
++
+     public void disconnect(final DisconnectionDetails details) {
+         // CraftBukkit start - fire PlayerKickEvent
+         if (!this.connection.isConnected()) {
+@@ -389,6 +_,7 @@
+ 
+             if (event.isCancelled()) {
+                 // Do not kick the player
++                this.canvas$keepAliveKickRequested = false; // Canvas - kick once per keepalive violation
+                 return;
+             }
+ 
