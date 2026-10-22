@@ -1,13 +1,45 @@
 --- a/net/minecraft/world/entity/ai/sensing/Sensing.java
 +++ b/net/minecraft/world/entity/ai/sensing/Sensing.java
-@@ -7,8 +_,8 @@
+@@ -7,33 +_,34 @@
  
  public class Sensing {
      private final Mob mob;
 -    private final IntSet seen = new IntOpenHashSet();
 -    private final IntSet unseen = new IntOpenHashSet();
-+    private final IntSet seen = new IntOpenHashSet(2); // Canvas - size sensing sets for the few entities a mob sees
-+    private final IntSet unseen = new IntOpenHashSet(2); // Canvas - size sensing sets for the few entities a mob sees
++    private final it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap seen = new it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap(4); // Canvas - size sensing sets for the few entities a mob sees // Canvas - Reduce line of sight updates and cache lookups
  
      public Sensing(final Mob mob) {
          this.mob = mob;
+     }
+ 
+     public void tick() {
+-        this.seen.clear();
+-        this.unseen.clear();
++        this.seen.clear(); // Canvas - Reduce line of sight updates and cache lookups
+     }
+ 
+     public boolean hasLineOfSight(final Entity target) {
+         int targetId = target.getId();
+-        if (this.seen.contains(targetId)) {
++        // Canvas start - Reduce line of sight updates and cache lookups
++        int cached = this.seen.get(targetId);
++        if (cached == 1) {
+             return true;
+         }
+ 
+-        if (this.unseen.contains(targetId)) {
++        if (cached == 2) {
+             return false;
+         }
++        // Canvas end - Reduce line of sight updates and cache lookups
+ 
+         boolean hasLineOfSight = this.mob.hasLineOfSight(target);
+         if (hasLineOfSight) {
+-            this.seen.add(targetId);
++            this.seen.put(targetId, 1); // Canvas - Reduce line of sight updates and cache lookups
+         } else {
+-            this.unseen.add(targetId);
++            this.seen.put(targetId, 2); // Canvas - Reduce line of sight updates and cache lookups
+         }
+ 
+         return hasLineOfSight;
