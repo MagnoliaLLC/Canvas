@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/chunk/PalettedContainer.java
++++ b/net/minecraft/world/level/chunk/PalettedContainer.java
+@@ -73,7 +_,7 @@
+     }
+ 
+     // Paper start - optimise palette reads
+-    private static <T> T readPalette(final PalettedContainer.Data<T> data, final int paletteIdx) {
++    public static <T> T readPalette(final PalettedContainer.Data<T> data, final int paletteIdx) { // Canvas - reduce PalettedContainer lookup in collisions - public
+         final Palette<T> palette = data.palette;
+         if (palette instanceof ca.spottedleaf.moonrise.patches.fast_palette.FastHashMapPalette<T> hashMapPalette) {
+             return hashMapPalette.valueFor(paletteIdx);
