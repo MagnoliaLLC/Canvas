@@ -34,7 +34,7 @@
      @Deprecated
      @VisibleForTesting
      public EnvironmentAttributeSystem setEnvironmentAttributes(final EnvironmentAttributeSystem environmentAttributes) {
-@@ -1065,71 +_,95 @@
+@@ -1065,71 +_,94 @@
      // Paper start - optimise random ticking
      private final io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource simpleRandom = io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource.INSTANCE; // Folia - region threading
  
@@ -59,8 +59,7 @@
 +
 +        final short[] tickingBlockCounts = chunk.canvas$getTickingBlockCounts();
 +        for (int sectionIndex = 0, sectionsLen = tickingBlockCounts.length; sectionIndex < sectionsLen; sectionIndex++) { // Canvas - optimize random tick
-+            final int tickingBlocks = tickingBlockCounts[sectionIndex];
-+            if (tickingBlocks == 0) continue;
++            if (tickingBlockCounts[sectionIndex] == 0) continue;
 +
 +            // Canvas start - optimize random tick
 +            // read the section on its first hit, the random draws stay where they are
@@ -98,7 +97,7 @@
 +                bitsLeft -= 12;
 +
 +                final int index = (int)((rndCache >>> bitsLeft) & 0xFFF);
-+                if (index >= tickingBlocks) continue;
++                if (index >= tickingBlockCounts[sectionIndex]) continue; // Canvas - optimize random tick
 +                // Canvas start - optimize random tick
 +                if (tickList == null) {
 +                    if (sections == null) {
