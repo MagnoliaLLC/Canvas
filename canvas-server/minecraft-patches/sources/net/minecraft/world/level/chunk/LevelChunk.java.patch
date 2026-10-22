@@ -45,16 +45,16 @@
 +        this.lightningTick = new java.util.Random().nextInt(100000) << 1; // Pufferfish - initialize lightning tick
 +        // Canvas start - keep per-chunk ticking block counts
 +        for (int i = 0; i < this.sections.length; ++i) {
-+            this.sections[i].canvas$attachTickingBlockCounts(this.canvas$tickingBlockCounts, i);
++            this.sections[i].canvas$attachRandomTickSchedule(this.canvas$randomTickSchedule, i);
 +        }
 +        // Canvas end - keep per-chunk ticking block counts
 +    }
 +
 +    // Canvas start - keep per-chunk ticking block counts
-+    private final short[] canvas$tickingBlockCounts = new short[this.sections.length];
++    private final io.canvasmc.canvas.world.chunk.RandomTickSchedule canvas$randomTickSchedule = new io.canvasmc.canvas.world.chunk.RandomTickSchedule(this.sections.length);
 +
-+    public short[] canvas$getTickingBlockCounts() {
-+        return this.canvas$tickingBlockCounts;
++    public io.canvasmc.canvas.world.chunk.RandomTickSchedule canvas$getRandomTickSchedule() {
++        return this.canvas$randomTickSchedule;
 +    }
 +    // Canvas end - keep per-chunk ticking block counts
  
