@@ -1,5 +1,13 @@
 --- a/net/minecraft/world/level/chunk/ChunkGenerator.java
 +++ b/net/minecraft/world/level/chunk/ChunkGenerator.java
+@@ -93,6 +_,7 @@
+     protected final BiomeSource biomeSource;
+     private final Supplier<List<FeatureSorter.StepFeatureData>> featuresPerStep;
+     public final Function<Holder<Biome>, BiomeGenerationSettings> generationSettingsGetter;
++    private final boolean getMobsAtOverridden = overridesGetMobsAt(this.getClass()); // Canvas - optimize mob spawning
+ 
+     public ChunkGenerator(final BiomeSource biomeSource) {
+         this(biomeSource, biome -> biome.value().getGenerationSettings());
 @@ -238,7 +_,7 @@
              int chunkOriginX = SectionPos.blockToSectionCoord(pos.getX());
              int chunkOriginZ = SectionPos.blockToSectionCoord(pos.getZ());
@@ -9,3 +17,65 @@
                  boolean foundSomething = false;
  
                  for (Entry<StructurePlacement, Set<Holder<Structure>>> entry : randomSpreadEntries) {
+@@ -555,23 +_,50 @@
+         final Level level, final StructureManager structureManager, final MobCategory mobCategory, final BlockPos pos
+     ) {
+         Map<Structure, LongSet> structures = structureManager.getAllStructuresAt(pos);
+-
++        // Canvas start - optimize mob spawning
++        return this.getMobsAt(level, structureManager, mobCategory, pos, structures, null);
++    }
++
++    public WeightedList<MobSpawnSettings.SpawnerData> getMobsAt(
++        final Level level, final StructureManager structureManager, final MobCategory mobCategory, final BlockPos pos, final LevelChunk chunk
++    ) {
++        if (this.getMobsAtOverridden || chunk.coordinateKey != ChunkPos.pack(pos) || chunk.getLevel() != structureManager.level) {
++            return this.getMobsAt(level, structureManager, mobCategory, pos);
++        }
++
++        return this.getMobsAt(level, structureManager, mobCategory, pos, chunk.getAllReferences(), chunk);
++    }
++
++    private static boolean overridesGetMobsAt(final Class<?> type) {
++        try {
++            return type.getMethod("getMobsAt", Level.class, StructureManager.class, MobCategory.class, BlockPos.class).getDeclaringClass() != ChunkGenerator.class;
++        } catch (final NoSuchMethodException | LinkageError e) {
++            return true;
++        }
++    }
++
++    private WeightedList<MobSpawnSettings.SpawnerData> getMobsAt(
++        final Level level, final StructureManager structureManager, final MobCategory mobCategory, final BlockPos pos,
++        final Map<Structure, LongSet> structures, final @Nullable LevelChunk chunk
++    ) {
++        // Canvas end - optimize mob spawning
++        if (!structures.isEmpty()) // Canvas - optimise ChunkGenerator#getMobsAt
+         for (Entry<Structure, LongSet> entry : structures.entrySet()) {
+             Structure structure = entry.getKey();
+             StructureSpawnOverride override = structure.spawnOverrides().get(mobCategory);
+             if (override != null) {
+-                MutableBoolean inOverrideBox = new MutableBoolean(false);
+-                Predicate<StructureStart> check = override.boundingBox() == StructureSpawnOverride.BoundingBoxType.PIECE
+-                    ? start -> structureManager.structureHasPieceAt(pos, start)
+-                    : start -> start.getBoundingBox().isInside(pos);
+-                structureManager.fillStartsForStructure(structure, entry.getValue(), start -> {
+-                    if (inOverrideBox.isFalse() && check.test(start)) {
+-                        inOverrideBox.setTrue();
++                // Canvas start - optimise ChunkGenerator#getMobsAt
++                for (long key : entry.getValue()) {
++                    ChunkAccess startChunk = chunk != null && key == chunk.coordinateKey ? chunk : structureManager.level.getChunk(ChunkPos.getX(key), ChunkPos.getZ(key), ChunkStatus.STRUCTURE_STARTS); // Canvas - optimize mob spawning
++                    StructureStart start = structureManager.getStartForStructure(structure, startChunk);
++                    if (start != null && start.isValid()
++                        && (override.boundingBox() == StructureSpawnOverride.BoundingBoxType.PIECE
++                            ? structureManager.structureHasPieceAt(pos, start)
++                            : start.getBoundingBox().isInside(pos))) {
++                        return override.spawns();
+                     }
+-                });
+-                if (inOverrideBox.isTrue()) {
+-                    return override.spawns();
+                 }
++                // Canvas end - optimise ChunkGenerator#getMobsAt
+             }
+         }
+ 
