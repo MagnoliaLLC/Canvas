@@ -1,10 +1,97 @@
 --- a/net/minecraft/core/component/PatchedDataComponentMap.java
 +++ b/net/minecraft/core/component/PatchedDataComponentMap.java
-@@ -17,6 +_,7 @@
+@@ -17,6 +_,8 @@
      private final DataComponentMap prototype;
      private Reference2ObjectMap<DataComponentType<?>, Object> patch;
      private boolean copyOnWrite;
++    private int maxStackSize; // Canvas - cache item max stack size
 +    public @Nullable Object canvas$holders; // Canvas - track changes to held stacks: what holds the stack owning this map, never copied
  
      public PatchedDataComponentMap(final DataComponentMap prototype) {
          this(prototype, Reference2ObjectMaps.emptyMap(), true);
+@@ -26,6 +_,22 @@
+         this.prototype = prototype;
+         this.patch = patch;
+         this.copyOnWrite = copyOnWrite;
++        // Canvas start - cache item max stack size
++        if (prototype != DataComponentMap.EMPTY || !patch.isEmpty()) {
++            this.refreshMaxStackSize(null);
++        } else {
++            this.maxStackSize = 1;
++        }
++    }
++
++    private PatchedDataComponentMap(
++        final DataComponentMap prototype, final Reference2ObjectMap<DataComponentType<?>, Object> patch, final boolean copyOnWrite, final int maxStackSize
++    ) {
++        this.prototype = prototype;
++        this.patch = patch;
++        this.copyOnWrite = copyOnWrite;
++        this.maxStackSize = maxStackSize;
++        // Canvas end - cache item max stack size
+     }
+ 
+     public static PatchedDataComponentMap fromPatch(final DataComponentMap prototype, final DataComponentPatch patch) {
+@@ -73,6 +_,7 @@
+             lastValue = this.patch.put(type, Removed.nullToRemoved(value));
+         }
+ 
++        this.refreshMaxStackSize(type); // Canvas - cache item max stack size
+         return lastValue != null ? Objects.requireNonNullElse((T)Removed.removedToNull(lastValue), defaultValue) : defaultValue;
+     }
+ 
+@@ -90,6 +_,7 @@
+             lastValue = this.patch.remove(type);
+         }
+ 
++        this.refreshMaxStackSize(type); // Canvas - cache item max stack size
+         return (T)(lastValue != null ? Removed.removedToNull(lastValue) : defaultValue);
+     }
+ 
+@@ -114,17 +_,20 @@
+         } else {
+             this.patch.remove(type);
+         }
++        this.refreshMaxStackSize(type); // Canvas - cache item max stack size
+     }
+ 
+     public void restorePatch(final DataComponentPatch patch) {
+         this.ensureMapOwnership();
+         this.patch.clear();
+         this.patch.putAll(patch.map);
++        this.refreshMaxStackSize(null); // Canvas - cache item max stack size
+     }
+ 
+     public void clearPatch() {
+         this.ensureMapOwnership();
+         this.patch.clear();
++        this.refreshMaxStackSize(null); // Canvas - cache item max stack size
+     }
+ 
+     public void setAll(final DataComponentMap components) {
+@@ -210,7 +_,7 @@
+ 
+     public PatchedDataComponentMap copy() {
+         this.copyOnWrite = true;
+-        return new PatchedDataComponentMap(this.prototype, this.patch, true);
++        return new PatchedDataComponentMap(this.prototype, this.patch, true, this.maxStackSize); // Canvas - cache item max stack size
+     }
+ 
+     public DataComponentMap toImmutableMap() {
+@@ -231,4 +_,16 @@
+     public String toString() {
+         return "{" + this.stream().map(TypedDataComponent::toString).collect(Collectors.joining(", ")) + "}";
+     }
++
++    // Canvas start - cache item max stack size
++    public int getMaxStackSize() {
++        return this.maxStackSize;
++    }
++
++    private void refreshMaxStackSize(final @Nullable DataComponentType<?> changedType) {
++        if (changedType == null || changedType == DataComponents.MAX_STACK_SIZE) {
++            this.maxStackSize = this.getOrDefault(DataComponents.MAX_STACK_SIZE, 1);
++        }
++    }
++    // Canvas end - cache item max stack size
+ }
