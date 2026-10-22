@@ -1,0 +1,16 @@
+--- a/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java
++++ b/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java
+@@ -202,6 +_,13 @@
+                 map.put(EntityTypes.LLAMA_SPIT, IntOr.Disabled.DISABLED);
+             });
+ 
++            // Canvas start - optimize despawn ranges
++            @PostProcess
++            public void indexDespawnRanges() {
++                this.despawnRanges = new java.util.EnumMap<>(this.despawnRanges);
++            }
++            // Canvas end - optimize despawn ranges
++
+             @PostProcess
+             public void precomputeDespawnDistances() throws SerializationException {
+                 for (final Map.Entry<MobCategory, DespawnRangePair> entry : this.despawnRanges.entrySet()) {
