@@ -1,0 +1,34 @@
+--- a/io/papermc/paper/FeatureHooks.java
++++ b/io/papermc/paper/FeatureHooks.java
+@@ -328,4 +_,31 @@
+         // Paper end - add explicit flush method
+     }
+ 
++    // Canvas start - fix and speed up light in chunk snapshots
++    // reads the section the chunk already holds, as starlight's layer listeners do, without looking the chunk up again
++    public static net.minecraft.world.level.chunk.DataLayer copyLightDataLayer(final Level level, final net.minecraft.world.level.chunk.ChunkAccess chunk, final net.minecraft.world.level.LightLayer layer, final int sectionIndex) {
++        final int sectionY = chunk.getSectionYFromSectionIndex(sectionIndex);
++        final int minLightSection = ca.spottedleaf.moonrise.common.util.WorldUtil.getMinLightSection(level);
++        final int maxLightSection = ca.spottedleaf.moonrise.common.util.WorldUtil.getMaxLightSection(level);
++        if (sectionY < minLightSection || sectionY > maxLightSection) {
++            return null;
++        }
++
++        final ca.spottedleaf.moonrise.patches.starlight.light.SWMRNibbleArray[] nibbles;
++        if (layer == net.minecraft.world.level.LightLayer.BLOCK) {
++            nibbles = ((ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk)chunk).starlight$getBlockNibbles();
++        } else {
++            if (!chunk.isLightCorrect() || !chunk.getPersistedStatus().isOrAfter(net.minecraft.world.level.chunk.status.ChunkStatus.LIGHT)) {
++                return null;
++            }
++            if (((ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk)chunk).starlight$getSkyEmptinessMap() == null) {
++                return null;
++            }
++
++            nibbles = ((ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk)chunk).starlight$getSkyNibbles();
++        }
++        return nibbles[sectionY - minLightSection].toVanillaNibble(); // already a copy
++    }
++    // Canvas end - fix and speed up light in chunk snapshots
++
+ }
