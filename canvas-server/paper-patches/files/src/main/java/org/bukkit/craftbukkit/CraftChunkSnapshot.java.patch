@@ -1,0 +1,58 @@
+--- a/src/main/java/org/bukkit/craftbukkit/CraftChunkSnapshot.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftChunkSnapshot.java
+@@ -28,14 +_,16 @@
+     private final String worldName;
+     private final Key worldKey;
+     private final PalettedContainer<BlockState>[] blockIds;
+-    private final byte[][] skylight;
+-    private final byte[][] emitLight;
++    // Canvas start - fix chunk snapshot light
++    private final net.minecraft.world.level.chunk.DataLayer[] skylight;
++    private final net.minecraft.world.level.chunk.DataLayer[] emitLight;
++    // Canvas end - fix chunk snapshot light
+     private final boolean[] empty;
+     private final Heightmap heightmap; // Height map
+     private final long captureFullTime;
+     private final PalettedContainerRO<Holder<net.minecraft.world.level.biome.Biome>>[] biome;
+ 
+-    CraftChunkSnapshot(int x, int z, int minHeight, int maxHeight, int seaLevel, String worldName, Key worldKey, long fullTime, PalettedContainer<BlockState>[] sectionBlockIDs, byte[][] sectionSkyLights, byte[][] sectionEmitLights, boolean[] sectionEmpty, Heightmap heightmap, PalettedContainerRO<Holder<net.minecraft.world.level.biome.Biome>>[] biome) {
++    CraftChunkSnapshot(int x, int z, int minHeight, int maxHeight, int seaLevel, String worldName, Key worldKey, long fullTime, PalettedContainer<BlockState>[] sectionBlockIDs, net.minecraft.world.level.chunk.DataLayer[] sectionSkyLights, net.minecraft.world.level.chunk.DataLayer[] sectionEmitLights, boolean[] sectionEmpty, Heightmap heightmap, PalettedContainerRO<Holder<net.minecraft.world.level.biome.Biome>>[] biome) { // Canvas - fix chunk snapshot light
+         this.x = x;
+         this.z = z;
+         this.minHeight = minHeight;
+@@ -126,8 +_,23 @@
+         Preconditions.checkState(this.skylight != null, "ChunkSnapshot created without light data. Please call getSnapshot with includeLightData=true"); // Paper - Add getChunkSnapshot includeLightData parameter
+         this.validateChunkCoordinates(x, y, z);
+ 
+-        int off = ((y & 0xF) << 7) | (z << 3) | (x >> 1);
+-        return (this.skylight[this.getSectionIndex(y)][off] >> ((x & 1) << 2)) & 0xF;
++        // Canvas start - fix chunk snapshot light
++        int sectionIndex = this.getSectionIndex(y);
++        net.minecraft.world.level.chunk.DataLayer current = this.skylight[sectionIndex];
++        if (current != null) {
++            return current.get(x, net.minecraft.core.SectionPos.sectionRelative(y), z);
++        }
++
++        // lit from the first section above with light, as the light engine does
++        for (int i = sectionIndex + 1; i < this.skylight.length; i++) {
++            net.minecraft.world.level.chunk.DataLayer above = this.skylight[i];
++            if (above != null) {
++                return above.get(x, 0, z);
++            }
++        }
++
++        return 15;
++        // Canvas end - fix chunk snapshot light
+     }
+ 
+     @Override
+@@ -135,8 +_,7 @@
+         Preconditions.checkState(this.emitLight != null, "ChunkSnapshot created without light data. Please call getSnapshot with includeLightData=true"); // Paper - Add getChunkSnapshot includeLightData parameter
+         this.validateChunkCoordinates(x, y, z);
+ 
+-        int off = ((y & 0xF) << 7) | (z << 3) | (x >> 1);
+-        return (this.emitLight[this.getSectionIndex(y)][off] >> ((x & 1) << 2)) & 0xF;
++        return this.emitLight[this.getSectionIndex(y)].get(x, net.minecraft.core.SectionPos.sectionRelative(y), z); // Canvas - fix chunk snapshot light
+     }
+ 
+     @Override
