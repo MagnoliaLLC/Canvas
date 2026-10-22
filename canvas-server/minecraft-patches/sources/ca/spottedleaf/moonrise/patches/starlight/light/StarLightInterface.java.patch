@@ -1,0 +1,18 @@
+--- a/ca/spottedleaf/moonrise/patches/starlight/light/StarLightInterface.java
++++ b/ca/spottedleaf/moonrise/patches/starlight/light/StarLightInterface.java
+@@ -220,6 +_,15 @@
+         return this.hasBlockLight;
+     }
+ 
++    // Canvas start - Optimize SpreadingSnowyBlock light retrieval
++    public boolean isRawBrightnessAtLeast(final BlockPos pos, final int ambientDarkness, final int threshold, final ChunkAccess chunk) {
++        if (15 - ambientDarkness >= threshold && this.getSkyLightValue(pos, chunk) - ambientDarkness >= threshold) {
++            return true;
++        }
++        return this.getBlockLightValue(pos, chunk) >= threshold;
++    }
++    // Canvas end - Optimize SpreadingSnowyBlock light retrieval
++
+     public int getSkyLightValue(final BlockPos blockPos, final ChunkAccess chunk) {
+         if (!this.hasSkyLight) {
+             return 0;
