@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/entity/EntitySelector.java
++++ b/net/minecraft/world/entity/EntitySelector.java
+@@ -49,7 +_,7 @@
+             ? Predicates.alwaysFalse()
+             : NO_SPECTATORS.and(
+                 input -> {
+-                    if (!input.isPushable() || !input.canCollideWithBukkit(entity) || !entity.canCollideWithBukkit(input)) { // CraftBukkit - collidable API // Paper - Climbing should not bypass cramming gamerule
++                    if (!input.canCollideWithBukkit(entity) || !entity.canCollideWithBukkit(input)) { // CraftBukkit - collidable API // Paper - Climbing should not bypass cramming gamerule // Canvas - optimize pushable selector
+                         return false;
+                     }
+ 
