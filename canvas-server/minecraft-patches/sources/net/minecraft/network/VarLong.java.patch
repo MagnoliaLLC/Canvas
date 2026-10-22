@@ -1,0 +1,46 @@
+--- a/net/minecraft/network/VarLong.java
++++ b/net/minecraft/network/VarLong.java
+@@ -39,6 +_,43 @@
+     }
+ 
+     public static ByteBuf write(final ByteBuf output, long value) {
++        // Canvas start - Optimize VarInt#write and VarLong#write
++        if ((value & 0xFFFFFFFFFFFFFF80L) == 0L) {
++            output.writeByte((int) value);
++            return output;
++        } else if ((value & 0xFFFFFFFFFFFFC000L) == 0L) {
++            int low = (int) value;
++            output.writeShort((low & 0x7F | 0x80) << 8 | (low >>> 7));
++            return output;
++        } else if ((value & 0xFFFFFFFFFFE00000L) == 0L) {
++            int low = (int) value;
++            int w = (low & 0x7F) << 16
++                | (low & 0x3F80) << 1
++                | (low >>> 14)
++                | 0x00808000;
++            output.writeMedium(w);
++            return output;
++        } else if ((value & 0xFFFFFFFFF0000000L) == 0L) {
++            int low = (int) value;
++            int w = (low & 0x7F) << 24
++                | (low & 0x3F80) << 9
++                | (low & 0x1FC000) >> 6
++                | (low >>> 21)
++                | 0x80808000;
++            output.writeInt(w);
++            return output;
++        } else if ((value & 0xFFFFFFF800000000L) == 0L) {
++            int low = (int) (value & 0xFFFFFFFL);
++            int w = (low & 0x7F) << 24
++                | (low & 0x3F80) << 9
++                | (low & 0x1FC000) >> 6
++                | ((low >>> 21) & 0x7F)
++                | 0x80808080;
++            output.writeInt(w);
++            output.writeByte((int) (value >>> 28));
++            return output;
++        }
++        // Canvas end - Optimize VarInt#write and VarLong#write
+         while ((value & -128L) != 0L) {
+             output.writeByte((int)(value & DATA_BITS_MASK) | CONTINUATION_BIT_MASK);
+             value >>>= DATA_BITS_PER_BYTE;
