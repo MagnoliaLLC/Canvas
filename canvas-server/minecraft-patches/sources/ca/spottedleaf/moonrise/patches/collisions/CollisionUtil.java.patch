@@ -1,0 +1,27 @@
+--- a/ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.java
++++ b/ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.java
+@@ -1991,6 +_,15 @@
+                     final int minYIterate = currChunkY == minChunkY ? (minBlockY & 15) + sectionAdjust : 0;
+                     final int maxYIterate = currChunkY == maxChunkY ? (maxBlockY & 15) - sectionAdjust : 15;
+ 
++                    // Canvas start - reduce PalettedContainer lookup in collisions
++                    if (minXIterate > maxXIterate || minYIterate > maxYIterate || minZIterate > maxZIterate) {
++                        continue;
++                    }
++
++                    final PalettedContainer.Data<BlockState> blocksData = blocks.data;
++                    final net.minecraft.util.BitStorage blocksStorage = blocksData.storage();
++                    // Canvas end - reduce PalettedContainer lookup in collisions
++
+                     for (int currY = minYIterate; currY <= maxYIterate; ++currY) {
+                         final int blockY = currY | (currChunkY << 4);
+                         for (int currZ = minZIterate; currZ <= maxZIterate; ++currZ) {
+@@ -2006,7 +_,7 @@
+                                     continue;
+                                 }
+ 
+-                                final BlockState blockData = blocks.get(localBlockIndex);
++                                final BlockState blockData = PalettedContainer.readPalette(blocksData, blocksStorage.get(localBlockIndex)); // Canvas - reduce PalettedContainer lookup in collisions
+ 
+                                 if (((CollisionBlockState)blockData).moonrise$emptyContextCollisionShape()) {
+                                     continue;
