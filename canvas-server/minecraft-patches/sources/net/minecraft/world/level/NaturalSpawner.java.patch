@@ -497,7 +497,7 @@
 +        return isInNetherFortressBounds(pos, chunk, mobCategory, structureManager) // Canvas - pass chunk
              ? NetherFortressStructure.FORTRESS_ENEMIES
 -            : generator.getMobsAt(level, structureManager, mobCategory, pos);
-+            : generator.getMobsAt(chunk.getLevel(), structureManager, mobCategory, pos); // Canvas - reduce chunk lookup
++            : generator.getMobsAt(chunk.getLevel(), structureManager, mobCategory, pos, chunk); // Canvas - reduce chunk lookup // Canvas - optimize mob spawning
      }
  
      public static boolean isInNetherFortressBounds(
