@@ -1,0 +1,34 @@
+--- a/net/minecraft/world/entity/ai/goal/TemptGoal.java
++++ b/net/minecraft/world/entity/ai/goal/TemptGoal.java
+@@ -54,6 +_,12 @@
+             this.calmDown--;
+             return false;
+         } else {
++            // Canvas start - look the tempt range up only when a player holds the food
++            if (this.canvas$noneTempting()) {
++                this.player = null;
++                return false;
++            }
++            // Canvas end - look the tempt range up only when a player holds the food
+             this.player = getServerLevel(this.mob)
+                 .getNearestPlayer(this.targetingConditions.range(this.mob.getAttributeValue(Attributes.TEMPT_RANGE)), this.mob);
+             // CraftBukkit start
+@@ -72,6 +_,18 @@
+     private boolean shouldFollow(final LivingEntity player) {
+         return this.items.test(player.getMainHandItem()) || this.items.test(player.getOffhandItem());
+     }
++
++    // Canvas start - look the tempt range up only when a player holds the food
++    // the search tests the same players, owned ones only, and refuses whoever fails the selector, so with nobody passing it the search answers nobody whatever the range
++    private boolean canvas$noneTempting() {
++        for (final net.minecraft.server.level.ServerPlayer player : getServerLevel(this.mob).getLocalPlayers()) {
++            if (ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(player) && this.shouldFollow(player)) {
++                return false;
++            }
++        }
++        return true;
++    }
++    // Canvas end - look the tempt range up only when a player holds the food
+ 
+     @Override
+     public boolean canContinueToUse() {
