@@ -1,0 +1,18 @@
+--- a/net/minecraft/world/level/gameevent/GameEventDispatcher.java
++++ b/net/minecraft/world/level/gameevent/GameEventDispatcher.java
+@@ -22,6 +_,7 @@
+     public void post(final Holder<GameEvent> gameEvent, final Vec3 position, final GameEvent.Context context) {
+         int radius = gameEvent.value().notificationRadius();
+         BlockPos center = BlockPos.containing(position);
++        if (org.bukkit.event.world.GenericGameEvent.getHandlerList().getRegisteredListeners().length != 0) { // Canvas - Skip firing GenericGameEvent if no listeners
+         // CraftBukkit start
+         org.bukkit.event.world.GenericGameEvent apiEvent = new org.bukkit.event.world.GenericGameEvent(
+             org.bukkit.craftbukkit.CraftGameEvent.minecraftHolderToBukkit(gameEvent), org.bukkit.craftbukkit.util.CraftLocation.toBukkit(center, this.level),
+@@ -31,6 +_,7 @@
+         }
+         radius = apiEvent.getRadius();
+         // CraftBukkit end
++        } // Canvas - Skip firing GenericGameEvent if no listeners
+         int sectionMinX = SectionPos.blockToSectionCoord(center.getX() - radius);
+         int sectionMinY = SectionPos.blockToSectionCoord(center.getY() - radius);
+         int sectionMinZ = SectionPos.blockToSectionCoord(center.getZ() - radius);
