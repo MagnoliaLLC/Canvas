@@ -5,18 +5,18 @@
      private short specialCollidingBlocks;
      private final ca.spottedleaf.moonrise.common.list.ShortList tickingBlocks = new ca.spottedleaf.moonrise.common.list.ShortList();
 +    // Canvas start - keep per-chunk ticking block counts
-+    private short[] canvas$tickingBlockCounts;
++    private io.canvasmc.canvas.world.chunk.RandomTickSchedule canvas$randomTickSchedule;
 +    private int canvas$sectionIndex;
 +
-+    public final void canvas$attachTickingBlockCounts(final short[] counts, final int sectionIndex) {
-+        this.canvas$tickingBlockCounts = counts;
++    public final void canvas$attachRandomTickSchedule(final io.canvasmc.canvas.world.chunk.RandomTickSchedule schedule, final int sectionIndex) {
++        this.canvas$randomTickSchedule = schedule;
 +        this.canvas$sectionIndex = sectionIndex;
 +        this.canvas$updateTickingBlockCount();
 +    }
 +
 +    private void canvas$updateTickingBlockCount() {
-+        if (this.canvas$tickingBlockCounts != null) {
-+            this.canvas$tickingBlockCounts[this.canvas$sectionIndex] = (short)(this.tickingBlockCount > 0 ? this.tickingBlocks.size() : 0);
++        if (this.canvas$randomTickSchedule != null) {
++            this.canvas$randomTickSchedule.count(this.canvas$sectionIndex, this.tickingBlockCount > 0 ? this.tickingBlocks.size() : 0);
 +        }
 +    }
 +    // Canvas end - keep per-chunk ticking block counts
