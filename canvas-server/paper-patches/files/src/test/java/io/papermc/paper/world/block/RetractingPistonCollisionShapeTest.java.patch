@@ -1,0 +1,74 @@
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/world/block/RetractingPistonCollisionShapeTest.java
+@@ -1,0 +_,71 @@
++package io.papermc.paper.world.block;
++
++import java.lang.reflect.Field;
++import net.minecraft.core.BlockPos;
++import net.minecraft.core.Direction;
++import net.minecraft.world.level.EmptyBlockGetter;
++import net.minecraft.world.level.block.Block;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.block.piston.PistonBaseBlock;
++import net.minecraft.world.level.block.piston.PistonHeadBlock;
++import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
++import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.phys.shapes.BooleanOp;
++import net.minecraft.world.phys.shapes.Shapes;
++import net.minecraft.world.phys.shapes.VoxelShape;
++import org.bukkit.support.environment.VanillaFeature;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertFalse;
++
++/**
++ * Pins the retracting source piston collision shape table in {@link PistonMovingBlockEntity} to the shape the
++ * uncached computation builds, for both piston blocks, every direction, every moved-state facing (a mismatch must
++ * fall back to the computed shape) and progress values on and off the cached offsets.
++ */
++@VanillaFeature
++public class RetractingPistonCollisionShapeTest {
++
++    private static final float[] PROGRESSES = {0.0F, 0.25F, 0.5F, 0.75F, 1.0F};
++
++    @Test
++    public void cachedShapesMatchComputedShapes() throws ReflectiveOperationException {
++        final Field progressField = PistonMovingBlockEntity.class.getDeclaredField("progress");
++        progressField.setAccessible(true);
++
++        for (final Block piston : new Block[] {Blocks.PISTON, Blocks.STICKY_PISTON}) {
++            for (final Direction direction : Direction.values()) {
++                for (final Direction facing : Direction.values()) {
++                    for (final float progress : PROGRESSES) {
++                        final BlockState movedState = piston.defaultBlockState().setValue(PistonBaseBlock.FACING, facing);
++                        final PistonMovingBlockEntity entity = new PistonMovingBlockEntity(
++                            BlockPos.ZERO, Blocks.MOVING_PISTON.defaultBlockState(), movedState, direction, false, true
++                        );
++                        progressField.setFloat(entity, progress);
++
++                        final VoxelShape expected = computedShape(movedState, direction, progress);
++                        final VoxelShape actual = entity.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
++                        final String description = movedState + " direction=" + direction + " progress=" + progress;
++
++                        assertFalse(Shapes.joinIsNotEmpty(expected, actual, BooleanOp.NOT_SAME), () -> "shape differs for " + description);
++                        assertEquals(expected.toAabbs(), actual.toAabbs(), () -> "boxes differ for " + description);
++                    }
++                }
++            }
++        }
++    }
++
++    private static VoxelShape computedShape(final BlockState movedState, final Direction direction, final float progress) {
++        final VoxelShape baseShape = movedState.setValue(PistonBaseBlock.EXTENDED, true).getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
++        final BlockState headState = Blocks.PISTON_HEAD
++            .defaultBlockState()
++            .setValue(PistonHeadBlock.FACING, direction)
++            .setValue(PistonHeadBlock.SHORT, 1.0F - progress < 0.25F);
++        final float extendedProgress = 1.0F - progress;
++        final double dx = direction.getStepX() * extendedProgress;
++        final double dy = direction.getStepY() * extendedProgress;
++        final double dz = direction.getStepZ() * extendedProgress;
++        return Shapes.or(baseShape, headState.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).move(dx, dy, dz));
++    }
++}
