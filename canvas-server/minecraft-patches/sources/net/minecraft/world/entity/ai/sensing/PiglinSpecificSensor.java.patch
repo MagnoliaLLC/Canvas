@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/entity/ai/sensing/PiglinSpecificSensor.java
++++ b/net/minecraft/world/entity/ai/sensing/PiglinSpecificSensor.java
+@@ -47,7 +_,7 @@
+     @Override
+     protected void doTick(final ServerLevel level, final LivingEntity body) {
+         Brain<?> brain = body.getBrain();
+-        brain.setMemory(MemoryModuleType.NEAREST_REPELLENT, findNearestRepellent(level, body));
++        brain.setMemory(MemoryModuleType.NEAREST_REPELLENT, io.canvasmc.canvas.world.block.search.CommonBlockSearchesCheckAndCache.hasNoMatch(level, body.blockPosition(), 8, 4, PiglinSpecificSensor::isValidRepellent, true) ? Optional.empty() : findNearestRepellent(level, body)); // Lithium - optimize non-POI block searches
+         Optional<Mob> nemesis = Optional.empty();
+         Optional<Hoglin> huntableHoglin = Optional.empty();
+         Optional<Hoglin> babyHoglin = Optional.empty();
