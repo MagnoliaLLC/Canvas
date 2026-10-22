@@ -1,0 +1,33 @@
+--- a/net/minecraft/world/entity/ai/attributes/Attribute.java
++++ b/net/minecraft/world/entity/ai/attributes/Attribute.java
+@@ -16,6 +_,7 @@
+     private boolean syncable;
+     private final String descriptionId;
+     public Attribute.Sentiment sentiment = Attribute.Sentiment.POSITIVE;
++    private int id = -1; // Canvas - optimize attribute
+ 
+     protected Attribute(final String descriptionId, final double defaultValue) {
+         this.defaultValue = defaultValue;
+@@ -51,6 +_,22 @@
+     public ChatFormatting getStyle(final boolean valueIncrease) {
+         return this.sentiment.getStyle(valueIncrease);
+     }
++
++    // Canvas start - optimize attribute
++    public int id() {
++        int id = this.id;
++        if (id < 0) {
++            id = BuiltInRegistries.ATTRIBUTE.getId(this);
++            this.id = id;
++        }
++
++        return id;
++    }
++
++    static int idOf(final Holder<Attribute> attribute) {
++        return attribute instanceof Holder.Reference<Attribute> reference && reference.isBound() ? reference.value().id() : -1;
++    }
++    // Canvas end - optimize attribute
+ 
+     public enum Sentiment {
+         POSITIVE,
