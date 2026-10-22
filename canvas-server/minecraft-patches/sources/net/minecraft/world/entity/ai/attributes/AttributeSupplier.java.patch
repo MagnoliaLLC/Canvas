@@ -1,0 +1,65 @@
+--- a/net/minecraft/world/entity/ai/attributes/AttributeSupplier.java
++++ b/net/minecraft/world/entity/ai/attributes/AttributeSupplier.java
+@@ -9,13 +_,37 @@
+ 
+ public class AttributeSupplier {
+     private final Map<Holder<Attribute>, AttributeInstance> instances;
++    private final AttributeInstance[] instancesById; // Canvas - optimize attribute
+ 
+     private AttributeSupplier(final Map<Holder<Attribute>, AttributeInstance> instances) {
+         this.instances = instances;
+-    }
++        // Canvas start - optimize attribute
++        this.instancesById = new AttributeInstance[net.minecraft.core.registries.BuiltInRegistries.ATTRIBUTE.size()];
++        for (AttributeInstance instance : instances.values()) {
++            int id = Attribute.idOf(instance.getAttribute());
++            if (id >= 0 && id < this.instancesById.length && this.instancesById[id] == null) {
++                this.instancesById[id] = instance;
++            }
++        }
++        // Canvas end - optimize attribute
++    }
++
++    // Canvas start - optimize attribute
++    private @Nullable AttributeInstance getInstance(final Holder<Attribute> attribute) {
++        int id = Attribute.idOf(attribute);
++        if (id >= 0 && id < this.instancesById.length) {
++            AttributeInstance instance = this.instancesById[id];
++            if (instance == null || instance.getAttribute() == attribute) {
++                return instance;
++            }
++        }
++
++        return this.instances.get(attribute);
++    }
++    // Canvas end - optimize attribute
+ 
+     public AttributeInstance getAttributeInstance(final Holder<Attribute> attribute) {
+-        AttributeInstance instance = this.instances.get(attribute);
++        AttributeInstance instance = this.getInstance(attribute); // Canvas - optimize attribute
+         if (instance == null) {
+             throw new IllegalArgumentException("Can't find attribute " + attribute.getRegisteredName());
+         } else {
+@@ -41,7 +_,7 @@
+     }
+ 
+     public @Nullable AttributeInstance createInstance(final Consumer<AttributeInstance> onDirty, final Holder<Attribute> attribute) {
+-        AttributeInstance template = this.instances.get(attribute);
++        AttributeInstance template = this.getInstance(attribute); // Canvas - optimize attribute
+         if (template == null) {
+             return null;
+         }
+@@ -56,11 +_,11 @@
+     }
+ 
+     public boolean hasAttribute(final Holder<Attribute> attribute) {
+-        return this.instances.containsKey(attribute);
++        return this.getInstance(attribute) != null; // Canvas - optimize attribute
+     }
+ 
+     public boolean hasModifier(final Holder<Attribute> attribute, final Identifier modifier) {
+-        AttributeInstance attributeInstance = this.instances.get(attribute);
++        AttributeInstance attributeInstance = this.getInstance(attribute); // Canvas - optimize attribute
+         return attributeInstance != null && attributeInstance.getModifier(modifier) != null;
+     }
+ 

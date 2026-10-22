@@ -1,0 +1,290 @@
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/attribute/AttributeMapLookupTest.java
+@@ -1,0 +_,287 @@
++package io.papermc.paper.attribute;
++
++import com.google.common.collect.HashMultimap;
++import com.google.common.collect.Multimap;
++import java.lang.reflect.Field;
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++import net.minecraft.core.Holder;
++import net.minecraft.core.registries.BuiltInRegistries;
++import net.minecraft.resources.Identifier;
++import net.minecraft.world.entity.EntityType;
++import net.minecraft.world.entity.LivingEntity;
++import net.minecraft.world.entity.ai.attributes.Attribute;
++import net.minecraft.world.entity.ai.attributes.AttributeInstance;
++import net.minecraft.world.entity.ai.attributes.AttributeMap;
++import net.minecraft.world.entity.ai.attributes.AttributeModifier;
++import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
++import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
++import org.bukkit.support.environment.AllFeatures;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertFalse;
++import static org.junit.jupiter.api.Assertions.assertNotNull;
++import static org.junit.jupiter.api.Assertions.assertNull;
++import static org.junit.jupiter.api.Assertions.assertSame;
++import static org.junit.jupiter.api.Assertions.assertThrows;
++import static org.junit.jupiter.api.Assertions.assertTrue;
++
++/**
++ * Checks the attribute lookups by registry id against a plain map built from each
++ * supplier's own instances, the way {@link AttributeMap} answered before the port.
++ */
++@AllFeatures
++class AttributeMapLookupTest {
++
++    private static final Identifier FIRST = Identifier.fromNamespaceAndPath("canvas", "lookup_test_first");
++    private static final Identifier SECOND = Identifier.fromNamespaceAndPath("canvas", "lookup_test_second");
++
++    @Test
++    void everyEntityTypeAnswersLikeTheSupplierMap() throws ReflectiveOperationException {
++        int checked = 0;
++        for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
++            if (!DefaultAttributes.hasSupplier(type)) {
++                continue;
++            }
++
++            this.check(type.toString(), supplierOf(type));
++            checked++;
++        }
++
++        assertTrue(checked > 0, "no entity type with default attributes");
++    }
++
++    @Test
++    void attributesHaveRegistryIds() {
++        BuiltInRegistries.ATTRIBUTE.listElements().forEach(holder ->
++            assertEquals(BuiltInRegistries.ATTRIBUTE.getId(holder.value()), holder.value().id(), holder.toString())
++        );
++    }
++
++    private void check(final String context, final AttributeSupplier supplier) throws ReflectiveOperationException {
++        final List<Holder<Attribute>> holders = new ArrayList<>();
++        final List<Holder<Attribute>> references = new ArrayList<>();
++        BuiltInRegistries.ATTRIBUTE.listElements().forEach(holder -> {
++            holders.add(holder);
++            references.add(holder);
++            holders.add(Holder.direct(holder.value()));
++        });
++
++        final Map<Holder<Attribute>, AttributeInstance> templates = templatesOf(supplier);
++        for (Holder<Attribute> holder : holders) {
++            assertEquals(templates.containsKey(holder), supplier.hasAttribute(holder), context + " supplier " + holder);
++        }
++
++        final ExpectedAttributeMap expected = new ExpectedAttributeMap(templates);
++        final AttributeMap map = new AttributeMap(supplier);
++        assertSameAnswers(context + " fresh", map, expected, holders);
++
++        for (Holder<Attribute> holder : holders) {
++            final AttributeInstance old = expected.getInstance(holder);
++            final AttributeInstance actual = map.getInstance(holder);
++            if (old == null) {
++                assertNull(actual, context + " getInstance " + holder);
++                continue;
++            }
++
++            assertNotNull(actual, context + " getInstance " + holder);
++            assertSame(holder, actual.getAttribute(), context + " holder " + holder);
++            assertSame(actual, map.getInstance(holder), context + " same instance " + holder);
++            assertEquals(old.getValue(), actual.getValue(), context + " instance value " + holder);
++        }
++        assertSameAnswers(context + " instances", map, expected, holders);
++
++        for (Holder<Attribute> holder : references) {
++            final AttributeInstance actual = map.getInstance(holder);
++            if (actual == null) {
++                continue;
++            }
++
++            final AttributeInstance old = expected.getInstance(holder);
++            actual.addTransientModifier(new AttributeModifier(FIRST, 1.5, AttributeModifier.Operation.ADD_VALUE));
++            old.addTransientModifier(new AttributeModifier(FIRST, 1.5, AttributeModifier.Operation.ADD_VALUE));
++            actual.addPermanentModifier(new AttributeModifier(SECOND, 0.25, AttributeModifier.Operation.ADD_MULTIPLIED_BASE));
++            old.addPermanentModifier(new AttributeModifier(SECOND, 0.25, AttributeModifier.Operation.ADD_MULTIPLIED_BASE));
++            assertEquals(1.5, map.getModifierValue(holder, FIRST), context + " modifier value " + holder);
++            assertTrue(map.getAttributesToUpdate().contains(actual), context + " to update " + holder);
++            assertEquals(holder.value().isClientSyncable(), map.getAttributesToSync().contains(actual), context + " to sync " + holder);
++        }
++        assertSameAnswers(context + " modifiers added", map, expected, holders);
++
++        final Multimap<Holder<Attribute>, AttributeModifier> removal = HashMultimap.create();
++        for (Holder<Attribute> holder : references) {
++            removal.put(holder, new AttributeModifier(FIRST, 1.5, AttributeModifier.Operation.ADD_VALUE));
++            final AttributeInstance old = expected.ownInstance(holder);
++            if (old != null) {
++                old.removeModifier(FIRST);
++            }
++        }
++        map.removeAttributeModifiers(removal);
++        assertSameAnswers(context + " modifier removed", map, expected, holders);
++
++        for (Holder<Attribute> holder : references) {
++            final AttributeInstance actual = map.getInstance(holder);
++            if (actual != null) {
++                actual.setBaseValue(actual.getBaseValue() + 2.0);
++                expected.getInstance(holder).setBaseValue(expected.getInstance(holder).getBaseValue() + 2.0);
++            }
++        }
++        assertSameAnswers(context + " base value set", map, expected, holders);
++
++        final List<AttributeInstance.Packed> packed = map.pack();
++        assertEquals(expected.ownCount(), packed.size(), context + " packed size");
++        final AttributeMap loaded = new AttributeMap(supplier);
++        loaded.apply(packed);
++        assertSameValues(context + " loaded", map, loaded, holders);
++
++        final AttributeMap assigned = new AttributeMap(supplier);
++        assigned.assignAllValues(map);
++        assertSameValues(context + " assigned", map, assigned, holders);
++
++        final Holder<Attribute> reset = references.getFirst();
++        assertEquals(supplier.hasAttribute(reset), map.resetBaseValue(reset), context + " reset " + reset);
++        expected.resetBaseValue(reset);
++        assertSameAnswers(context + " base value reset", map, expected, holders);
++
++        for (Holder<Attribute> holder : holders) {
++            if (!expected.hasAttribute(holder)) {
++                map.registerAttribute(holder);
++                expected.registerAttribute(holder);
++                assertSame(holder, map.getInstance(holder).getAttribute(), context + " registered " + holder);
++            }
++        }
++        assertSameAnswers(context + " registered", map, expected, holders);
++        for (Holder<Attribute> holder : references) {
++            final Holder<Attribute> equalDirect = Holder.direct(holder.value());
++            assertEquals(expected.hasAttribute(equalDirect), map.hasAttribute(equalDirect), context + " equal direct " + holder);
++        }
++        assertEquals(expected.ownCount(), map.pack().size(), context + " registered packed size");
++    }
++
++    private static void assertSameAnswers(final String context, final AttributeMap map, final ExpectedAttributeMap expected, final List<Holder<Attribute>> holders) {
++        for (Holder<Attribute> holder : holders) {
++            final String where = context + " " + holder;
++            final boolean has = expected.hasAttribute(holder);
++            assertEquals(has, map.hasAttribute(holder), where);
++            if (has) {
++                assertEquals(expected.getValue(holder), map.getValue(holder), where);
++                assertEquals(expected.getBaseValue(holder), map.getBaseValue(holder), where);
++            } else {
++                assertThrows(IllegalArgumentException.class, () -> map.getValue(holder), where);
++                assertThrows(IllegalArgumentException.class, () -> map.getBaseValue(holder), where);
++            }
++            assertEquals(expected.hasModifier(holder, FIRST), map.hasModifier(holder, FIRST), where);
++            assertEquals(expected.hasModifier(holder, SECOND), map.hasModifier(holder, SECOND), where);
++        }
++    }
++
++    private static void assertSameValues(final String context, final AttributeMap expected, final AttributeMap actual, final List<Holder<Attribute>> holders) {
++        for (Holder<Attribute> holder : holders) {
++            final String where = context + " " + holder;
++            final boolean has = expected.hasAttribute(holder);
++            if (!has) {
++                assertFalse(actual.hasAttribute(holder), where);
++                continue;
++            }
++
++            assertTrue(actual.hasAttribute(holder), where);
++            assertEquals(expected.getValue(holder), actual.getValue(holder), where);
++            assertEquals(expected.getBaseValue(holder), actual.getBaseValue(holder), where);
++            assertEquals(expected.hasModifier(holder, SECOND), actual.hasModifier(holder, SECOND), where);
++        }
++    }
++
++    @SuppressWarnings("unchecked")
++    private static AttributeSupplier supplierOf(final EntityType<?> type) {
++        return DefaultAttributes.getSupplier((EntityType<? extends LivingEntity>) type);
++    }
++
++    @SuppressWarnings("unchecked")
++    private static Map<Holder<Attribute>, AttributeInstance> templatesOf(final AttributeSupplier supplier) throws ReflectiveOperationException {
++        final Field field = AttributeSupplier.class.getDeclaredField("instances");
++        field.setAccessible(true);
++        return (Map<Holder<Attribute>, AttributeInstance>) field.get(supplier);
++    }
++
++    /**
++     * The attribute map as it answered before the lookup by id: one hash map keyed by holder over the supplier's own map.
++     */
++    private static final class ExpectedAttributeMap {
++
++        private final Map<Holder<Attribute>, AttributeInstance> templates;
++        private final Map<Holder<Attribute>, AttributeInstance> attributes = new HashMap<>();
++
++        private ExpectedAttributeMap(final Map<Holder<Attribute>, AttributeInstance> templates) {
++            this.templates = templates;
++        }
++
++        AttributeInstance getInstance(final Holder<Attribute> attribute) {
++            return this.attributes.computeIfAbsent(attribute, key -> {
++                final AttributeInstance template = this.templates.get(key);
++                if (template == null) {
++                    return null;
++                }
++
++                final AttributeInstance instance = new AttributeInstance(key, ignored -> {});
++                instance.replaceFrom(template);
++                return instance;
++            });
++        }
++
++        AttributeInstance ownInstance(final Holder<Attribute> attribute) {
++            return this.attributes.get(attribute);
++        }
++
++        int ownCount() {
++            return this.attributes.size();
++        }
++
++        boolean hasAttribute(final Holder<Attribute> attribute) {
++            return this.attributes.get(attribute) != null || this.templates.containsKey(attribute);
++        }
++
++        boolean hasModifier(final Holder<Attribute> attribute, final Identifier id) {
++            final AttributeInstance own = this.attributes.get(attribute);
++            if (own != null) {
++                return own.getModifier(id) != null;
++            }
++
++            final AttributeInstance template = this.templates.get(attribute);
++            return template != null && template.getModifier(id) != null;
++        }
++
++        double getValue(final Holder<Attribute> attribute) {
++            final AttributeInstance own = this.attributes.get(attribute);
++            return own != null ? own.getValue() : this.template(attribute).getValue();
++        }
++
++        double getBaseValue(final Holder<Attribute> attribute) {
++            final AttributeInstance own = this.attributes.get(attribute);
++            return own != null ? own.getBaseValue() : this.template(attribute).getBaseValue();
++        }
++
++        void resetBaseValue(final Holder<Attribute> attribute) {
++            final AttributeInstance template = this.templates.get(attribute);
++            final AttributeInstance own = this.attributes.get(attribute);
++            if (template != null && own != null) {
++                own.setBaseValue(template.getBaseValue());
++            }
++        }
++
++        void registerAttribute(final Holder<Attribute> attribute) {
++            this.attributes.put(attribute, new AttributeInstance(attribute, AttributeInstance::getAttribute));
++        }
++
++        private AttributeInstance template(final Holder<Attribute> attribute) {
++            final AttributeInstance template = this.templates.get(attribute);
++            if (template == null) {
++                throw new IllegalArgumentException("Can't find attribute " + attribute.getRegisteredName());
++            }
++
++            return template;
++        }
++    }
++}

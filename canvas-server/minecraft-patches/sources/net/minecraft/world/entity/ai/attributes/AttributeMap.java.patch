@@ -1,0 +1,180 @@
+--- a/net/minecraft/world/entity/ai/attributes/AttributeMap.java
++++ b/net/minecraft/world/entity/ai/attributes/AttributeMap.java
+@@ -14,7 +_,10 @@
+ import org.jspecify.annotations.Nullable;
+ 
+ public class AttributeMap {
+-    private final Map<Holder<Attribute>, AttributeInstance> attributes = new Object2ObjectOpenHashMap<>();
++    // Canvas start - optimize attribute
++    private final AttributeInstance[] attributesById = new AttributeInstance[net.minecraft.core.registries.BuiltInRegistries.ATTRIBUTE.size()];
++    private @Nullable Map<Holder<Attribute>, AttributeInstance> attributes;
++    // Canvas end - optimize attribute
+     private final Set<AttributeInstance> attributesToSync = new ObjectOpenHashSet<>();
+     private final Set<AttributeInstance> attributesToUpdate = new ObjectOpenHashSet<>();
+     private final AttributeSupplier supplier;
+@@ -39,34 +_,90 @@
+     }
+ 
+     public Collection<AttributeInstance> getSyncableAttributes() {
+-        return this.attributes.values().stream().filter(instance -> instance.getAttribute().value().isClientSyncable()).collect(Collectors.toList());
++        return this.instances().stream().filter(instance -> instance.getAttribute().value().isClientSyncable()).collect(Collectors.toList()); // Canvas - optimize attribute
+     }
+ 
+     public @Nullable AttributeInstance getInstance(final Holder<Attribute> attribute) {
+-        return this.attributes.computeIfAbsent(attribute, key -> this.supplier.createInstance(this::onAttributeModified, (Holder<Attribute>)key));
+-    }
++        // Canvas start - optimize attribute
++        AttributeInstance instance = this.ownInstance(attribute);
++        if (instance == null) {
++            instance = this.supplier.createInstance(this::onAttributeModified, attribute);
++            if (instance != null) {
++                this.putInstance(attribute, instance);
++            }
++        }
++
++        return instance;
++        // Canvas end - optimize attribute
++    }
++
++    // Canvas start - optimize attribute
++    private @Nullable AttributeInstance ownInstance(final Holder<Attribute> attribute) {
++        int id = Attribute.idOf(attribute);
++        if (id >= 0 && id < this.attributesById.length) {
++            AttributeInstance instance = this.attributesById[id];
++            if (instance == null || instance.getAttribute() == attribute) {
++                return instance;
++            }
++        }
++
++        return this.attributes != null ? this.attributes.get(attribute) : null;
++    }
++
++    private void putInstance(final Holder<Attribute> attribute, final AttributeInstance instance) {
++        int id = Attribute.idOf(attribute);
++        if (id >= 0 && id < this.attributesById.length) {
++            AttributeInstance current = this.attributesById[id];
++            if (current == null || current.getAttribute() == attribute) {
++                this.attributesById[id] = instance;
++                return;
++            }
++        }
++
++        if (this.attributes == null) {
++            this.attributes = new Object2ObjectOpenHashMap<>();
++        }
++
++        this.attributes.put(attribute, instance);
++    }
++
++    private List<AttributeInstance> instances() {
++        List<AttributeInstance> instances = new ArrayList<>();
++        for (AttributeInstance instance : this.attributesById) {
++            if (instance != null) {
++                instances.add(instance);
++            }
++        }
++
++        if (this.attributes != null) {
++            instances.addAll(this.attributes.values());
++        }
++
++        return instances;
++    }
++    // Canvas end - optimize attribute
+ 
+     public boolean hasAttribute(final Holder<Attribute> attribute) {
+-        return this.attributes.get(attribute) != null || this.supplier.hasAttribute(attribute);
++        return this.ownInstance(attribute) != null || this.supplier.hasAttribute(attribute); // Canvas - optimize attribute
+     }
+ 
+     public boolean hasModifier(final Holder<Attribute> attribute, final Identifier id) {
+-        AttributeInstance attributeInstance = this.attributes.get(attribute);
++        AttributeInstance attributeInstance = this.ownInstance(attribute); // Canvas - optimize attribute
+         return attributeInstance != null ? attributeInstance.getModifier(id) != null : this.supplier.hasModifier(attribute, id);
+     }
+ 
+     public double getValue(final Holder<Attribute> attribute) {
+-        AttributeInstance ownAttribute = this.attributes.get(attribute);
++        AttributeInstance ownAttribute = this.ownInstance(attribute); // Canvas - optimize attribute
+         return ownAttribute != null ? ownAttribute.getValue() : this.supplier.getValue(attribute);
+     }
+ 
+     public double getBaseValue(final Holder<Attribute> attribute) {
+-        AttributeInstance ownAttribute = this.attributes.get(attribute);
++        AttributeInstance ownAttribute = this.ownInstance(attribute); // Canvas - optimize attribute
+         return ownAttribute != null ? ownAttribute.getBaseValue() : this.supplier.getBaseValue(attribute);
+     }
+ 
+     public double getModifierValue(final Holder<Attribute> attribute, final Identifier id) {
+-        AttributeInstance attributeInstance = this.attributes.get(attribute);
++        AttributeInstance attributeInstance = this.ownInstance(attribute); // Canvas - optimize attribute
+         return attributeInstance != null ? attributeInstance.getModifier(id).amount() : this.supplier.getModifierValue(attribute, id);
+     }
+ 
+@@ -82,7 +_,7 @@
+ 
+     public void removeAttributeModifiers(final Multimap<Holder<Attribute>, AttributeModifier> modifiers) {
+         modifiers.asMap().forEach((attribute, attributeModifiers) -> {
+-            AttributeInstance instance = this.attributes.get(attribute);
++            AttributeInstance instance = this.ownInstance(attribute); // Canvas - optimize attribute
+             if (instance != null) {
+                 attributeModifiers.forEach(attributeModifier -> instance.removeModifier(attributeModifier.id()));
+             }
+@@ -90,7 +_,7 @@
+     }
+ 
+     public void assignAllValues(final AttributeMap other) {
+-        other.attributes.values().forEach(otherInstance -> {
++        other.instances().forEach(otherInstance -> { // Canvas - optimize attribute
+             AttributeInstance selfInstance = this.getInstance(otherInstance.getAttribute());
+             if (selfInstance != null) {
+                 selfInstance.replaceFrom(otherInstance);
+@@ -99,7 +_,7 @@
+     }
+ 
+     public void assignBaseValues(final AttributeMap other) {
+-        other.attributes.values().forEach(otherInstance -> {
++        other.instances().forEach(otherInstance -> { // Canvas - optimize attribute
+             AttributeInstance selfInstance = this.getInstance(otherInstance.getAttribute());
+             if (selfInstance != null) {
+                 selfInstance.setBaseValue(otherInstance.getBaseValue());
+@@ -108,7 +_,7 @@
+     }
+ 
+     public void assignPermanentModifiers(final AttributeMap other) {
+-        other.attributes.values().forEach(otherInstance -> {
++        other.instances().forEach(otherInstance -> { // Canvas - optimize attribute
+             AttributeInstance selfInstance = this.getInstance(otherInstance.getAttribute());
+             if (selfInstance != null) {
+                 selfInstance.addPermanentModifiers(otherInstance.getPermanentModifiers());
+@@ -121,7 +_,7 @@
+             return false;
+         }
+ 
+-        AttributeInstance instance = this.attributes.get(attribute);
++        AttributeInstance instance = this.ownInstance(attribute); // Canvas - optimize attribute
+         if (instance != null) {
+             instance.setBaseValue(this.supplier.getBaseValue(attribute));
+         }
+@@ -130,9 +_,10 @@
+     }
+ 
+     public List<AttributeInstance.Packed> pack() {
+-        List<AttributeInstance.Packed> result = new ArrayList<>(this.attributes.values().size());
++        List<AttributeInstance> instances = this.instances(); // Canvas - optimize attribute
++        List<AttributeInstance.Packed> result = new ArrayList<>(instances.size()); // Canvas - optimize attribute
+ 
+-        for (AttributeInstance attribute : this.attributes.values()) {
++        for (AttributeInstance attribute : instances) { // Canvas - optimize attribute
+             result.add(attribute.pack());
+         }
+ 
+@@ -151,7 +_,7 @@
+     // Paper - start - living entity allow attribute registration
+     public void registerAttribute(Holder<Attribute> attributeBase) {
+         AttributeInstance attributeModifiable = new AttributeInstance(attributeBase, AttributeInstance::getAttribute);
+-        attributes.put(attributeBase, attributeModifiable);
++        this.putInstance(attributeBase, attributeModifiable); // Canvas - optimize attribute
+     }
+     // Paper - end - living entity allow attribute registration
+ 
