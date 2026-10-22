@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/LevelChunk.java
 +++ b/net/minecraft/world/level/chunk/LevelChunk.java
-@@ -89,10 +_,14 @@
+@@ -89,12 +_,19 @@
              return "<null>";
          }
      };
@@ -14,8 +14,14 @@
 +    private final io.canvasmc.canvas.world.chunk.RandomTickSchedule canvas$randomTickSchedule = new io.canvasmc.canvas.world.chunk.RandomTickSchedule(this.sections.length);
 +    // Canvas end - optimize random tick
      private LevelChunk.@Nullable PostLoadProcessor postLoad;
-     private final Int2ObjectMap<GameEventListenerRegistry> gameEventListenerRegistrySections;
+-    private final Int2ObjectMap<GameEventListenerRegistry> gameEventListenerRegistrySections;
++    // Canvas start - optimize game events
++    private final GameEventListenerRegistry[] gameEventListenerRegistrySections;
++    private @Nullable Int2ObjectMap<GameEventListenerRegistry> gameEventListenerRegistrySectionsOutside;
++    // Canvas end - optimize game events
      private final LevelChunkTicks<Block> blockTicks;
+     private final LevelChunkTicks<Fluid> fluidTicks;
+     private LevelChunk.UnsavedListener unsavedListener = chunkPos -> {};
 @@ -133,6 +_,18 @@
      private final int maxSection;
      private final boolean debug;
@@ -35,15 +41,18 @@
  
      @Override
      public final BlockState moonrise$getBlock(final int x, final int y, final int z) {
-@@ -160,7 +_,7 @@
+@@ -160,9 +_,9 @@
          final LevelChunk.@Nullable PostLoadProcessor postLoad,
          final @Nullable BlendingData blendingData
      ) {
 -        super(pos, upgradeData, level, PalettedContainerFactory.create(net.minecraft.server.MinecraftServer.getServer().registryAccess()), inhabitedTime, sections, blendingData); // Paper - Anti-Xray - The world isn't ready yet, use server singleton for registry
 +        super(pos, upgradeData, level, level.palettedContainerFactory() != null ? level.palettedContainerFactory() : PalettedContainerFactory.create(net.minecraft.server.MinecraftServer.getServer().registryAccess()), inhabitedTime, sections, blendingData); // Paper - Anti-Xray - The world isn't ready yet, use server singleton for registry // Canvas - optimize palette reads
          this.level = (ServerLevel) level; // CraftBukkit - type
-         this.gameEventListenerRegistrySections = new Int2ObjectOpenHashMap<>();
+-        this.gameEventListenerRegistrySections = new Int2ObjectOpenHashMap<>();
++        this.gameEventListenerRegistrySections = new GameEventListenerRegistry[this.getSectionsCount()]; // Canvas - optimize game events
  
+         for (Heightmap.Types type : Heightmap.Types.values()) {
+             if (ChunkStatus.FULL.heightmapsAfter().contains(type)) {
 @@ -181,7 +_,19 @@
          this.debug = !empty && this.level.isDebug();
          this.defaultBlockState = empty ? VOID_AIR_BLOCKSTATE : AIR_BLOCKSTATE;
@@ -79,6 +88,39 @@
              this.setBlockEntity(blockEntity);
          }
  
+@@ -268,10 +_,28 @@
+ 
+     @Override
+     public GameEventListenerRegistry getListenerRegistry(final int section) {
+-        return this.level instanceof ServerLevel serverLevel
+-            ? this.gameEventListenerRegistrySections
+-                .computeIfAbsent(section, key -> new EuclideanGameEventListenerRegistry(serverLevel, section, this::removeGameEventListenerRegistry))
+-            : super.getListenerRegistry(section);
++        // Canvas start - optimize game events
++        if (!(this.level instanceof ServerLevel serverLevel)) {
++            return super.getListenerRegistry(section);
++        }
++
++        final int sectionIndex = section - this.minSection;
++        if (sectionIndex >= 0 && sectionIndex < this.gameEventListenerRegistrySections.length) {
++            GameEventListenerRegistry registry = this.gameEventListenerRegistrySections[sectionIndex];
++            if (registry == null) {
++                registry = new EuclideanGameEventListenerRegistry(serverLevel, section, this::removeGameEventListenerRegistry);
++                this.gameEventListenerRegistrySections[sectionIndex] = registry;
++            }
++            return registry;
++        }
++
++        Int2ObjectMap<GameEventListenerRegistry> outside = this.gameEventListenerRegistrySectionsOutside;
++        if (outside == null) {
++            outside = new Int2ObjectOpenHashMap<>();
++            this.gameEventListenerRegistrySectionsOutside = outside;
++        }
++        return outside.computeIfAbsent(section, key -> new EuclideanGameEventListenerRegistry(serverLevel, section, this::removeGameEventListenerRegistry));
++        // Canvas end - optimize game events
+     }
+ 
+     // Paper start - Perf: Reduce instructions and provide final method
 @@ -282,12 +_,18 @@
  
      public BlockState getBlockStateFinal(final int x, final int y, final int z) {
@@ -176,6 +218,26 @@
              // CraftBukkit start - SPIGOT-5561: Also remove from pending map
              if (!this.pendingBlockEntities.isEmpty()) {
                  this.pendingBlockEntities.remove(pos);
+@@ -612,7 +_,18 @@
+     }
+ 
+     private void removeGameEventListenerRegistry(final int sectionY) {
+-        this.gameEventListenerRegistrySections.remove(sectionY);
++        // Canvas start - optimize game events
++        final int sectionIndex = sectionY - this.minSection;
++        if (sectionIndex >= 0 && sectionIndex < this.gameEventListenerRegistrySections.length) {
++            this.gameEventListenerRegistrySections[sectionIndex] = null;
++            return;
++        }
++
++        final Int2ObjectMap<GameEventListenerRegistry> outside = this.gameEventListenerRegistrySectionsOutside;
++        if (outside != null) {
++            outside.remove(sectionY);
++        }
++        // Canvas end - optimize game events
+     }
+ 
+     private void removeBlockEntityTicker(final BlockPos pos) {
 @@ -756,18 +_,44 @@
      }
  
@@ -354,3 +416,38 @@
                              this.ticker.tick(LevelChunk.this.level, this.blockEntity.getBlockPos(), blockState, this.blockEntity);
                              this.loggedInvalidBlockState = false;
                              // Paper start - Remove the Block Entity if it's invalid
+@@ -1022,13 +_,19 @@
+ 
+     public static class RebindableTickingBlockEntityWrapper implements TickingBlockEntity {
+         public TickingBlockEntity ticker;
++        private @Nullable BlockPos cachedPos; // Canvas - optimize block entities
++        private @Nullable BlockEntity blockEntityReference; // Canvas - optimize block entities
+ 
+         private RebindableTickingBlockEntityWrapper(final TickingBlockEntity ticker) {
+             this.ticker = ticker;
++            this.cachedPos = this.ticker.getPos(); // Canvas - optimize block entities
++            this.blockEntityReference = ticker instanceof BoundTickingBlockEntity<?> boundTicker ? boundTicker.blockEntity : null; // Canvas - optimize block entities
+         }
+ 
+         public void rebind(final TickingBlockEntity ticker) {
+             this.ticker = ticker;
++            this.cachedPos = this.ticker.getPos(); // Canvas - optimize block entities
++            this.blockEntityReference = ticker instanceof BoundTickingBlockEntity<?> boundTicker ? boundTicker.blockEntity : null; // Canvas - optimize block entities
+         }
+ 
+         // Folia start - region threading
+@@ -1045,12 +_,12 @@
+ 
+         @Override
+         public boolean isRemoved() {
+-            return this.ticker.isRemoved();
++            return this.blockEntityReference != null ? this.blockEntityReference.isRemoved() : this.ticker.isRemoved(); // Canvas - optimize block entities
+         }
+ 
+         @Override
+         public BlockPos getPos() {
+-            return this.ticker.getPos();
++            return this.cachedPos; // Canvas - optimize block entities
+         }
+ 
+         @Override
