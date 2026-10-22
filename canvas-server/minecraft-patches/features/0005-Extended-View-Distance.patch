@@ -1207,7 +1207,7 @@ index 3493916a5f64e8d930a6144be3d72136392da184..26f885c5acb5a6282a9d1c9a965db3fd
          // Canvas start - region threading
  
 diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
-index 3b96c28cdb52e0c03e2573c9e2aff0589735d740..afb95032dff869165204b40ad42fbdbe1a58d297 100644
+index 4fe6d9e31be10c48f506498784e053b4da00a16b..6658017f5352dd5f9c01ac250031c25bbc54b338 100644
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
 @@ -374,6 +374,14 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
