@@ -244,3 +244,15 @@
              csvOutput.writeRow(blockPos.getX(), blockPos.getY(), blockPos.getZ(), ticker.getType());
          }
      }
+@@ -3114,6 +_,11 @@
+ 
+     public boolean canSpreadFireAround(final BlockPos pos) {
+         int spreadRadius = this.getGameRules().get(GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER);
++        // Canvas start - Skip player checks when fire spreading is disabled
++        if (spreadRadius == 0) {
++            return false;
++        }
++        // Canvas end - Skip player checks when fire spreading is disabled
+         return spreadRadius == -1 || this.chunkSource.chunkMap.anyPlayerCloseEnoughTo(pos, spreadRadius);
+     }
+ 
