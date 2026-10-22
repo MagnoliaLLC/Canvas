@@ -1,0 +1,34 @@
+--- a/net/minecraft/network/VarInt.java
++++ b/net/minecraft/network/VarInt.java
+@@ -59,9 +_,30 @@
+         } else if ((value & (0xFFFFFFFF << 14)) == 0) {
+             int s = (value & 0x7F | 0x80) << 8 | (value >>> 7);
+             output.writeShort(s);
++        // Canvas start - Optimize VarInt#write and VarLong#write
++        } else if ((value & (0xFFFFFFFF << 21)) == 0) {
++            int w = (value & 0x7F) << 16
++                | (value & 0x3F80) << 1
++                | (value >>> 14)
++                | 0x00808000;
++            output.writeMedium(w);
++        } else if ((value & (0xFFFFFFFF << 28)) == 0) {
++            int w = (value & 0x7F) << 24
++                | (value & 0x3F80) << 9
++                | (value & 0x1FC000) >> 6
++                | (value >>> 21)
++                | 0x80808000;
++            output.writeInt(w);
+         } else {
+-            writeSlow(output, value);
++            int w = (value & 0x7F) << 24
++                | (value & 0x3F80) << 9
++                | (value & 0x1FC000) >> 6
++                | ((value >>> 21) & 0x7F)
++                | 0x80808080;
++            output.writeInt(w);
++            output.writeByte(value >>> 28);
+         }
++        // Canvas end - Optimize VarInt#write and VarLong#write
+         return output;
+     }
+     public static ByteBuf writeSlow(final ByteBuf output, int value) {
