@@ -75,7 +75,17 @@
  
      public void setListenerForServerboundHandshake(final PacketListener packetListener) {
          if (this.packetListener != null) {
-@@ -539,6 +_,29 @@
+@@ -535,10 +_,55 @@
+         if (this.channel.eventLoop().inEventLoop()) {
+             this.doSendPacket(packet, listener, flush);
+         } else {
++            // Canvas start - Optimise non-flush packet sending
++            if (!flush && this.channel.eventLoop() instanceof io.netty.util.concurrent.SingleThreadEventExecutor eventLoop) {
++                eventLoop.lazyExecute(() -> this.doSendPacket(packet, listener, false));
++                return;
++            }
++            // Canvas end - Optimise non-flush packet sending
+             this.channel.eventLoop().execute(() -> this.doSendPacket(packet, listener, flush));
          }
      }
  
@@ -88,7 +98,7 @@
 +        }
 +
 +        this.sentPackets += sends.size();
-+        this.channel.eventLoop().execute(() -> {
++        final Runnable drain = () -> { // Canvas - Optimise non-flush packet sending
 +            boolean flush = false;
 +            for (final PacketSendAction send : sends) {
 +                this.doSendPacket(send.packet, send.listener, false);
@@ -98,8 +108,24 @@
 +            if (flush) {
 +                this.channel.flush();
 +            }
-+        });
++        }; // Canvas - Optimise non-flush packet sending
++        // Canvas start - Optimise non-flush packet sending
++        if (this.channel.eventLoop() instanceof io.netty.util.concurrent.SingleThreadEventExecutor eventLoop && Connection.noneFlush(sends)) {
++            eventLoop.lazyExecute(drain);
++            return;
++        }
++        this.channel.eventLoop().execute(drain);
 +    }
++
++    private static boolean noneFlush(final java.util.List<PacketSendAction> sends) {
++        for (final PacketSendAction send : sends) {
++            if (send.flush) {
++                return false;
++            }
++        }
++        return true;
++    }
++    // Canvas end - Optimise non-flush packet sending
 +    // Canvas end - one event loop task per queue drain
 +
      private void doSendPacket(final Packet<?> packet, final @Nullable ChannelFutureListener listener, final boolean flush) {
