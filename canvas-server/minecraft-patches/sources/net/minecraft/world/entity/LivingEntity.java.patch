@@ -104,6 +104,22 @@
      }
  
      @Override
+@@ -971,6 +_,7 @@
+ 
+     protected void tickEffects() {
+         if (this.level() instanceof ServerLevel serverLevel) {
++            if (!this.activeEffects.isEmpty()) { // Canvas - optimize tickEffects
+             Iterator<Holder<MobEffect>> iterator = this.activeEffects.keySet().iterator();
+ 
+             this.tickingEffects = true; // CraftBukkit
+@@ -993,6 +_,7 @@
+                 }
+             } catch (ConcurrentModificationException var6) {
+             }
++            } // Canvas - optimize tickEffects
+             // CraftBukkit start
+             this.tickingEffects = false;
+             Runnable task;
 @@ -1006,7 +_,7 @@
              }
  
@@ -304,6 +320,15 @@
          }
  
          if (!this.level().isClientSide() || this.isLocalInstanceAuthoritative()) {
+@@ -3818,7 +_,7 @@
+ 
+         if (this.level() instanceof ServerLevel serverLevel) {
+             if ((!this.isInPowderSnow || !this.canFreeze()) && !this.freezeLocked) { // Paper - Freeze Tick Lock API
+-                this.setTicksFrozen(Math.max(0, this.getTicksFrozen() - 2));
++                if (this.getTicksFrozen() != 0) this.setTicksFrozen(Math.max(0, this.getTicksFrozen() - 2)); // Canvas - optimize frozen ticks
+             }
+ 
+             this.removeFrost();
 @@ -3833,7 +_,7 @@
              this.checkAutoSpinAttack(beforeTravelBox, this.getBoundingBox());
          }
