@@ -34,7 +34,7 @@
      @Deprecated
      @VisibleForTesting
      public EnvironmentAttributeSystem setEnvironmentAttributes(final EnvironmentAttributeSystem environmentAttributes) {
-@@ -1064,71 +_,94 @@
+@@ -1064,72 +_,82 @@
      // Paper start - optimise random ticking
      private final io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource simpleRandom = io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource.INSTANCE; // Folia - region threading
  
@@ -45,8 +45,10 @@
 +    // Canvas start - optimize random tick
 +    // the modifications in this method essentially reduce tick volume drastically without
 +    // any sort of bias or skipping important updates, and significantly reduce RNG calls
-+    private void optimiseRandomTick(final LevelChunk chunk, final int tickSpeed, io.papermc.paper.threadedregions.RegionizedWorldData worldData) {
-+        LevelChunkSection[] sections = null; // Canvas - load ticked sections lazily
++    // Canvas start - schedule random ticks
++    // the schedule answers only the picks that land, the misses between them drawn geometrically, and a section is read on its first landing
++    private void optimiseRandomTick(final LevelChunk chunk, final io.canvasmc.canvas.world.chunk.RandomTickSchedule schedule, final net.minecraft.util.RandomSource random) {
++        LevelChunkSection[] sections = null;
 +        final int minSection = ca.spottedleaf.moonrise.common.util.WorldUtil.getMinSection(this);
          final boolean doubleTickFluids = !ca.spottedleaf.moonrise.common.PlatformHooks.get().configFixMC224294();
  
@@ -55,18 +57,27 @@
          final int offsetZ = cpos.z() << 4;
  
 -        for (int sectionIndex = 0, sectionsLen = sections.length; sectionIndex < sectionsLen; sectionIndex++) {
-+        final net.minecraft.util.RandomSource random = worldData.getCanvasWorldData().simpleUnsafeLocalRandom;
++        int loadedSection = -1;
++        net.minecraft.world.level.chunk.PalettedContainer<BlockState> states = null;
++        ca.spottedleaf.moonrise.common.list.ShortList tickList = null;
 +
-+        final short[] tickingBlockCounts = chunk.canvas$getTickingBlockCounts();
-+        for (int sectionIndex = 0, sectionsLen = tickingBlockCounts.length; sectionIndex < sectionsLen; sectionIndex++) { // Canvas - load ticked sections lazily
-+            if (tickingBlockCounts[sectionIndex] == 0) continue;
++        for (int landing = schedule.nextLanding(random); landing >= 0; landing = schedule.nextLanding(random)) {
++            final int sectionIndex = io.canvasmc.canvas.world.chunk.RandomTickSchedule.section(landing);
++            if (sectionIndex != loadedSection) {
++                if (sections == null) {
++                    sections = chunk.getSections();
++                }
++                final LevelChunkSection section = sections[sectionIndex];
++                states = section.getStates();
++                tickList = ((ca.spottedleaf.moonrise.patches.block_counting.BlockCountingChunkSection)section).moonrise$getTickingBlockList();
++                loadedSection = sectionIndex;
++            }
 +
-+            // Canvas start - load ticked sections lazily
-+            // most picks miss the ticking blocks, so the section is read on the first hit; the random draws stay where they are
-+            net.minecraft.world.level.chunk.PalettedContainer<BlockState> states = null;
-+            ca.spottedleaf.moonrise.common.list.ShortList tickList = null;
-+            // Canvas end - load ticked sections lazily
++            final int index = io.canvasmc.canvas.world.chunk.RandomTickSchedule.index(landing);
++            if (index >= tickList.size()) continue; // Paper's own bound on the pick
 +
++            final int location = (int)tickList.getRaw(index) & 0xFFFF;
++            final BlockState state = states.get(location);
              final int offsetY = (sectionIndex + minSection) << 4;
 -            final LevelChunkSection section = sections[sectionIndex];
 -            final net.minecraft.world.level.chunk.PalettedContainer<net.minecraft.world.level.block.state.BlockState> states = section.getStates();
@@ -84,82 +95,73 @@
 -                    // most of the time we fall here
 -                    continue;
 -                }
-+
-+            // cached rng for block selection
-+            long rndCache = random.nextLong();
-+            int bitsLeft = 64;
-+
-+            for (int i = 0; i < tickSpeed; i++) {
-+                if (bitsLeft < 12) { // need 12 bits for 0-4095
-+                    rndCache = random.nextLong();
-+                    bitsLeft = 64;
-+                }
-+                bitsLeft -= 12;
-+
-+                final int index = (int)((rndCache >>> bitsLeft) & 0xFFF);
-+                if (index >= tickingBlockCounts[sectionIndex]) continue; // Canvas - read the live count, as a random tick can add a ticking block to this section as well as remove one
-+                // Canvas start - load ticked sections lazily
-+                if (tickList == null) {
-+                    if (sections == null) {
-+                        sections = chunk.getSections();
-+                    }
-+                    final LevelChunkSection section = sections[sectionIndex];
-+                    states = section.getStates();
-+                    tickList = ((ca.spottedleaf.moonrise.patches.block_counting.BlockCountingChunkSection)section).moonrise$getTickingBlockList();
-+                }
-+                // Canvas end - load ticked sections lazily
-+                if (index >= tickList.size()) continue; // Canvas - Paper's own bound on the pick
- 
-                 final int location = (int)tickList.getRaw(index) & 0xFFFF;
-                 final BlockState state = states.get(location);
- 
+-
+-                final int location = (int)tickList.getRaw(index) & 0xFFFF;
+-                final BlockState state = states.get(location);
+-
 -                // do not use a mutable pos, as some random tick implementations store the input without calling immutable()!
 -                final BlockPos pos = new BlockPos((location & 15) | offsetX, ((location >>> (4 + 4)) & 15) | offsetY, ((location >>> 4) & 15) | offsetZ);
-+                final BlockPos pos = new BlockPos(
-+                    (location & 15) | offsetX,
-+                    ((location >>> 8) & 15) | offsetY,
-+                    ((location >>> 4) & 15) | offsetZ
-+                );
- 
+-
 -                state.randomTick((ServerLevel)(Object)this, pos, simpleRandom);
-+                state.randomTick(this, pos, random);
-                 if (doubleTickFluids) {
-                     final FluidState fluidState = state.getFluidState();
-                     if (fluidState.isRandomlyTicking()) {
+-                if (doubleTickFluids) {
+-                    final FluidState fluidState = state.getFluidState();
+-                    if (fluidState.isRandomlyTicking()) {
 -                        fluidState.randomTick((ServerLevel)(Object)this, pos, simpleRandom);
-+                        fluidState.randomTick(this, pos, random);
-                     }
+-                    }
++
++            final BlockPos pos = new BlockPos(
++                (location & 15) | offsetX,
++                ((location >>> 8) & 15) | offsetY,
++                ((location >>> 4) & 15) | offsetZ
++            );
++
++            state.randomTick(this, pos, random);
++            if (doubleTickFluids) {
++                final FluidState fluidState = state.getFluidState();
++                if (fluidState.isRandomlyTicking()) {
++                    fluidState.randomTick(this, pos, random);
                  }
              }
          }
 -
 -        return;
      }
++    // Canvas end - schedule random ticks
 +    // Canvas end - optimize random tick
      // Paper end - optimise random ticking
  
 -    public void tickChunk(final LevelChunk chunk, final int tickSpeed) {
 -        final io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource simpleRandom = this.simpleRandom; // Paper - optimise random ticking // Folia - region threading
 +    public void tickChunk(final LevelChunk chunk, final int tickSpeed, io.papermc.paper.threadedregions.RegionizedWorldData worldData) { // Canvas - optimize random tick
++        // Canvas start - schedule random ticks
++        final io.canvasmc.canvas.world.chunk.RandomTickSchedule schedule = chunk.canvas$getRandomTickSchedule();
++        if (schedule.idle(tickSpeed)) {
++            return;
++        }
++        final net.minecraft.util.RandomSource random = worldData.getCanvasWorldData().simpleUnsafeLocalRandom;
++        final int precipitations = schedule.begin(tickSpeed, random);
++        // Canvas end - schedule random ticks
          ChunkPos chunkPos = chunk.getPos();
          int minX = chunkPos.getMinBlockX();
          int minZ = chunkPos.getMinBlockZ();
  
          if (!this.paperConfig().environment.disableIceAndSnow) { // Paper - Option to disable ice and snow
-         for (int i = 0; i < tickSpeed; i++) {
+-        for (int i = 0; i < tickSpeed; i++) {
 -            if (simpleRandom.nextInt(48) == 0) { // Paper - optimise random ticking
-+            if (worldData.getCanvasWorldData().simpleUnsafeLocalRandom.nextInt(48) == 0) { // Paper - optimise random ticking // Canvas - optimize random tick
-                 this.tickPrecipitation(this.getBlockRandomPos(minX, 0, minZ, 15));
-             }
+-                this.tickPrecipitation(this.getBlockRandomPos(minX, 0, minZ, 15));
+-            }
++        for (int i = 0; i < precipitations; i++) { // Canvas - schedule random ticks
++            this.tickPrecipitation(this.getBlockRandomPos(minX, 0, minZ, 15));
          }
          } // Paper - Option to disable ice and snow
  
-         if (tickSpeed > 0) {
+-        if (tickSpeed > 0) {
 -            this.optimiseRandomTick(chunk, tickSpeed); // Paper - optimise random ticking
-+            this.optimiseRandomTick(chunk, tickSpeed, worldData); // Paper - optimise random ticking // Canvas - optimize random tick
-         }
+-        }
++        this.optimiseRandomTick(chunk, schedule, random); // Paper - optimise random ticking // Canvas - schedule random ticks
      }
  
+     public void tickThunder(final LevelChunk chunk) {
 @@ -1137,7 +_,7 @@
          boolean raining = this.isRaining();
          int minX = chunkPos.getMinBlockX();
