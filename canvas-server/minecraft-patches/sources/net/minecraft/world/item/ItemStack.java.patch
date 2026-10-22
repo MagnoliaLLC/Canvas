@@ -96,9 +96,17 @@
          this.applyComponents(patch);
          // Paper end - change base component prototype
      }
-@@ -1304,6 +_,11 @@
+@@ -1303,7 +_,19 @@
+         return this.getCount();
      }
  
++    // Canvas start - cache item max stack size
++    @Override
++    public int getMaxStackSize() {
++        return this.isEmpty() ? 1 : this.components.getMaxStackSize();
++    }
++    // Canvas end - cache item max stack size
++
      public void setCount(final int count) {
 +        // Canvas start - track changes to held stacks
 +        if (count != this.count) {

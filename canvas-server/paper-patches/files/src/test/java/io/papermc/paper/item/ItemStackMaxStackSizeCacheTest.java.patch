@@ -1,0 +1,296 @@
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/item/ItemStackMaxStackSizeCacheTest.java
+@@ -1,0 +_,293 @@
++package io.papermc.paper.item;
++
++import io.papermc.paper.datacomponent.DataComponentTypes;
++import net.minecraft.core.component.DataComponentMap;
++import net.minecraft.core.component.DataComponentPatch;
++import net.minecraft.core.component.DataComponents;
++import net.minecraft.core.component.PatchedDataComponentMap;
++import net.minecraft.core.component.TypedDataComponent;
++import net.minecraft.core.registries.BuiltInRegistries;
++import net.minecraft.world.item.Item;
++import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.item.Items;
++import org.bukkit.craftbukkit.inventory.CraftItemStack;
++import org.bukkit.inventory.meta.ItemMeta;
++import org.bukkit.support.environment.AllFeatures;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertTrue;
++
++/**
++ * Checks that the max stack size cached on {@link PatchedDataComponentMap} ("cache item max stack
++ * size") always equals the component it caches, after every way a stack's components can change.
++ */
++@AllFeatures
++class ItemStackMaxStackSizeCacheTest {
++
++    @Test
++    void mutatorsWithPrototypeValue() {
++        exerciseMutators(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 16).set(DataComponents.REPAIR_COST, 0).build());
++        exerciseMutators(Items.DIRT.components());
++        exerciseMutators(Items.DIAMOND_SWORD.components());
++    }
++
++    @Test
++    void mutatorsWithoutPrototypeValue() {
++        exerciseMutators(DataComponentMap.builder().set(DataComponents.REPAIR_COST, 0).build());
++        exerciseMutators(DataComponentMap.EMPTY);
++    }
++
++    @Test
++    void everyItem() {
++        for (Item item : BuiltInRegistries.ITEM) {
++            final ItemStack stack = new ItemStack(item);
++            final String context = item.toString();
++            assertCached(stack, context + " new");
++            assertCached(stack.copy(), context + " copy");
++            if (stack.isEmpty()) {
++                continue;
++            }
++
++            stack.set(DataComponents.MAX_STACK_SIZE, 42);
++            assertCached(stack, context + " set");
++            assertEquals(42, stack.getMaxStackSize(), context);
++            assertCached(stack.copy(), context + " copy after set");
++            stack.remove(DataComponents.MAX_STACK_SIZE);
++            assertCached(stack, context + " remove");
++            stack.restorePatch(DataComponentPatch.EMPTY);
++            assertCached(stack, context + " restore");
++        }
++    }
++
++    @Test
++    void itemStackPaths() {
++        final ItemStack stack = new ItemStack(Items.DIRT, 10);
++        assertCached(stack, "new");
++        assertEquals(64, stack.getMaxStackSize());
++
++        stack.set(DataComponents.MAX_STACK_SIZE, 5);
++        assertCached(stack, "set");
++        assertEquals(5, stack.getMaxStackSize());
++
++        final ItemStack copy = stack.copy();
++        assertCached(copy, "copy");
++        assertEquals(5, copy.getMaxStackSize());
++        copy.set(DataComponents.MAX_STACK_SIZE, 2);
++        assertCached(copy, "copy changed");
++        assertCached(stack, "original after copy changed");
++        assertEquals(5, stack.getMaxStackSize());
++        assertEquals(2, copy.getMaxStackSize());
++
++        stack.set(DataComponents.MAX_STACK_SIZE, 6);
++        assertCached(stack, "original changed");
++        assertCached(copy, "copy after original changed");
++        assertEquals(2, copy.getMaxStackSize());
++
++        assertCached(stack.copyWithCount(3), "copyWithCount");
++        assertCached(stack.split(1), "split");
++        final ItemStack transmuted = stack.transmuteCopy(Items.ENDER_PEARL);
++        assertCached(transmuted, "transmuteCopy");
++        assertEquals(6, transmuted.getMaxStackSize());
++
++        stack.remove(DataComponents.MAX_STACK_SIZE);
++        assertCached(stack, "remove");
++        assertEquals(1, stack.getMaxStackSize());
++        stack.setItem(Items.ENDER_PEARL);
++        assertCached(stack, "setItem with removed value");
++        stack.restorePatch(DataComponentPatch.EMPTY);
++        assertCached(stack, "restorePatch empty");
++        assertEquals(16, stack.getMaxStackSize());
++        stack.set(DataComponents.MAX_STACK_SIZE, 9);
++        stack.setItem(Items.DIRT);
++        assertCached(stack, "setItem with set value");
++        assertEquals(9, stack.getMaxStackSize());
++
++        stack.applyComponents(DataComponentPatch.builder().set(DataComponents.MAX_STACK_SIZE, 8).build());
++        assertCached(stack, "applyComponents patch");
++        assertEquals(8, stack.getMaxStackSize());
++        stack.applyComponents(DataComponentPatch.builder().remove(DataComponents.MAX_STACK_SIZE).build());
++        assertCached(stack, "applyComponents patch remove");
++        stack.applyComponents(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 4).build());
++        assertCached(stack, "applyComponents map");
++        assertEquals(4, stack.getMaxStackSize());
++        stack.update(DataComponents.MAX_STACK_SIZE, 1, value -> value + 1);
++        assertCached(stack, "update");
++        assertEquals(5, stack.getMaxStackSize());
++        stack.copyFrom(DataComponents.MAX_STACK_SIZE, new ItemStack(Items.SNOWBALL));
++        assertCached(stack, "copyFrom");
++        assertEquals(16, stack.getMaxStackSize());
++        stack.set(new TypedDataComponent<>(DataComponents.MAX_STACK_SIZE, 3));
++        assertCached(stack, "set typed");
++        assertEquals(3, stack.getMaxStackSize());
++        stack.set(DataComponents.MAX_STACK_SIZE, null);
++        assertCached(stack, "set null");
++        assertEquals(1, stack.getMaxStackSize());
++
++        final ItemStack full = new ItemStack(Items.DIRT, 64);
++        full.applyComponentsAndValidate(DataComponentPatch.builder().set(DataComponents.MAX_STACK_SIZE, 16).build());
++        assertCached(full, "applyComponentsAndValidate refused");
++        assertEquals(64, full.getMaxStackSize());
++        full.applyComponentsAndValidate(DataComponentPatch.builder().set(DataComponents.MAX_STACK_SIZE, 99).build());
++        assertCached(full, "applyComponentsAndValidate accepted");
++        assertEquals(99, full.getMaxStackSize());
++
++        final ItemStack decoded = new ItemStack(
++            Items.DIRT.builtInRegistryHolder(), 3, DataComponentPatch.builder().set(DataComponents.MAX_STACK_SIZE, 7).build()
++        );
++        assertCached(decoded, "from patch");
++        assertEquals(7, decoded.getMaxStackSize());
++        final ItemStack decodedDefault = new ItemStack(
++            Items.DIRT.builtInRegistryHolder(), 3, DataComponentPatch.builder().set(DataComponents.MAX_STACK_SIZE, 64).build()
++        );
++        assertCached(decodedDefault, "from unsanitized patch");
++        assertEquals(64, decodedDefault.getMaxStackSize());
++    }
++
++    @Test
++    void emptyStacks() {
++        assertEquals(1, ItemStack.EMPTY.getMaxStackSize());
++        assertCached(ItemStack.EMPTY, "EMPTY");
++        assertCached(new ItemStack(Items.AIR), "air");
++
++        final ItemStack stack = new ItemStack(Items.DIRT);
++        stack.setCount(0);
++        assertCached(stack, "count 0");
++        assertEquals(1, stack.getMaxStackSize());
++        stack.setCount(1);
++        assertCached(stack, "count 1");
++        assertEquals(64, stack.getMaxStackSize());
++    }
++
++    @Test
++    void bukkitApi() {
++        final ItemStack handle = new ItemStack(Items.DIRT);
++        final org.bukkit.inventory.ItemStack mirror = CraftItemStack.asBukkitMirror(handle);
++
++        mirror.setData(DataComponentTypes.MAX_STACK_SIZE, 12);
++        assertCached(handle, "setData");
++        assertEquals(12, handle.getMaxStackSize());
++        mirror.unsetData(DataComponentTypes.MAX_STACK_SIZE);
++        assertCached(handle, "unsetData");
++        assertEquals(1, handle.getMaxStackSize());
++        mirror.resetData(DataComponentTypes.MAX_STACK_SIZE);
++        assertCached(handle, "resetData");
++        assertEquals(64, handle.getMaxStackSize());
++
++        final ItemMeta meta = mirror.getItemMeta();
++        meta.setMaxStackSize(3);
++        assertTrue(mirror.setItemMeta(meta));
++        assertCached(CraftItemStack.unwrap(mirror), "setItemMeta");
++        assertEquals(3, CraftItemStack.unwrap(mirror).getMaxStackSize());
++        assertTrue(mirror.setItemMeta(null));
++        assertCached(CraftItemStack.unwrap(mirror), "setItemMeta null");
++        assertEquals(64, CraftItemStack.unwrap(mirror).getMaxStackSize());
++    }
++
++    private static void exerciseMutators(final DataComponentMap prototype) {
++        final Integer prototypeValue = prototype.get(DataComponents.MAX_STACK_SIZE);
++        final PatchedDataComponentMap map = new PatchedDataComponentMap(prototype);
++        assertCached(map, "new");
++
++        map.set(DataComponents.MAX_STACK_SIZE, 7);
++        assertCached(map, "set");
++        assertEquals(7, map.getMaxStackSize());
++        map.set(DataComponents.REPAIR_COST, 3);
++        assertCached(map, "set other");
++
++        final PatchedDataComponentMap copy = map.copy();
++        assertCached(copy, "copy");
++        assertEquals(7, copy.getMaxStackSize());
++        copy.set(DataComponents.MAX_STACK_SIZE, 3);
++        assertCached(copy, "copy changed");
++        assertCached(map, "original after copy changed");
++        assertEquals(7, map.getMaxStackSize());
++        map.set(DataComponents.MAX_STACK_SIZE, 5);
++        assertCached(map, "original changed");
++        assertCached(copy, "copy after original changed");
++        assertEquals(3, copy.getMaxStackSize());
++
++        map.set(DataComponents.MAX_STACK_SIZE, prototypeValue);
++        assertCached(map, "set prototype value");
++        map.set(DataComponents.MAX_STACK_SIZE, null);
++        assertCached(map, "set null");
++        assertEquals(1, map.getMaxStackSize());
++        map.set(new TypedDataComponent<>(DataComponents.MAX_STACK_SIZE, 9));
++        assertCached(map, "set typed");
++        assertEquals(9, map.getMaxStackSize());
++        map.remove(DataComponents.MAX_STACK_SIZE);
++        assertCached(map, "remove");
++        assertEquals(1, map.getMaxStackSize());
++        map.remove(DataComponents.REPAIR_COST);
++        assertCached(map, "remove other");
++
++        map.applyPatch(DataComponentPatch.builder().set(DataComponents.MAX_STACK_SIZE, 12).build());
++        assertCached(map, "applyPatch set");
++        assertEquals(12, map.getMaxStackSize());
++        map.applyPatch(DataComponentPatch.builder().set(DataComponents.REPAIR_COST, 4).build());
++        assertCached(map, "applyPatch other");
++        assertEquals(12, map.getMaxStackSize());
++        map.applyPatch(DataComponentPatch.builder().remove(DataComponents.MAX_STACK_SIZE).build());
++        assertCached(map, "applyPatch remove");
++        assertEquals(1, map.getMaxStackSize());
++        if (prototypeValue != null) {
++            map.applyPatch(DataComponentPatch.builder().set(DataComponents.MAX_STACK_SIZE, prototypeValue).build());
++            assertCached(map, "applyPatch prototype value");
++            assertEquals(prototypeValue.intValue(), map.getMaxStackSize());
++        }
++
++        map.set(DataComponents.MAX_STACK_SIZE, 11);
++        final DataComponentPatch saved = map.asPatch();
++        map.set(DataComponents.MAX_STACK_SIZE, 20);
++        assertCached(map, "set after asPatch");
++        assertEquals(20, map.getMaxStackSize());
++        final PatchedDataComponentMap fromSaved = PatchedDataComponentMap.fromPatch(prototype, saved);
++        assertCached(fromSaved, "fromPatch sanitized");
++        assertEquals(11, fromSaved.getMaxStackSize());
++        final DataComponentPatch unsanitized = prototypeValue != null
++            ? DataComponentPatch.builder().set(DataComponents.MAX_STACK_SIZE, prototypeValue).build()
++            : DataComponentPatch.builder().remove(DataComponents.MAX_STACK_SIZE).build();
++        assertCached(PatchedDataComponentMap.fromPatch(prototype, unsanitized), "fromPatch unsanitized");
++
++        map.restorePatch(saved);
++        assertCached(map, "restorePatch saved");
++        assertEquals(11, map.getMaxStackSize());
++        map.restorePatch(DataComponentPatch.builder().set(DataComponents.MAX_STACK_SIZE, 2).build());
++        assertCached(map, "restorePatch set");
++        assertEquals(2, map.getMaxStackSize());
++        map.restorePatch(DataComponentPatch.builder().remove(DataComponents.MAX_STACK_SIZE).build());
++        assertCached(map, "restorePatch remove");
++        map.restorePatch(DataComponentPatch.EMPTY);
++        assertCached(map, "restorePatch empty");
++
++        map.set(DataComponents.MAX_STACK_SIZE, 13);
++        map.clearPatch();
++        assertCached(map, "clearPatch");
++        assertEquals(prototypeValue != null ? prototypeValue : 1, map.getMaxStackSize());
++
++        map.setAll(DataComponentMap.builder().set(DataComponents.MAX_STACK_SIZE, 33).set(DataComponents.REPAIR_COST, 1).build());
++        assertCached(map, "setAll");
++        assertEquals(33, map.getMaxStackSize());
++        map.setAll(DataComponentMap.builder().set(DataComponents.REPAIR_COST, 2).build());
++        assertCached(map, "setAll other");
++        assertEquals(33, map.getMaxStackSize());
++
++        if (map.toImmutableMap() instanceof PatchedDataComponentMap immutable) {
++            assertCached(immutable, "toImmutableMap");
++            assertEquals(33, immutable.getMaxStackSize());
++        }
++    }
++
++    private static void assertCached(final PatchedDataComponentMap map, final String step) {
++        final int expected = map.getOrDefault(DataComponents.MAX_STACK_SIZE, 1);
++        assertEquals(expected, map.getMaxStackSize(), step + " " + map);
++    }
++
++    private static void assertCached(final ItemStack stack, final String step) {
++        final int expected = stack.getComponents().getOrDefault(DataComponents.MAX_STACK_SIZE, 1);
++        assertEquals(expected, stack.getMaxStackSize(), step + " " + stack);
++        if (!stack.isEmpty()) {
++            assertCached((PatchedDataComponentMap) stack.getComponents(), step);
++        }
++    }
++}
