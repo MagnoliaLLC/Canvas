@@ -1,0 +1,72 @@
+--- a/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java
++++ b/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java
+@@ -25,11 +_,17 @@
+     private final Mob removerMob;
+     private int ticksSinceReachedGoal;
+     private static final int WAIT_AFTER_BLOCK_FOUND = 20;
++    // Lithium start - optimize non-POI block searches
++    private static final int SEARCH_RANGE = 24;
++    private static final java.util.function.BiPredicate<ChunkAccess, BlockPos.MutableBlockPos> IS_VALID_TARGET_ABOVE_BIPREDICATE = RemoveBlockGoal::lithium$isValidTargetAbove;
++    private final int lithium$verticalSearchRange;
++    // Lithium end - optimize non-POI block searches
+ 
+     public RemoveBlockGoal(final Block blockToRemove, final PathfinderMob mob, final double speedModifier, final int verticalSearchRange) {
+-        super(mob, speedModifier, 24, verticalSearchRange);
++        super(mob, speedModifier, SEARCH_RANGE, verticalSearchRange); // Lithium - optimize non-POI block searches
+         this.blockToRemove = blockToRemove;
+         this.removerMob = mob;
++        this.lithium$verticalSearchRange = verticalSearchRange; // Lithium - optimize non-POI block searches
+     }
+ 
+     @Override
+@@ -39,7 +_,7 @@
+         } else if (this.nextStartTick > 0) {
+             this.nextStartTick--;
+             return false;
+-        } else if (this.findNearestBlock()) {
++        } else if (this.lithium$findNearestBlock()) { // Lithium - optimize non-POI block searches
+             this.nextStartTick = reducedTickDelay(20);
+             return true;
+         } else {
+@@ -142,6 +_,41 @@
+ 
+         return null;
+     }
++
++    // Lithium start - optimize non-POI block searches
++    private boolean lithium$findNearestBlock() {
++        if (this.blockToRemove.defaultBlockState().isAir()) {
++            return this.findNearestBlock();
++        }
++
++        final BlockPos.MutableBlockPos found = io.canvasmc.canvas.world.block.search.MoveToBlockGoalSearch.findNearestBlock(
++            this.mob.level(),
++            this.mob.blockPosition().below(),
++            SEARCH_RANGE,
++            this.verticalSearchStart,
++            this.lithium$verticalSearchRange,
++            this.mob::isWithinHome,
++            this::lithium$isValidTargetBlock,
++            IS_VALID_TARGET_ABOVE_BIPREDICATE
++        );
++        if (found == null) {
++            return false;
++        }
++
++        this.blockPos = found;
++        this.mob.movingTarget = found.immutable();
++        return true;
++    }
++
++    private boolean lithium$isValidTargetBlock(final net.minecraft.world.level.block.state.BlockState blockState) {
++        return blockState.is(this.blockToRemove);
++    }
++
++    private static boolean lithium$isValidTargetAbove(final ChunkAccess chunkAccess, final BlockPos.MutableBlockPos mutable) {
++        return chunkAccess.getBlockState(mutable.move(0, 1, 0)).isAir()
++            && chunkAccess.getBlockState(mutable.move(0, 1, 0)).isAir();
++    }
++    // Lithium end - optimize non-POI block searches
+ 
+     @Override
+     protected boolean isValidTarget(final LevelReader level, final BlockPos pos) {
