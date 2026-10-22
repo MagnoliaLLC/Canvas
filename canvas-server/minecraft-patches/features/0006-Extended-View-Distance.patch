@@ -1282,7 +1282,7 @@ index f8ab6d56859d5605f6e15a8d12d737cce8fc2cae..79a04db23a8b65bfbddc27a7ed6647c5
          // Canvas start - region threading
  
 diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
-index 00c89fa1755de26e7f3e7181dab51aa302de6cd8..53f74e500136d1ba05a1bcadcb61064b4aaf2033 100644
+index 6c63298ea9bfd401b2daf2bdd006479bb0d50ed1..d93cf04ad01b62231c4a6ddc8712897c2cf9c40e 100644
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
 @@ -374,6 +374,14 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
@@ -1338,7 +1338,7 @@ index 41176326afeda91806f502c20d71a749b6c4fefb..2853d8cc6a2e30a843823fa867c90f74
          public boolean ignitedByLava() {
              return this.ignitedByLava;
 diff --git a/net/minecraft/world/level/chunk/LevelChunkSection.java b/net/minecraft/world/level/chunk/LevelChunkSection.java
-index 15d4d112e4435356b3a9d75d132199443e6603c4..c9ec8e4b278e4c1f8248c070e231d89b2563db77 100644
+index 8d615f1eab3d3facdff9f463182afcfe4d8bbe49..d8ec399dcc04037971f021efbb1571b7130bb7ee 100644
 --- a/net/minecraft/world/level/chunk/LevelChunkSection.java
 +++ b/net/minecraft/world/level/chunk/LevelChunkSection.java
 @@ -45,6 +45,11 @@ public class LevelChunkSection implements ca.spottedleaf.moonrise.patches.block_
