@@ -1,0 +1,31 @@
+--- a/net/minecraft/network/FriendlyByteBuf.java
++++ b/net/minecraft/network/FriendlyByteBuf.java
+@@ -266,7 +_,28 @@
+         return this;
+     }
+ 
++    // Canvas start - Bulk writes to writeLongArray during chunk loading
++    private static final java.lang.invoke.VarHandle LONG_ARRAY_BIG_ENDIAN = java.lang.invoke.MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.BIG_ENDIAN);
++    // Canvas end - Bulk writes to writeLongArray during chunk loading
++
+     public static void writeFixedSizeLongArray(final ByteBuf output, final long[] longs) {
++        // Canvas start - Bulk writes to writeLongArray during chunk loading
++        if (longs.length > 0 && longs.length <= output.maxWritableBytes() / Long.BYTES && output.hasArray() && output.order() == ByteOrder.BIG_ENDIAN) {
++            final int bytes = longs.length * Long.BYTES;
++            output.ensureWritable(bytes);
++            if (output.hasArray()) {
++                final byte[] array = output.array();
++                final int writerIndex = output.writerIndex();
++                int offset = output.arrayOffset() + writerIndex;
++                for (final long l : longs) {
++                    LONG_ARRAY_BIG_ENDIAN.set(array, offset, l);
++                    offset += Long.BYTES;
++                }
++                output.writerIndex(writerIndex + bytes);
++                return;
++            }
++        }
++        // Canvas end - Bulk writes to writeLongArray during chunk loading
+         for (long l : longs) {
+             output.writeLong(l);
+         }
