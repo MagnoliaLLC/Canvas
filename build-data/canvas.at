@@ -4,6 +4,8 @@ default-f net.minecraft.world.entity.Entity isInvulnerableToBase(Lnet/minecraft/
 private-f net.minecraft.world.clock.ServerClockManager clocks
 private-f net.minecraft.world.clock.ServerClockManager$ServerClockInstance timeMarkers
 protected ca.spottedleaf.concurrentutil.executor.thread.BalancedPrioritisedThreadPool groupTimeSliceNS
+protected net.minecraft.world.entity.ai.goal.MoveToBlockGoal searchRange
+protected net.minecraft.world.entity.ai.goal.MoveToBlockGoal verticalSearchRange
 public ca.spottedleaf.concurrentutil.executor.thread.BalancedPrioritisedThreadPool threadFactory
 public ca.spottedleaf.concurrentutil.scheduler.SchedulableTick getScheduledStart()J
 public ca.spottedleaf.concurrentutil.scheduler.SchedulableTick scheduledStart
