@@ -34,7 +34,7 @@
      @Deprecated
      @VisibleForTesting
      public EnvironmentAttributeSystem setEnvironmentAttributes(final EnvironmentAttributeSystem environmentAttributes) {
-@@ -1064,71 +_,94 @@
+@@ -1064,71 +_,95 @@
      // Paper start - optimise random ticking
      private final io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource simpleRandom = io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource.INSTANCE; // Folia - region threading
  
@@ -109,6 +109,7 @@
 +                    tickList = ((ca.spottedleaf.moonrise.patches.block_counting.BlockCountingChunkSection)section).moonrise$getTickingBlockList();
 +                }
 +                // Canvas end - load ticked sections lazily
++                if (index >= tickList.size()) continue; // Canvas - a random tick can shrink the list below the count read for its section
  
                  final int location = (int)tickList.getRaw(index) & 0xFFFF;
                  final BlockState state = states.get(location);
