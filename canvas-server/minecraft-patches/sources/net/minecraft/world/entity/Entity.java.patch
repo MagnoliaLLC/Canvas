@@ -26,6 +26,17 @@
          }
  
          this.firstTick = false;
+@@ -1372,8 +_,10 @@
+                     }
+                 }
+ 
++                if (this.getDeltaMovement().x != 0.0 || this.getDeltaMovement().z != 0.0) { // Canvas - Skip negligible planar movement multiplication
+                 float blockSpeedFactor = this.getBlockSpeedFactor();
+                 this.setDeltaMovement(this.getDeltaMovement().multiply(blockSpeedFactor, 1.0, blockSpeedFactor));
++                } // Canvas - Skip negligible planar movement multiplication
+             }
+         }
+     }
 @@ -1547,7 +_,7 @@
              int previousRemainingFireTicks = this.getRemainingFireTicks();
              this.checkInsideBlocks(movements, this.insideEffectCollector);
@@ -35,6 +46,23 @@
                  this.clearFire();
              }
  
+@@ -1644,13 +_,14 @@
+     }
+ 
+     protected BlockPos getOnPos(final float offset) {
+-        if (this.mainSupportingBlockPos.isPresent() && this.level().getChunkIfLoadedImmediately(this.mainSupportingBlockPos.get()) != null) { // Paper - ensure no loads
++        net.minecraft.world.level.chunk.LevelChunk chunk; // Canvas - optimize getOnPos
++        if (this.mainSupportingBlockPos.isPresent() && (chunk = this.level().getChunkIfLoaded(this.mainSupportingBlockPos.get())) != null) { // Paper - ensure no loads // Canvas - optimize getOnPos
+             BlockPos getOnPos = this.mainSupportingBlockPos.get();
+             if (!(offset > 1.0E-5F)) {
+                 return getOnPos;
+             }
+ 
+-            BlockState belowState = this.level().getBlockState(getOnPos);
++            BlockState belowState = this.level().getCurrentWorldData().captureTreeGeneration || !this.level().isInValidBounds(getOnPos) ? this.level().getBlockState(getOnPos) : chunk.getBlockStateFinal(getOnPos.getX(), getOnPos.getY(), getOnPos.getZ()); // Canvas - optimize getOnPos
+             return (!(offset <= 0.5) || !belowState.is(BlockTags.FENCES))
+                     && !belowState.is(BlockTags.WALLS)
+                     && !(belowState.getBlock() instanceof FenceGateBlock)
 @@ -1910,8 +_,134 @@
          return SoundEvents.GENERIC_SPLASH;
      }
@@ -306,6 +334,18 @@
              }
  
              this.setPose(Pose.STANDING);
+@@ -3807,8 +_,9 @@
+     }
+ 
+     public boolean isOnFire() {
+-        boolean isClientSide = this.level() != null && this.level().isClientSide();
+-        return !this.fireImmune() && (this.remainingFireTicks > 0 || isClientSide && this.getSharedFlag(FLAG_ONFIRE));
++        // Canvas start - Short-circuit isOnFire checks
++        return (this.remainingFireTicks > 0 || this.level() != null && this.level().isClientSide() && this.getSharedFlag(FLAG_ONFIRE)) && !this.fireImmune();
++        // Canvas end - Short-circuit isOnFire checks
+     }
+ 
+     public boolean isPassenger() {
 @@ -3978,6 +_,16 @@
              newAmount = event.getAmount();
          }
