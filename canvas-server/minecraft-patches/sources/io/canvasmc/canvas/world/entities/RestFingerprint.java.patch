@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/io/canvasmc/canvas/world/entities/RestFingerprint.java
-@@ -1,0 +_,101 @@
+@@ -1,0 +_,112 @@
 +package io.canvasmc.canvas.world.entities;
 +
 +import net.minecraft.util.Mth;
@@ -14,8 +14,8 @@
 +
 +/**
 + * What a resting entity's travel was read from: its position, size and speed, the friction, drag and gravity it fell with,
-+ * and the chunk sections around it with their block write counts. While all of them hold, the travel would compute
-+ * the same result again.
++ * and the chunk sections around it with their block write counts, a section swapped into its chunk in place of one counting
++ * as a write. While all of them hold, the travel would compute the same result again.
 + */
 +public final class RestFingerprint {
 +
@@ -30,10 +30,13 @@
 +    private final Vec3 velocity;
 +    private final AABB box;
 +    private final LevelChunkSection[] sections;
++    private final LevelChunkSection[][] holders;
++    private final int[] indexes;
 +    private final int[] changes;
 +
 +    private RestFingerprint(final double x, final double y, final double z, final Vec3 velocity, final AABB box, final double friction,
-+                            final double drag, final double gravity, final LevelChunkSection[] sections, final int[] changes) {
++                            final double drag, final double gravity, final LevelChunkSection[] sections, final LevelChunkSection[][] holders,
++                            final int[] indexes, final int[] changes) {
 +        this.x = x;
 +        this.y = y;
 +        this.z = z;
@@ -43,6 +46,8 @@
 +        this.drag = drag;
 +        this.gravity = gravity;
 +        this.sections = sections;
++        this.holders = holders;
++        this.indexes = indexes;
 +        this.changes = changes;
 +    }
 +
@@ -65,6 +70,8 @@
 +            return null;
 +        }
 +        final LevelChunkSection[] sections = new LevelChunkSection[count];
++        final LevelChunkSection[][] holders = new LevelChunkSection[count][];
++        final int[] indexes = new int[count];
 +        final int[] changes = new int[count];
 +        int index = 0;
 +        for (int chunkX = minSectionX; chunkX <= maxSectionX; ++chunkX) {
@@ -75,14 +82,17 @@
 +                }
 +                final LevelChunkSection[] chunkSections = chunk.getSections();
 +                for (int sectionY = minSectionY; sectionY <= maxSectionY; ++sectionY) {
-+                    final LevelChunkSection section = chunkSections[sectionY - level.getMinSectionY()];
++                    final int sectionIndex = sectionY - level.getMinSectionY();
++                    final LevelChunkSection section = chunkSections[sectionIndex];
 +                    sections[index] = section;
-+                    changes[index] = section.canvas$changes;
++                    holders[index] = chunkSections;
++                    indexes[index] = sectionIndex;
++                    changes[index] = section.getStates().canvas$changes;
 +                    ++index;
 +                }
 +            }
 +        }
-+        return new RestFingerprint(x, y, z, velocity, box, friction, drag, gravity, sections, changes);
++        return new RestFingerprint(x, y, z, velocity, box, friction, drag, gravity, sections, holders, indexes, changes);
 +    }
 +
 +    public boolean holds(final double x, final double y, final double z, final Vec3 velocity, final AABB box) {
@@ -95,7 +105,8 @@
 +            return false;
 +        }
 +        for (int i = 0; i < this.sections.length; ++i) {
-+            if (this.sections[i].canvas$changes != this.changes[i]) {
++            final LevelChunkSection section = this.sections[i];
++            if (this.holders[i][this.indexes[i]] != section || section.getStates().canvas$changes != this.changes[i]) {
 +                return false;
 +            }
 +        }
