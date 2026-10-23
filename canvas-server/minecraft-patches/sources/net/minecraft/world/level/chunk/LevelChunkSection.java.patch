@@ -23,17 +23,6 @@
  
      @Override
      public final boolean moonrise$hasSpecialCollidingBlocks() {
-@@ -126,7 +_,10 @@
-     }
-     // Paper end - block counting
- 
-+    public int canvas$changes; // Canvas - skip travel while resting: moves on every block write, so a resting entity can tell nothing around it changed
-+
-     public BlockState setBlockState(final int sectionX, final int sectionY, final int sectionZ, final BlockState state, final boolean checkThreading) {
-+        ++this.canvas$changes; // Canvas - skip travel while resting
-         BlockState previous;
-         if (checkThreading) {
-             previous = this.states.getAndSet(sectionX, sectionY, sectionZ, state);
 @@ -165,6 +_,7 @@
          }
  
