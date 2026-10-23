@@ -7,7 +7,7 @@ This code is from PurpurMC/Purpur, licensed under MIT, initially ported from 26.
 https://github.com/PurpurMC/Purpur/blob/ver/26.1.2/purpur-server/minecraft-patches/sources/net/minecraft/server/network/ServerCommonPacketListenerImpl.java.patch
 
 diff --git a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
-index 63aea7219dc11ac8ecaab5edf0b4f29582c60f81..2a0785deabfe3ff078f0ef200184a8c2b7002e3c 100644
+index 4d9573a3fa77fafcd24342012f92711894ad863a..d88c0a941cbd3861eefefa2cae2706329a17eaa3 100644
 --- a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
 @@ -39,10 +39,11 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
@@ -42,7 +42,7 @@ index 63aea7219dc11ac8ecaab5edf0b4f29582c60f81..2a0785deabfe3ff078f0ef200184a8c2
          if (pending != null && pending.challengeId() == packet.getId()) {
              this.keepAlive.pendingKeepAlives.remove(pending);
  
-@@ -255,6 +268,23 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
+@@ -259,6 +272,23 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
      protected void keepConnectionAlive() {
          long now = Util.getMillis();
          // Paper start - improve keepalives

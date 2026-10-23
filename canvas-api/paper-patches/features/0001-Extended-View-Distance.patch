@@ -5,10 +5,10 @@ Subject: [PATCH] Extended View Distance
 
 
 diff --git a/src/main/java/org/bukkit/entity/Player.java b/src/main/java/org/bukkit/entity/Player.java
-index 190313bc060d5f8440cec7c249ad1d2f1074f5bc..4db5b4ea39ae22aa5e7c626c48e465735969c7c9 100644
+index e763c44f999df2814be8fbc2dfb9eceead2e77db..af474b6feb33b2ba624ff98d9b4b7131617986eb 100644
 --- a/src/main/java/org/bukkit/entity/Player.java
 +++ b/src/main/java/org/bukkit/entity/Player.java
-@@ -3532,6 +3532,26 @@ public interface Player extends HumanEntity, Conversable, OfflinePlayer, PluginM
+@@ -3543,6 +3543,26 @@ public interface Player extends HumanEntity, Conversable, OfflinePlayer, PluginM
       */
      public void setSendViewDistance(int viewDistance);
      // Paper end

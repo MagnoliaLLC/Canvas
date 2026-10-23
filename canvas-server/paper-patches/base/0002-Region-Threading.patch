@@ -3833,7 +3833,7 @@ index 32e426513f3e710abeda3363a4e2a08fe902c703..2655d6c0c58c27bd532d13fab723863c
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
-index e708c17dda72a6e13b57403871a8db6f6109c186..582c13383c82c9cb0aa17d23d6ab24b516f46c0c 100644
+index 119959cd00560577038c582349bdf039ca7ae4bb..d077806fa23895d804593f056bc24a6e1219db48 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
 @@ -116,6 +116,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {

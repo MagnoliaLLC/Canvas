@@ -31636,15 +31636,15 @@ index c223581e30414842ce24079b47c82639d36b7e73..002a3053ce04e2864338311d998e4902
                  serverPlayer.getInventory().placeItemBackInInventory(carried, Prediction.SERVER_ONLY);
              } else {
 diff --git a/net/minecraft/world/item/BucketItem.java b/net/minecraft/world/item/BucketItem.java
-index 3bc24a581404fee042f9be29595ade92b7b29c0c..cbe3f685634c39b119a536e01c1f665f247441d2 100644
+index 88de6142f66f158a4425a4cc5d093fdda80b6ebb..9929f3bb7145abdf401204876704e7bb48da84fc 100644
 --- a/net/minecraft/world/item/BucketItem.java
 +++ b/net/minecraft/world/item/BucketItem.java
 @@ -34,7 +34,7 @@ import net.minecraft.world.phys.HitResult;
  import org.jspecify.annotations.Nullable;
  
  public class BucketItem extends Item implements DispensibleContainerItem {
--    private static @Nullable ItemStack itemLeftInHandAfterPlayerBucketEmptyEvent = null; // Paper - Fix PlayerBucketEmptyEvent result itemstack
-+    private static final ThreadLocal<ItemStack> ITEM_LEFT_IN_HAND_AFTER_EMPTY_BUCKET_EVENT = new ThreadLocal<>(); // Paper - Fix PlayerBucketEmptyEvent result itemstack // Canvas - region threading
+-    static @Nullable ItemStack itemLeftInHandAfterPlayerBucketEmptyEvent = null; // Paper - Fix PlayerBucketEmptyEvent result itemstack
++    static final ThreadLocal<ItemStack> ITEM_LEFT_IN_HAND_AFTER_EMPTY_BUCKET_EVENT = new ThreadLocal<>(); // Paper - Fix PlayerBucketEmptyEvent result itemstack // Canvas - region threading
      protected final Fluid content;
  
      public BucketItem(final Fluid content, final Item.Properties properties) {
@@ -31806,6 +31806,19 @@ index 161e2cf6d7f2ce750599e08ac1eea5ebd80f859e..4148505f4c6f00869fa222eeb8431036
          }
      }
  
+diff --git a/net/minecraft/world/item/MobBucketItem.java b/net/minecraft/world/item/MobBucketItem.java
+index 85baba30fc1ec169eda549ce76fe454084f4323c..7eac940c83bae1f3ab38acb0c13e2c95f84a47a9 100644
+--- a/net/minecraft/world/item/MobBucketItem.java
++++ b/net/minecraft/world/item/MobBucketItem.java
+@@ -67,7 +67,7 @@ public class MobBucketItem extends BucketItem {
+                     player.containerMenu.sendAllDataToRemote(); // SPIGOT-4541
+                     return false;
+                 }
+-                BucketItem.itemLeftInHandAfterPlayerBucketEmptyEvent = event.getItemStack() != null ? event.getItemStack().equals(org.bukkit.inventory.ItemStack.of(org.bukkit.Material.BUCKET)) ? null : org.bukkit.craftbukkit.inventory.CraftItemStack.asNMSCopy(event.getItemStack()) : ItemStack.EMPTY; // Paper - Fix PlayerBucketEmptyEvent result itemstack
++                BucketItem.ITEM_LEFT_IN_HAND_AFTER_EMPTY_BUCKET_EVENT.set(event.getItemStack() != null ? event.getItemStack().equals(org.bukkit.inventory.ItemStack.of(org.bukkit.Material.BUCKET)) ? null : org.bukkit.craftbukkit.inventory.CraftItemStack.asNMSCopy(event.getItemStack()) : ItemStack.EMPTY); // Paper - Fix PlayerBucketEmptyEvent result itemstack // Canvas - region threading
+             }
+             // Paper end
+             this.playEmptySound(user, level, pos);
 diff --git a/net/minecraft/world/item/component/LodestoneTracker.java b/net/minecraft/world/item/component/LodestoneTracker.java
 index 65fe2c5b19e37c6800a54c6945eec7df9c505749..91ef5fa03fd5f08b47532ee7146b8ffaca242286 100644
 --- a/net/minecraft/world/item/component/LodestoneTracker.java
@@ -35458,7 +35471,7 @@ index 2bdbb8451974f0b8d6e94d390ac735f4ccffd954..f6ea7dcb5fa9ef32a6f48cf4e203d51c
  
      @Retention(RetentionPolicy.CLASS)
 diff --git a/net/minecraft/world/scores/Scoreboard.java b/net/minecraft/world/scores/Scoreboard.java
-index 4a15851bda30c918c58c96d2cb98b74f30db396c..533c379950ede676fcc1b27b3bf3b7cf6905f8f6 100644
+index ccff13ea50431fbde5b1e0238a8534fab06aa786..bb6aada5a94e5f21902639f751923b233f3047a5 100644
 --- a/net/minecraft/world/scores/Scoreboard.java
 +++ b/net/minecraft/world/scores/Scoreboard.java
 @@ -30,17 +30,54 @@ import org.slf4j.Logger;
@@ -35694,7 +35707,7 @@ index 4a15851bda30c918c58c96d2cb98b74f30db396c..533c379950ede676fcc1b27b3bf3b7cf
                  if (removedPlayer != null) {
                      this.onPlayerRemoved(player);
                  }
-@@ -209,83 +294,136 @@ public class Scoreboard {
+@@ -209,84 +294,137 @@ public class Scoreboard {
      }
  
      public Object2IntMap<Objective> listPlayerScores(final ScoreHolder player) {
@@ -35808,6 +35821,7 @@ index 4a15851bda30c918c58c96d2cb98b74f30db396c..533c379950ede676fcc1b27b3bf3b7cf
  
          this.onTeamRemoved(team);
 +        // Canvas end - region threading
+         team.getPlayers().clear(); // Paper - Clear scoreboard team entries on unregister
      }
  
      public boolean addPlayerToTeam(final String player, final PlayerTeam team) {
@@ -35867,7 +35881,7 @@ index 4a15851bda30c918c58c96d2cb98b74f30db396c..533c379950ede676fcc1b27b3bf3b7cf
      }
  
      public void removePlayerFromTeam(final String player, final PlayerTeam team) {
-@@ -293,20 +431,32 @@ public class Scoreboard {
+@@ -294,20 +432,32 @@ public class Scoreboard {
              throw new IllegalStateException("Player is either on another team or not on any team. Cannot remove from team '" + team.getName() + "'.");
          }
  
@@ -35905,7 +35919,7 @@ index 4a15851bda30c918c58c96d2cb98b74f30db396c..533c379950ede676fcc1b27b3bf3b7cf
      }
  
      public void onObjectiveAdded(final Objective objective) {
-@@ -339,15 +489,16 @@ public class Scoreboard {
+@@ -340,15 +490,16 @@ public class Scoreboard {
      public void onTeamRemoved(final PlayerTeam team) {
      }
  
@@ -35927,7 +35941,7 @@ index 4a15851bda30c918c58c96d2cb98b74f30db396c..533c379950ede676fcc1b27b3bf3b7cf
              .entrySet()
              .stream()
              .flatMap(
-@@ -363,7 +514,9 @@ public class Scoreboard {
+@@ -364,7 +515,9 @@ public class Scoreboard {
              .toList();
      }
  
@@ -35937,7 +35951,7 @@ index 4a15851bda30c918c58c96d2cb98b74f30db396c..533c379950ede676fcc1b27b3bf3b7cf
          Objective objective = this.getObjective(score.objective);
          if (objective == null) {
              LOGGER.error("Unknown objective {} for name {}, ignoring", score.objective, score.owner);
-@@ -373,10 +526,13 @@ public class Scoreboard {
+@@ -374,10 +527,13 @@ public class Scoreboard {
      }
  
      protected List<PlayerTeam.Packed> packPlayerTeams() {
@@ -35951,7 +35965,7 @@ index 4a15851bda30c918c58c96d2cb98b74f30db396c..533c379950ede676fcc1b27b3bf3b7cf
          PlayerTeam team = this.addPlayerTeam(packed.name());
          packed.displayName().ifPresent(team::setDisplayName);
          team.setColor(packed.color());
-@@ -394,10 +550,13 @@ public class Scoreboard {
+@@ -395,10 +551,13 @@ public class Scoreboard {
      }
  
      protected List<Objective.Packed> packObjectives() {
@@ -35965,7 +35979,7 @@ index 4a15851bda30c918c58c96d2cb98b74f30db396c..533c379950ede676fcc1b27b3bf3b7cf
          this.addObjective(
              objective.name(),
              objective.criteria(),
-@@ -409,6 +568,7 @@ public class Scoreboard {
+@@ -410,6 +569,7 @@ public class Scoreboard {
      }
  
      protected Map<DisplaySlot, String> packDisplaySlots() {
