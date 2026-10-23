@@ -390,7 +390,7 @@ index c3f48cd6f20db9de5212afefa4cc118cdccaf2b7..a531dd6c03bf074a92390f1a1ef043c9
      }
  }
 diff --git a/net/minecraft/world/level/chunk/LevelChunkSection.java b/net/minecraft/world/level/chunk/LevelChunkSection.java
-index 1ec862d44cd2f3e868849c699692335eac3c72a4..90da5a11319054e34c14e29eb4ba96e349386085 100644
+index 64bd6807cbd0074e51a8027313e49f4d9c41d87b..6dd778dda67edd28abf0f39aea8c62beb3a6711f 100644
 --- a/net/minecraft/world/level/chunk/LevelChunkSection.java
 +++ b/net/minecraft/world/level/chunk/LevelChunkSection.java
 @@ -45,6 +45,11 @@ public class LevelChunkSection implements ca.spottedleaf.moonrise.patches.block_
