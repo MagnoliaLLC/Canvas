@@ -1,6 +1,44 @@
 --- a/net/minecraft/world/entity/item/ItemEntity.java
 +++ b/net/minecraft/world/entity/item/ItemEntity.java
-@@ -199,7 +_,7 @@
+@@ -155,26 +_,28 @@
+             this.yo = this.getY();
+             this.zo = this.getZ();
+             Vec3 oldMovement = this.getDeltaMovement();
++            final boolean resting = this.canvas$stillResting(); // Canvas - skip the physics of a resting item
+             if (this.isInWater() && this.getFluidHeight(FluidTags.WATER) > 0.1F) {
+                 this.setUnderwaterMovement();
+             } else if (this.isInLava() && this.getFluidHeight(FluidTags.LAVA) > 0.1F) {
+                 this.setUnderLavaMovement();
+-            } else {
++            } else if (!resting) { // Canvas - skip the physics of a resting item
+                 this.applyGravity();
+             }
+ 
+             if (this.level().isClientSide()) {
+                 this.noPhysics = false;
+-            } else {
++            } else if (!resting) { // Canvas - skip the physics of a resting item
+                 this.noPhysics = !this.level().noCollision(this, this.getBoundingBox().deflate(1.0E-7));
+                 if (this.noPhysics) {
+                     this.moveTowardsClosestSpace(this.getX(), (this.getBoundingBox().minY + this.getBoundingBox().maxY) / 2.0, this.getZ());
+                 }
+             }
+ 
+-            if (this.onGround() && !(this.getDeltaMovement().horizontalDistanceSqr() > 1.0E-5F) && (this.tickCount + this.getId()) % 4 != 0) { // Paper - Diff on change; ActivationRange immunity
++            if (this.onGround() && !(this.getDeltaMovement().horizontalDistanceSqr() > 1.0E-5F) && (resting || (this.tickCount + this.getId()) % 4 != 0)) { // Paper - Diff on change; ActivationRange immunity // Canvas - skip the physics of a resting item
+                 this.applyEffectsFromBlocksForLastMovements();
+             } else {
++                final Vec3 before = this.position(); // Canvas - skip the physics of a resting item
+                 this.move(MoverType.SELF, this.getDeltaMovement());
+                 this.applyEffectsFromBlocks();
+                 float airDrag = this.getAirDrag();
+@@ -194,12 +_,13 @@
+                         this.setDeltaMovement(movement.multiply(1.0, -0.5, 1.0));
+                     }
+                 }
++                this.canvas$noteRest(before); // Canvas - skip the physics of a resting item
+             }
+ 
              boolean moved = Mth.floor(this.xo) != Mth.floor(this.getX())
                  || Mth.floor(this.yo) != Mth.floor(this.getY())
                  || Mth.floor(this.zo) != Mth.floor(this.getZ());
@@ -9,6 +47,111 @@
              if (this.tickCount % rate == 0 && !this.level().isClientSide() && this.isMergable()) {
                  this.mergeWithNeighbours();
              }
+@@ -228,6 +_,104 @@
+         }
+     }
+ 
++    // Canvas start - skip the physics of a resting item
++    // where an item came to rest on a block, the speed it kept and the blocks it is in or lies on: while they hold and no
++    // entity or border collides with it, its fall, its move and the check that it is not stuck in a block change nothing
++    private @Nullable Vec3 canvas$restPosition;
++    private @Nullable Vec3 canvas$restMovement;
++    private net.minecraft.world.level.block.state.BlockState @Nullable [] canvas$restStates;
++
++    private boolean canvas$mayRest() {
++        return this.onGround()
++            && !this.noPhysics
++            && !this.isInWater()
++            && !this.isInLava()
++            && this.level().getWorldBorder().getDistanceToBorder(this) > 2.0;
++    }
++
++    private boolean canvas$stillResting() {
++        final net.minecraft.world.level.block.state.BlockState[] states = this.canvas$restStates;
++        if (states == null) {
++            return false;
++        }
++        if (!this.position().equals(this.canvas$restPosition)
++            || !this.getDeltaMovement().equals(this.canvas$restMovement)
++            || !this.canvas$mayRest()
++            || !this.canvas$restBlocksHold(states)
++            || ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.getEntityHardCollisions(
++                this.level(), this, this.getBoundingBox().deflate(1.0E-7), null, ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.COLLISION_FLAG_CHECK_ONLY, null
++            )) {
++            this.canvas$restStates = null;
++            return false;
++        }
++        return true;
++    }
++
++    private void canvas$noteRest(final Vec3 before) {
++        this.canvas$restStates = null;
++        if (this.level().isClientSide()
++            || !this.position().equals(before)
++            || this.getDeltaMovement().y > 0.0
++            || this.mainSupportingBlockPos.isEmpty()
++            || !this.canvas$mayRest()) {
++            return;
++        }
++        this.canvas$restStates = this.canvas$readRestBlocks();
++        this.canvas$restPosition = this.position();
++        this.canvas$restMovement = this.getDeltaMovement();
++    }
++
++    // every block the item is in or lies on, with the one under each for a fence or wall it lies on; none when one is not
++    // loaded or a block around them has a shape its block entity moves with no block write, as a shulker box lid does
++    private net.minecraft.world.level.block.state.BlockState @Nullable [] canvas$readRestBlocks() {
++        final net.minecraft.world.phys.AABB box = this.getBoundingBox();
++        final int minX = Mth.floor(box.minX);
++        final int maxX = Mth.floor(box.maxX);
++        final int minY = Mth.floor(box.minY - 1.0E-6) - 1;
++        final int maxY = Mth.floor(box.maxY);
++        final int minZ = Mth.floor(box.minZ);
++        final int maxZ = Mth.floor(box.maxZ);
++        final net.minecraft.world.level.block.state.BlockState[] states = new net.minecraft.world.level.block.state.BlockState[(maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1)];
++        final BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
++        int index = 0;
++        for (int x = minX - 1; x <= maxX + 1; ++x) {
++            for (int z = minZ - 1; z <= maxZ + 1; ++z) {
++                final boolean inBox = x >= minX && x <= maxX && z >= minZ && z <= maxZ;
++                for (int y = minY; y <= maxY; ++y) {
++                    final net.minecraft.world.level.block.state.BlockState state = this.level().getBlockStateIfLoaded(pos.set(x, y, z));
++                    if (state == null || state.hasBlockEntity() && state.getBlock().hasDynamicShape()) {
++                        return null;
++                    }
++                    if (inBox) {
++                        states[index++] = state;
++                    }
++                }
++            }
++        }
++        return states;
++    }
++
++    private boolean canvas$restBlocksHold(final net.minecraft.world.level.block.state.BlockState[] states) {
++        final net.minecraft.world.phys.AABB box = this.getBoundingBox();
++        final int maxX = Mth.floor(box.maxX);
++        final int minY = Mth.floor(box.minY - 1.0E-6) - 1;
++        final int maxY = Mth.floor(box.maxY);
++        final int maxZ = Mth.floor(box.maxZ);
++        final BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
++        int index = 0;
++        for (int x = Mth.floor(box.minX); x <= maxX; ++x) {
++            for (int z = Mth.floor(box.minZ); z <= maxZ; ++z) {
++                for (int y = minY; y <= maxY; ++y) {
++                    if (this.level().getBlockStateIfLoaded(pos.set(x, y, z)) != states[index++]) {
++                        return false;
++                    }
++                }
++            }
++        }
++        return true;
++    }
++    // Canvas end - skip the physics of a resting item
++
+     @Override
+     public BlockPos getBlockPosBelowThatAffectsMyMovement() {
+         return this.getOnPos(0.999999F);
 @@ -261,7 +_,7 @@
                      }
                      // Paper end - Fix items merging through walls

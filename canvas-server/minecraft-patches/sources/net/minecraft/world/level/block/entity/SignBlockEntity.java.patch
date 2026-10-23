@@ -1,0 +1,50 @@
+--- a/net/minecraft/world/level/block/entity/SignBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/SignBlockEntity.java
+@@ -51,6 +_,7 @@
+     private SignText backText = SignText.EMPTY;
+     private boolean isWaxed = false;
+     private boolean allowOpFeatures = false;
++    private @Nullable CompoundTag canvas$updateTag; // Canvas - keep the update tag until the sign changes
+ 
+     public SignBlockEntity(final BlockPos worldPosition, final BlockState blockState) {
+         this(BlockEntityTypes.SIGN, worldPosition, blockState);
+@@ -109,6 +_,7 @@
+     @Override
+     protected void loadAdditional(final ValueInput input) {
+         super.loadAdditional(input);
++        this.canvas$updateTag = null; // Canvas - keep the update tag until the sign changes
+         this.allowOpFeatures = input.getBooleanOr("allow_op_features", false);
+         this.frontText = input.read("front_text", SignText.CODEC).map(this::resolveLines).orElse(SignText.EMPTY);
+         this.backText = input.read("back_text", SignText.CODEC).map(this::resolveLines).orElse(SignText.EMPTY);
+@@ -325,8 +_,21 @@
+ 
+     @Override
+     public CompoundTag getUpdateTag(final HolderLookup.Provider registries) {
+-        return this.saveCustomOnly(registries);
+-    }
++        // Canvas start - keep the update tag until the sign changes, handing out copies since callers change them
++        if (this.canvas$updateTag == null) {
++            this.canvas$updateTag = this.saveCustomOnly(registries);
++        }
++        return this.canvas$updateTag.copy();
++        // Canvas end - keep the update tag until the sign changes
++    }
++
++    // Canvas start - keep the update tag until the sign changes
++    @Override
++    public void setChanged() {
++        this.canvas$updateTag = null;
++        super.setChanged();
++    }
++    // Canvas end - keep the update tag until the sign changes
+ 
+     public void setAllowedPlayerEditor(final @Nullable UUID playerUUID) {
+         this.playerWhoMayEdit = playerUUID;
+@@ -385,6 +_,7 @@
+     @Override
+     protected void applyImplicitComponents(final DataComponentGetter components) {
+         super.applyImplicitComponents(components);
++        this.canvas$updateTag = null; // Canvas - keep the update tag until the sign changes
+         this.frontText = components.getOrDefault(DataComponents.SIGN_TEXT_FRONT, SignText.EMPTY);
+         this.backText = components.getOrDefault(DataComponents.SIGN_TEXT_BACK, SignText.EMPTY);
+         this.isWaxed = components.get(DataComponents.WAXED) != null;
