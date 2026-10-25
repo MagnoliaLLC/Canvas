@@ -8,17 +8,18 @@
          }
      }
  
-@@ -576,14 +_,29 @@
+@@ -576,14 +_,30 @@
          return 8;
      }
  
 +    // Canvas start - optimize wolf anger sync
-+    private static final long CANVAS_ANGER_SYNC_MARGIN = 100L;
++    private static final long ANGER_SYNC_MARGIN = 100L;
 +    private long canvas$angerEndTime = -1L;
 +
 +    private void canvas$syncAnger() {
 +        final long synced = this.entityData.get(DATA_ANGER_END_TIME);
-+        if (this.canvas$angerEndTime < synced || synced - this.level().getGameTime() <= CANVAS_ANGER_SYNC_MARGIN) {
++        final io.papermc.paper.threadedregions.RegionizedWorldData worldData = io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData();
++        if (this.canvas$angerEndTime < synced || worldData == null || worldData.world != this.level() || synced - this.level().getGameTime() <= ANGER_SYNC_MARGIN) {
 +            this.entityData.set(DATA_ANGER_END_TIME, this.canvas$angerEndTime);
 +        }
 +    }
