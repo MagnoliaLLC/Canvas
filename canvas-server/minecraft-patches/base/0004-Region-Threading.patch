@@ -31836,7 +31836,7 @@ index 65fe2c5b19e37c6800a54c6945eec7df9c505749..91ef5fa03fd5f08b47532ee7146b8ffa
                  : new LodestoneTracker(Optional.empty(), true);
          } else {
 diff --git a/net/minecraft/world/level/BaseCommandBlock.java b/net/minecraft/world/level/BaseCommandBlock.java
-index e73026529520c1bc641681ad0709906101b48a4f..159f6941ffb5d9ef606d28b1612368e96027d562 100644
+index e73026529520c1bc641681ad0709906101b48a4f..c64a0b50f2678f4ec00b16e4e9ed5ed15477ffe9 100644
 --- a/net/minecraft/world/level/BaseCommandBlock.java
 +++ b/net/minecraft/world/level/BaseCommandBlock.java
 @@ -91,6 +91,7 @@ public abstract class BaseCommandBlock {
@@ -31870,7 +31870,7 @@ index e73026529520c1bc641681ad0709906101b48a4f..159f6941ffb5d9ef606d28b1612368e9
                  org.spigotmc.AsyncCatcher.catchOp("sendSystemMessage to a command block"); // Paper - Don't broadcast messages to command blocks
 -                BaseCommandBlock.this.lastOutput = Component.literal("[" + this.level.paperConfig().commandBlocks.timeFormatPattern.or(TIME_FORMAT).format(ZonedDateTime.now()) + "] ").append(message); // Paper - per-world configurable time format
 +                BaseCommandBlock.this.threadCheck(); // Folia - region threading
-+                BaseCommandBlock.this.lastOutput = Component.literal("[" + TIME_FORMAT.get().format(ZonedDateTime.now()) + "] ").append(message); // Paper - per-world configurable time format // Folia - region threading - SDF is not thread-safe
++                BaseCommandBlock.this.lastOutput = Component.literal("[" + this.level.paperConfig().commandBlocks.timeFormatPattern.or(TIME_FORMAT.get()).format(ZonedDateTime.now()) + "] ").append(message); // Paper - per-world configurable time format // Folia - region threading - SDF is not thread-safe
                  BaseCommandBlock.this.onUpdated(this.level);
              }
          }
