@@ -1,0 +1,111 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: RootBeer <rootb33rman@gmail.com>
+Date: Mon, 26 Oct 2026 20:04:04 -0400
+Subject: [PATCH] Permission Resolver
+
+
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java
+index fb2f18f96fb5ed7b24ed4856bbc3d239104e0471..d6604d1604175777c269f3402998a1b9d964e6f6 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java
+@@ -258,24 +258,71 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
+ 
+     @Override
+     public boolean isPermissionSet(String name) {
++        // Canvas start - permission resolver
++        final net.kyori.adventure.util.TriState resolved = this.canvas$resolve(name);
++        if (resolved != null) {
++            return resolved != net.kyori.adventure.util.TriState.NOT_SET || this.perm.isPermissionSet(name);
++        }
++        // Canvas end - permission resolver
+         return this.perm.isPermissionSet(name);
+     }
+ 
+     @Override
+     public boolean isPermissionSet(Permission perm) {
+-        return this.perm.isPermissionSet(perm);
++        // Canvas start - permission resolver
++        Preconditions.checkArgument(perm != null, "Permission cannot be null");
++        return this.isPermissionSet(perm.getName());
++        // Canvas end - permission resolver
+     }
+ 
+     @Override
+     public boolean hasPermission(String name) {
++        // Canvas start - permission resolver
++        final net.kyori.adventure.util.TriState resolved = this.canvas$resolve(name);
++        if (resolved != null && resolved != net.kyori.adventure.util.TriState.NOT_SET) {
++            return resolved == net.kyori.adventure.util.TriState.TRUE;
++        }
++        // Canvas end - permission resolver
+         return this.perm.hasPermission(name);
+     }
+ 
+     @Override
+     public boolean hasPermission(Permission perm) {
++        // Canvas start - permission resolver
++        Preconditions.checkArgument(perm != null, "Permission cannot be null");
++        final net.kyori.adventure.util.TriState resolved = this.canvas$resolve(perm.getName());
++        if (resolved != null && resolved != net.kyori.adventure.util.TriState.NOT_SET) {
++            return resolved == net.kyori.adventure.util.TriState.TRUE;
++        }
++        // Canvas end - permission resolver
+         return this.perm.hasPermission(perm);
+     }
+ 
++    // Canvas start - permission resolver
++    /**
++     * Resolves a permission as a plugin's attachment, then the server's {@link io.canvasmc.canvas.permission.PermissionResolver}
++     * decide it.
++     *
++     * @return null when no resolver is set or this is not a player, so the vanilla answer stands alone;
++     *     otherwise the decided value, or NOT_SET to fall back to the vanilla answer
++     */
++    private net.kyori.adventure.util.@Nullable TriState canvas$resolve(final String name) {
++        Preconditions.checkArgument(name != null, "Permission name cannot be null");
++        final io.canvasmc.canvas.permission.PermissionResolver resolver = io.canvasmc.canvas.permission.PermissionResolver.resolver();
++        if (resolver == null || !(this instanceof org.bukkit.entity.Player player)) {
++            return null;
++        }
++
++        final String lower = name.toLowerCase(java.util.Locale.ROOT);
++        final PermissionAttachmentInfo attached = this.perm.getAttachedPermission(lower);
++        if (attached != null) {
++            return net.kyori.adventure.util.TriState.byBoolean(attached.getValue());
++        }
++
++        return resolver.permissionValue(player, lower);
++    }
++    // Canvas end - permission resolver
++
+     @Override
+     public PermissionAttachment addAttachment(Plugin plugin, String name, boolean value) {
+         return this.perm.addAttachment(plugin, name, value);
+@@ -314,6 +361,27 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
+ 
+     @Override
+     public Set<PermissionAttachmentInfo> getEffectivePermissions() {
++        // Canvas start - permission resolver
++        final io.canvasmc.canvas.permission.PermissionResolver resolver = io.canvasmc.canvas.permission.PermissionResolver.resolver();
++        if (resolver != null && this instanceof org.bukkit.entity.Player player) {
++            final Set<PermissionAttachmentInfo> vanilla = this.perm.getEffectivePermissions();
++            final java.util.Map<String, PermissionAttachmentInfo> merged = new java.util.HashMap<>();
++            for (final PermissionAttachmentInfo info : vanilla) {
++                if (info.getAttachment() == null) {
++                    merged.put(info.getPermission(), info);
++                }
++            }
++            for (final java.util.Map.Entry<String, Boolean> entry : resolver.effectivePermissions(player).entrySet()) {
++                merged.put(entry.getKey(), new PermissionAttachmentInfo(this, entry.getKey(), null, entry.getValue()));
++            }
++            for (final PermissionAttachmentInfo info : vanilla) {
++                if (info.getAttachment() != null) {
++                    merged.put(info.getPermission(), info);
++                }
++            }
++            return new java.util.HashSet<>(merged.values());
++        }
++        // Canvas end - permission resolver
+         return this.perm.getEffectivePermissions();
+     }
+ 
