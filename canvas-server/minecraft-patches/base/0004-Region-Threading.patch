@@ -13825,7 +13825,7 @@ index 6c05b9276bdc267a36376f6c64592a50e4b2b36e..cfc1b480704bf47917f68abe4da2e59c
      }
  
 diff --git a/net/minecraft/core/dispenser/DispenseItemBehavior.java b/net/minecraft/core/dispenser/DispenseItemBehavior.java
-index c650f26d3ecdeb94a4d0f40637c07c59a6cbdfa6..e7d0c46ea0c10ece4b6f30c7e52913d3839872a7 100644
+index 04593896b7c54d63fa4f97f58010aabce58dee1d..0ca7975252b4b9318253dd22ac6907c928cd00d9 100644
 --- a/net/minecraft/core/dispenser/DispenseItemBehavior.java
 +++ b/net/minecraft/core/dispenser/DispenseItemBehavior.java
 @@ -294,7 +294,8 @@ public interface DispenseItemBehavior {
