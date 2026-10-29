@@ -31054,6 +31054,27 @@ index c507cbb1b0d89f8fe5a00e67eea510f7516fe040..53131c1b8d5562f9a1b45dfab4fdbdd3
                          level.getPoiManager()
                              .getType(pos.pos())
                              .ifPresent(
+diff --git a/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java b/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
+index 818d7882a4d7001a9d8f90516b7368e89a5689a0..3e8dee815ecfc55dce46b11ed6198582cbc09b7b 100644
+--- a/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
++++ b/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
+@@ -80,6 +80,7 @@ public class PrepareRamNearestTarget<E extends PathfinderMob> extends Behavior<E
+                 if (event.isCancelled() || event.getTarget() == null) {
+                     return null;
+                 }
++                if (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(((org.bukkit.craftbukkit.entity.CraftEntity) event.getTarget()).getHandleRaw())) return null; // Canvas - region threading
+                 livingEntity = ((org.bukkit.craftbukkit.entity.CraftLivingEntity) event.getTarget()).getHandle();
+                 return livingEntity;
+             })
+@@ -98,7 +99,7 @@ public class PrepareRamNearestTarget<E extends PathfinderMob> extends Behavior<E
+ 
+     @Override
+     protected boolean canStillUse(final ServerLevel level, final PathfinderMob body, final long timestamp) {
+-        return this.ramCandidate.isPresent() && this.ramCandidate.get().getTarget().isAlive();
++        return this.ramCandidate.isPresent() && ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(this.ramCandidate.get().getTarget()) && this.ramCandidate.get().getTarget().isAlive(); // Canvas - region threading
+     }
+ 
+     @Override
 diff --git a/net/minecraft/world/entity/ai/behavior/SleepInBed.java b/net/minecraft/world/entity/ai/behavior/SleepInBed.java
 index a12d01d1278a8d49df67d7b1f8714b179e76ca36..59a0d806e8d9c658b4b8e5a54bdd105c79163594 100644
 --- a/net/minecraft/world/entity/ai/behavior/SleepInBed.java
