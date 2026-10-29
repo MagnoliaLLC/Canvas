@@ -1,0 +1,27 @@
+--- a/src/main/java/io/papermc/paper/potion/PaperPotionBrewer.java
++++ b/src/main/java/io/papermc/paper/potion/PaperPotionBrewer.java
+@@ -53,10 +_,11 @@
+         final RecipeManager recipeManager = this.server.getRecipeManager();
+         final RegistryAccess registryAccess = this.server.registryAccess();
+ 
+-        final Collection<RecipeHolder<BrewingRecipe>> brewingRecipes = recipeManager.recipes.byType(RecipeType.BREWING);
++        recipeManager.updateRecipes(recipeMap -> { // Canvas - region threading
++        final Collection<RecipeHolder<BrewingRecipe>> brewingRecipes = recipeMap.byType(RecipeType.BREWING); // Canvas - region threading
+ 
+         // Completely clear brewing recipes.
+-        brewingRecipes.forEach(recipe -> recipeManager.recipes.byKey.remove(recipe.id()));
++        brewingRecipes.forEach(recipe -> recipeMap.byKey.remove(recipe.id())); // Canvas - region threading
+         brewingRecipes.clear();
+ 
+         // Restore recipe manager state for brewing from registries.
+@@ -65,7 +_,8 @@
+             .stream()
+             .flatMap(HolderLookup::listElements)
+             .filter(recipe -> recipe.value().getType() == RecipeType.BREWING)
+-            .forEach(recipe -> recipeManager.recipes.addRecipe(new RecipeHolder<>(recipe.key(), recipe.value())));
+-        recipeManager.finalizeRecipeLoading();
++            .forEach(recipe -> recipeMap.addRecipe(new RecipeHolder<>(recipe.key(), recipe.value()))); // Canvas - region threading
++        return true;
++        }); // Canvas - region threading
+     }
+ }
