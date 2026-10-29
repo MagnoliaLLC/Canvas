@@ -1,0 +1,23 @@
+--- a/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
++++ b/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
+@@ -80,6 +_,11 @@
+                 if (event.isCancelled() || event.getTarget() == null) {
+                     return null;
+                 }
++                // Canvas start - region threading
++                if (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(((org.bukkit.craftbukkit.entity.CraftEntity) event.getTarget()).getHandleRaw())) {
++                    return null;
++                }
++                // Canvas end - region threading
+                 livingEntity = ((org.bukkit.craftbukkit.entity.CraftLivingEntity) event.getTarget()).getHandle();
+                 return livingEntity;
+             })
+@@ -98,7 +_,7 @@
+ 
+     @Override
+     protected boolean canStillUse(final ServerLevel level, final PathfinderMob body, final long timestamp) {
+-        return this.ramCandidate.isPresent() && this.ramCandidate.get().getTarget().isAlive();
++        return this.ramCandidate.isPresent() && ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(this.ramCandidate.get().getTarget()) && this.ramCandidate.get().getTarget().isAlive(); // Canvas - region threading
+     }
+ 
+     @Override
