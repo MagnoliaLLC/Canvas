@@ -1,0 +1,21 @@
+--- a/io/canvasmc/canvas/threadedregions/world/waypoints/RegionizedWaypointManager.java
++++ b/io/canvasmc/canvas/threadedregions/world/waypoints/RegionizedWaypointManager.java
+@@ -105,13 +_,16 @@
+ 
+     @Override
+     public void untrackWaypoint(final WaypointTransmitter waypoint) {
++        // Canvas start - region threading
++        if (!waypoints.remove(waypoint) && !(waypoint instanceof ServerPlayer)) {
++            return;
++        }
++        // Canvas end - region threading
+         for (final ServerPlayer trackedPlayer : players) {
+             trackedPlayer.getBukkitEntity().taskScheduler.scheduleOrExecute((ServerPlayer entityPlayer) -> {
+                 disconnectWaypoint(waypoint, entityPlayer);
+             });
+         }
+-
+-        waypoints.remove(waypoint);
+     }
+ 
+     // note: this should be called on the "player" param
