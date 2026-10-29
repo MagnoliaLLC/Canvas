@@ -1,0 +1,50 @@
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -1595,20 +_,19 @@
+     public boolean addRecipes(Iterable<Recipe> recipes) {
+         org.spigotmc.AsyncCatcher.catchOp("Recipes Add");
+         Preconditions.checkArgument(recipes != null, "recipes cannot be null");
++        final RecipeManager recipeManager = this.getServer().getRecipeManager();
++        return recipeManager.updateRecipes(recipeMap -> { // Canvas - region threading
+         boolean anyAdded = false;
+-        final RecipeManager recipeManager = this.getServer().getRecipeManager();
+         for (Recipe recipe : recipes) {
+             final CraftRecipe craftRecipe = CraftRecipe.fromBukkitRecipe(recipe);
+             if (craftRecipe != null) {
+-                recipeManager.recipes.addRecipe(craftRecipe.toMinecraftRecipe());
++                recipeMap.addRecipe(craftRecipe.toMinecraftRecipe()); // Canvas - region threading
+                 anyAdded = true;
+             }
+         }
+ 
+-        if (anyAdded) {
+-            recipeManager.finalizeRecipeLoading();
+-        }
+         return anyAdded;
++        }); // Canvas - region threading
+     }
+ 
+     @Override
+@@ -1796,18 +_,17 @@
+     @Override
+     public boolean removeRecipes(Iterable<NamespacedKey> recipeKeys) {
+         Preconditions.checkArgument(recipeKeys != null, "recipeKeys cannot be null");
++        final RecipeManager recipeManager = this.getServer().getRecipeManager();
++        return recipeManager.updateRecipes(recipeMap -> { // Canvas - region threading
+         boolean anyRemoved = false;
+-        final RecipeManager recipeManager = this.getServer().getRecipeManager();
+         for (NamespacedKey recipeKey : recipeKeys) {
+             final ResourceKey<net.minecraft.world.item.crafting.Recipe<?>> id = CraftNamespacedKey.toResourceKey(Registries.RECIPE, recipeKey);
+-            if (recipeManager.recipes.removeRecipe(id)) {
++            if (recipeMap.removeRecipe(id)) { // Canvas - region threading
+                 anyRemoved = true;
+             }
+         }
+-        if (anyRemoved) {
+-            recipeManager.finalizeRecipeLoading();
+-        }
+         return anyRemoved;
++        }); // Canvas - region threading
+     }
+ 
+     @Override

@@ -1,0 +1,57 @@
+--- a/net/minecraft/world/item/crafting/RecipeManager.java
++++ b/net/minecraft/world/item/crafting/RecipeManager.java
+@@ -46,7 +_,7 @@
+         RecipePropertySet.BREWING_REAGENTS,
+         recipe -> recipe instanceof BrewingRecipe brewingRecipe ? Optional.of(brewingRecipe.getReagent().ingredient()) : Optional.empty()
+     );
+-    public RecipeMap recipes;
++    public volatile RecipeMap recipes; // Canvas - region threading
+     private Map<ResourceKey<RecipePropertySet>, RecipePropertySet> propertySets = Map.of();
+     private SelectableRecipe.SingleInputSet<StonecutterRecipe> stonecutterRecipes = SelectableRecipe.SingleInputSet.empty();
+     private List<RecipeManager.ServerDisplayInfo> allDisplays = List.of();
+@@ -62,9 +_,26 @@
+     // CraftBukkit start
+     public void addRecipe(RecipeHolder<?> holder) {
+         org.spigotmc.AsyncCatcher.catchOp("Recipe Add"); // Spigot
+-        this.recipes.addRecipe(holder);
++        // Canvas start - region threading
++        this.updateRecipes(recipes -> {
++            recipes.addRecipe(holder);
++            return true;
++        });
++        // Canvas end - region threading
++    }
++
++    // Canvas start - region threading - region threads read the recipes while they change, so a change is made to a copy and the copy is published
++    public synchronized boolean updateRecipes(final java.util.function.Predicate<RecipeMap> update) {
++        final RecipeMap recipes = this.recipes.copy();
++        if (!update.test(recipes)) {
++            return false;
++        }
++
++        this.recipes = recipes;
+         this.finalizeRecipeLoading();
++        return true;
+     }
++    // Canvas end - region threading
+ 
+     private FeatureFlagSet enabledFlags;
+ 
+@@ -188,15 +_,10 @@
+ 
+     // CraftBukkit start
+     public boolean removeRecipe(ResourceKey<Recipe<?>> id) {
+-        boolean removed = this.recipes.removeRecipe(id);
+-        if (removed) {
+-            this.finalizeRecipeLoading();
+-        }
+-
+-        return removed;
++        return this.updateRecipes(recipes -> recipes.removeRecipe(id)); // Canvas - region threading
+     }
+ 
+-    public void clearRecipes() {
++    public synchronized void clearRecipes() { // Canvas - region threading
+         this.recipes = RecipeMap.createEmpty();
+         this.finalizeRecipeLoading();
+     }

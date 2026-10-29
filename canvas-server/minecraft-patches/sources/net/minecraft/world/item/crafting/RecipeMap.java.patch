@@ -1,0 +1,15 @@
+--- a/net/minecraft/world/item/crafting/RecipeMap.java
++++ b/net/minecraft/world/item/crafting/RecipeMap.java
+@@ -38,6 +_,12 @@
+         return new RecipeMap(com.google.common.collect.LinkedHashMultimap.create(), com.google.common.collect.Maps.newLinkedHashMap());
+     }
+ 
++    // Canvas start - region threading
++    public RecipeMap copy() {
++        return new RecipeMap(com.google.common.collect.LinkedHashMultimap.create(this.byType), com.google.common.collect.Maps.newLinkedHashMap(this.byKey));
++    }
++    // Canvas end - region threading
++
+     public void addRecipe(RecipeHolder<?> holder) {
+         holder = holder.asRuntimeAddedRecipe(); // Mark recipes holder as added during runtime
+         Collection<RecipeHolder<?>> recipes = this.byType.get(holder.value().getType());

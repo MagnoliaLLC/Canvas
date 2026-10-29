@@ -1,0 +1,13 @@
+--- a/src/main/java/org/bukkit/craftbukkit/inventory/RecipeIterator.java
++++ b/src/main/java/org/bukkit/craftbukkit/inventory/RecipeIterator.java
+@@ -28,9 +_,7 @@
+ 
+     @Override
+     public void remove() {
+-        MinecraftServer.getServer().getRecipeManager().recipes.byKey.remove(this.currentRecipe.id());
+-        this.recipes.remove();
+-        MinecraftServer.getServer().getRecipeManager().finalizeRecipeLoading();
++        MinecraftServer.getServer().getRecipeManager().removeRecipe(this.currentRecipe.id()); // Canvas - region threading - removed from a copy, this iterator walks the recipes it started on
+         MinecraftServer.getServer().getPlayerList().reloadRecipes();
+     }
+ }
