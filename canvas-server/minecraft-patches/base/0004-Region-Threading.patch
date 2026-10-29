@@ -5695,10 +5695,10 @@ index 0000000000000000000000000000000000000000..6895b52f9cf84cd29355dfd1abb348f7
 +import org.jspecify.annotations.NullMarked;
 diff --git a/io/canvasmc/canvas/threadedregions/world/waypoints/RegionizedWaypointManager.java b/io/canvasmc/canvas/threadedregions/world/waypoints/RegionizedWaypointManager.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..8a9dea8879e1ea84d741680db123dd4af716a85c
+index 0000000000000000000000000000000000000000..6ea76e570d09b1f22044b95a8685056a7959aa9a
 --- /dev/null
 +++ b/io/canvasmc/canvas/threadedregions/world/waypoints/RegionizedWaypointManager.java
-@@ -0,0 +1,282 @@
+@@ -0,0 +1,283 @@
 +package io.canvasmc.canvas.threadedregions.world.waypoints;
 +
 +import ca.spottedleaf.moonrise.common.util.TickThread;
@@ -5806,13 +5806,14 @@ index 0000000000000000000000000000000000000000..8a9dea8879e1ea84d741680db123dd4a
 +
 +    @Override
 +    public void untrackWaypoint(final WaypointTransmitter waypoint) {
++        if (!waypoints.remove(waypoint) && !(waypoint instanceof ServerPlayer)) {
++            return;
++        }
 +        for (final ServerPlayer trackedPlayer : players) {
 +            trackedPlayer.getBukkitEntity().taskScheduler.scheduleOrExecute((ServerPlayer entityPlayer) -> {
 +                disconnectWaypoint(waypoint, entityPlayer);
 +            });
 +        }
-+
-+        waypoints.remove(waypoint);
 +    }
 +
 +    // note: this should be called on the "player" param
