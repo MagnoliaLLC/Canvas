@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: RootBeer <rootb33rman@gmail.com>
+Date: Thu, 29 Oct 2026 19:03:33 -0400
+Subject: [PATCH] Composter Input
+
+
+diff --git a/net/minecraft/world/level/block/ComposterBlock.java b/net/minecraft/world/level/block/ComposterBlock.java
+index 16287ae9281f5d67d56291d3a13e491fc95d76e9..f4c116a443c55baed54e6da7377879baaa614aba 100644
+--- a/net/minecraft/world/level/block/ComposterBlock.java
++++ b/net/minecraft/world/level/block/ComposterBlock.java
+@@ -342,9 +342,16 @@ public class ComposterBlock extends Block implements WorldlyContainerHolder {
+ 
+         @Override
+         public boolean canPlaceItemThroughFace(final int slot, final ItemStack itemStack, final @Nullable Direction direction) {
+-            return !this.changed && direction == Direction.UP && itemStack.has(DataComponents.COMPOSTABLE);
++            return !this.changed && direction == Direction.UP && itemStack.has(DataComponents.COMPOSTABLE) && this.canvas$accepts(itemStack); // Canvas - composter input
+         }
+ 
++        // Canvas start - composter input
++        private boolean canvas$accepts(final ItemStack itemStack) {
++            final io.canvasmc.canvas.block.ComposterInput input = io.canvasmc.canvas.block.ComposterInput.current();
++            return input == null || input.accepts(org.bukkit.craftbukkit.block.CraftBlock.at(this.level, this.pos), org.bukkit.craftbukkit.inventory.CraftItemStack.asBukkitMirror(itemStack));
++        }
++        // Canvas end - composter input
++
+         @Override
+         public boolean canTakeItemThroughFace(final int slot, final ItemStack itemStack, final Direction direction) {
+             return false;
