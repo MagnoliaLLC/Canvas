@@ -1157,10 +1157,10 @@ index 5c40c3d0ea8e1e59d39d5f4da6377309119e784b..58571a07c0cdc6c74ef46005c45ad407
          // Spigot doesn't validate the name when the config is created, and instead when the plugin is loaded.
          // Paper plugin configuration will do these checks in config serializer instead of when this is created.
 diff --git a/src/main/java/io/papermc/paper/potion/PaperPotionBrewer.java b/src/main/java/io/papermc/paper/potion/PaperPotionBrewer.java
-index 4e998a422c8420134e90f37a77815a8cfd37831d..e9efdefbbda05e751fbc068131a8699f6c48e2bc 100644
+index 4e998a422c8420134e90f37a77815a8cfd37831d..962c59fd7cd465aea1384253aad441f654839116 100644
 --- a/src/main/java/io/papermc/paper/potion/PaperPotionBrewer.java
 +++ b/src/main/java/io/papermc/paper/potion/PaperPotionBrewer.java
-@@ -49,7 +49,7 @@ public class PaperPotionBrewer implements PotionBrewer {
+@@ -49,14 +49,15 @@ public class PaperPotionBrewer implements PotionBrewer {
  
      @Override
      public void resetPotionMixes() {
@@ -1169,6 +1169,27 @@ index 4e998a422c8420134e90f37a77815a8cfd37831d..e9efdefbbda05e751fbc068131a8699f
          final RecipeManager recipeManager = this.server.getRecipeManager();
          final RegistryAccess registryAccess = this.server.registryAccess();
  
+-        final Collection<RecipeHolder<BrewingRecipe>> brewingRecipes = recipeManager.recipes.byType(RecipeType.BREWING);
++        recipeManager.updateRecipes(recipeMap -> { // Canvas - region threading
++        final Collection<RecipeHolder<BrewingRecipe>> brewingRecipes = recipeMap.byType(RecipeType.BREWING); // Canvas - region threading
+ 
+         // Completely clear brewing recipes.
+-        brewingRecipes.forEach(recipe -> recipeManager.recipes.byKey.remove(recipe.id()));
++        brewingRecipes.forEach(recipe -> recipeMap.byKey.remove(recipe.id())); // Canvas - region threading
+         brewingRecipes.clear();
+ 
+         // Restore recipe manager state for brewing from registries.
+@@ -65,7 +66,8 @@ public class PaperPotionBrewer implements PotionBrewer {
+             .stream()
+             .flatMap(HolderLookup::listElements)
+             .filter(recipe -> recipe.value().getType() == RecipeType.BREWING)
+-            .forEach(recipe -> recipeManager.recipes.addRecipe(new RecipeHolder<>(recipe.key(), recipe.value())));
+-        recipeManager.finalizeRecipeLoading();
++            .forEach(recipe -> recipeMap.addRecipe(new RecipeHolder<>(recipe.key(), recipe.value()))); // Canvas - region threading
++        return true; // Canvas - region threading
++        }); // Canvas - region threading
+     }
+ }
 diff --git a/src/main/java/io/papermc/paper/threadedregions/EntityScheduler.java b/src/main/java/io/papermc/paper/threadedregions/EntityScheduler.java
 index 6f580f7b1708cda1cb63aea6607e369a6d771d1a..e2d0165d179e6d4d6c72c8453350a4b5a3925cb1 100644
 --- a/src/main/java/io/papermc/paper/threadedregions/EntityScheduler.java
@@ -1605,7 +1626,55 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
          //Preconditions.checkState(!this.console.isIteratingOverLevels, "Cannot unload a world while worlds are being ticked"); // Paper - Cat - Temp disable. We'll see how this goes.
          if (world == null) {
              return false;
-@@ -2710,8 +2867,23 @@ public final class CraftServer implements Server {
+@@ -1439,20 +1596,19 @@ public final class CraftServer implements Server {
+     public boolean addRecipes(Iterable<Recipe> recipes) {
+         org.spigotmc.AsyncCatcher.catchOp("Recipes Add");
+         Preconditions.checkArgument(recipes != null, "recipes cannot be null");
++        final RecipeManager recipeManager = this.getServer().getRecipeManager(); // Canvas - region threading - move up
++        return recipeManager.updateRecipes(recipeMap -> { // Canvas - region threading
+         boolean anyAdded = false;
+-        final RecipeManager recipeManager = this.getServer().getRecipeManager();
+         for (Recipe recipe : recipes) {
+             final CraftRecipe craftRecipe = CraftRecipe.fromBukkitRecipe(recipe);
+             if (craftRecipe != null) {
+-                recipeManager.recipes.addRecipe(craftRecipe.toMinecraftRecipe());
++                recipeMap.addRecipe(craftRecipe.toMinecraftRecipe()); // Canvas - region threading
+                 anyAdded = true;
+             }
+         }
+ 
+-        if (anyAdded) {
+-            recipeManager.finalizeRecipeLoading();
+-        }
+         return anyAdded;
++        }); // Canvas - region threading
+     }
+ 
+     @Override
+@@ -1640,18 +1796,17 @@ public final class CraftServer implements Server {
+     @Override
+     public boolean removeRecipes(Iterable<NamespacedKey> recipeKeys) {
+         Preconditions.checkArgument(recipeKeys != null, "recipeKeys cannot be null");
++        final RecipeManager recipeManager = this.getServer().getRecipeManager(); // Canvas - region threading - move up
++        return recipeManager.updateRecipes(recipeMap -> { // Canvas - region threading
+         boolean anyRemoved = false;
+-        final RecipeManager recipeManager = this.getServer().getRecipeManager();
+         for (NamespacedKey recipeKey : recipeKeys) {
+             final ResourceKey<net.minecraft.world.item.crafting.Recipe<?>> id = CraftNamespacedKey.toResourceKey(Registries.RECIPE, recipeKey);
+-            if (recipeManager.recipes.removeRecipe(id)) {
++            if (recipeMap.removeRecipe(id)) { // Canvas - region threading
+                 anyRemoved = true;
+             }
+         }
+-        if (anyRemoved) {
+-            recipeManager.finalizeRecipeLoading();
+-        }
+         return anyRemoved;
++        }); // Canvas - region threading
+     }
+ 
+     @Override
+@@ -2710,8 +2865,23 @@ public final class CraftServer implements Server {
  
      @Override
      public double getAverageTickTime() {
@@ -1631,7 +1700,7 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
      }
  
      private final org.bukkit.Server.Spigot spigot = new org.bukkit.Server.Spigot() {
-@@ -2763,12 +2935,38 @@ public final class CraftServer implements Server {
+@@ -2763,12 +2933,38 @@ public final class CraftServer implements Server {
  
      @Override
      public void restart() {
@@ -1671,7 +1740,7 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
      }
  
      @Override
-@@ -2938,7 +3136,7 @@ public final class CraftServer implements Server {
+@@ -2938,7 +3134,7 @@ public final class CraftServer implements Server {
  
      @Override
      public int getCurrentTick() {
@@ -1680,7 +1749,7 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
      }
  
      @Override
-@@ -2972,4 +3170,160 @@ public final class CraftServer implements Server {
+@@ -2972,4 +3168,160 @@ public final class CraftServer implements Server {
      public void allowPausing(final Plugin plugin, final boolean value) {
          this.console.addPluginAllowingSleep(plugin.getName(), value);
      }
@@ -5367,6 +5436,21 @@ index 01271bd7484f75664ac14bc10ad7abc78fa88b8c..9a86743b5fd79365a261e8da8f13694f
  
      static {
          instance = new CraftItemFactory();
+diff --git a/src/main/java/org/bukkit/craftbukkit/inventory/RecipeIterator.java b/src/main/java/org/bukkit/craftbukkit/inventory/RecipeIterator.java
+index b7b342f77eb3b296e459dafd72f5f0214e244174..12e628e27944cb6b809528cc2ecb18db270e792d 100644
+--- a/src/main/java/org/bukkit/craftbukkit/inventory/RecipeIterator.java
++++ b/src/main/java/org/bukkit/craftbukkit/inventory/RecipeIterator.java
+@@ -28,9 +28,7 @@ public class RecipeIterator implements Iterator<Recipe> {
+ 
+     @Override
+     public void remove() {
+-        MinecraftServer.getServer().getRecipeManager().recipes.byKey.remove(this.currentRecipe.id());
+-        this.recipes.remove();
+-        MinecraftServer.getServer().getRecipeManager().finalizeRecipeLoading();
++        MinecraftServer.getServer().getRecipeManager().removeRecipe(this.currentRecipe.id()); // Canvas - region threading
+         MinecraftServer.getServer().getPlayerList().reloadRecipes();
+     }
+ }
 diff --git a/src/main/java/org/bukkit/craftbukkit/map/CraftMapRenderer.java b/src/main/java/org/bukkit/craftbukkit/map/CraftMapRenderer.java
 index a573499fb96cb08d96e0b20602fc423bfd0e2f52..e272a32fa809d13afd522ae981bab3cee2392c5b 100644
 --- a/src/main/java/org/bukkit/craftbukkit/map/CraftMapRenderer.java

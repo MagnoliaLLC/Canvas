@@ -33286,6 +33286,82 @@ index 65fe2c5b19e37c6800a54c6945eec7df9c505749..91ef5fa03fd5f08b47532ee7146b8ffa
                  ? this
                  : new LodestoneTracker(Optional.empty(), true);
          } else {
+diff --git a/net/minecraft/world/item/crafting/RecipeManager.java b/net/minecraft/world/item/crafting/RecipeManager.java
+index d9ac0c84285c96df934d8649ea659ab11925cb9a..580330f37177f4ee02a6041be026719531e47c52 100644
+--- a/net/minecraft/world/item/crafting/RecipeManager.java
++++ b/net/minecraft/world/item/crafting/RecipeManager.java
+@@ -46,7 +46,7 @@ public class RecipeManager implements RecipeAccess {
+         RecipePropertySet.BREWING_REAGENTS,
+         recipe -> recipe instanceof BrewingRecipe brewingRecipe ? Optional.of(brewingRecipe.getReagent().ingredient()) : Optional.empty()
+     );
+-    public RecipeMap recipes;
++    public volatile RecipeMap recipes; // Canvas - region threading
+     private Map<ResourceKey<RecipePropertySet>, RecipePropertySet> propertySets = Map.of();
+     private SelectableRecipe.SingleInputSet<StonecutterRecipe> stonecutterRecipes = SelectableRecipe.SingleInputSet.empty();
+     private List<RecipeManager.ServerDisplayInfo> allDisplays = List.of();
+@@ -62,9 +62,26 @@ public class RecipeManager implements RecipeAccess {
+     // CraftBukkit start
+     public void addRecipe(RecipeHolder<?> holder) {
+         org.spigotmc.AsyncCatcher.catchOp("Recipe Add"); // Spigot
+-        this.recipes.addRecipe(holder);
++        // Canvas start - region threading
++        this.updateRecipes(recipes -> {
++            recipes.addRecipe(holder);
++            return true;
++        });
++        // Canvas end - region threading
++    }
++
++    // Canvas start - region threading
++    public synchronized boolean updateRecipes(final java.util.function.Predicate<RecipeMap> update) {
++        final RecipeMap recipes = this.recipes.copy();
++        if (!update.test(recipes)) {
++            return false;
++        }
++
++        this.recipes = recipes;
+         this.finalizeRecipeLoading();
++        return true;
+     }
++    // Canvas end - region threading
+ 
+     private FeatureFlagSet enabledFlags;
+ 
+@@ -188,15 +205,10 @@ public class RecipeManager implements RecipeAccess {
+ 
+     // CraftBukkit start
+     public boolean removeRecipe(ResourceKey<Recipe<?>> id) {
+-        boolean removed = this.recipes.removeRecipe(id);
+-        if (removed) {
+-            this.finalizeRecipeLoading();
+-        }
+-
+-        return removed;
++        return this.updateRecipes(recipes -> recipes.removeRecipe(id)); // Canvas - region threading
+     }
+ 
+-    public void clearRecipes() {
++    public synchronized void clearRecipes() { // Canvas - region threading
+         this.recipes = RecipeMap.createEmpty();
+         this.finalizeRecipeLoading();
+     }
+diff --git a/net/minecraft/world/item/crafting/RecipeMap.java b/net/minecraft/world/item/crafting/RecipeMap.java
+index b6142dc1f3b8b358965c16dcacf5a5979470b239..48e69dda6ca43e6458a3c653b7d195a576cc1ffe 100644
+--- a/net/minecraft/world/item/crafting/RecipeMap.java
++++ b/net/minecraft/world/item/crafting/RecipeMap.java
+@@ -38,6 +38,12 @@ public class RecipeMap {
+         return new RecipeMap(com.google.common.collect.LinkedHashMultimap.create(), com.google.common.collect.Maps.newLinkedHashMap());
+     }
+ 
++    // Canvas start - region threading
++    public RecipeMap copy() {
++        return new RecipeMap(com.google.common.collect.LinkedHashMultimap.create(this.byType), com.google.common.collect.Maps.newLinkedHashMap(this.byKey));
++    }
++    // Canvas end - region threading
++
+     public void addRecipe(RecipeHolder<?> holder) {
+         holder = holder.asRuntimeAddedRecipe(); // Mark recipes holder as added during runtime
+         Collection<RecipeHolder<?>> recipes = this.byType.get(holder.value().getType());
 diff --git a/net/minecraft/world/level/BaseCommandBlock.java b/net/minecraft/world/level/BaseCommandBlock.java
 index e73026529520c1bc641681ad0709906101b48a4f..2fa46f2713e196e3e45f1efdd70115ea02e8ea41 100644
 --- a/net/minecraft/world/level/BaseCommandBlock.java
