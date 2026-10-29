@@ -1,5 +1,13 @@
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
+@@ -282,6 +_,7 @@
+     // Canvas start - region threading
+     private volatile float canvas$threadSafeYRot;
+     private volatile float canvas$threadSafeXRot;
++    public io.papermc.paper.threadedregions.@Nullable RegionizedWorldData canvas$worldData; // Canvas - region threading
+ 
+     // region transfer state logic, this is specifically for debugging
+     // and tracking callers of cross-region transfers
 @@ -984,7 +_,7 @@
          }
  

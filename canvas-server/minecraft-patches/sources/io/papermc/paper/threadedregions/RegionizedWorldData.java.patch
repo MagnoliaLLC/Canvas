@@ -1,5 +1,13 @@
 --- a/io/papermc/paper/threadedregions/RegionizedWorldData.java
 +++ b/io/papermc/paper/threadedregions/RegionizedWorldData.java
+@@ -104,6 +_,7 @@
+             into.endCreditsPlayers.addAll(from.endCreditsPlayers); // Canvas - region threading
+             for (final Entity entity : from.allEntities) {
+                 into.allEntities.add(entity);
++                entity.canvas$worldData = into; // Canvas - region threading
+                 entity.updateTicks(fromTickOffset, fromRedstoneTimeOffset);
+                 entity.getBukkitEntity().taskScheduler.registerTo(into.entitySchedulerTickList);
+             }
 @@ -137,7 +_,13 @@
              }
              for (final TickingBlockEntity tileEntityWrapped : from.blockEntityTickers) {
@@ -15,6 +23,14 @@
                  if (tileEntity != null) {
                      tileEntity.updateTicks(fromTickOffset, fromRedstoneTimeOffset);
                  }
+@@ -220,6 +_,7 @@
+                 // the chunk holder must _exist_, and so the region section exists.
+                 final RegionizedWorldData into = regionToData.get(CoordinateUtils.getChunkKey(pos.x() >> chunkToRegionShift, pos.z() >> chunkToRegionShift));
+                 into.allEntities.add(entity);
++                entity.canvas$worldData = into; // Canvas - region threading
+                 // note: entityTickList is a subset of allEntities
+                 if (from.entityTickList.contains(entity)) {
+                     into.entityTickList.add(entity);
 @@ -280,7 +_,18 @@
                    //       marked as removed. So if there is no section, it's probably removed!
              }
@@ -82,3 +98,28 @@
      }
  
      public NearbyPlayers getNearbyPlayers() {
+@@ -759,6 +_,7 @@
+             throw new IllegalArgumentException("Entity " + entity + " is not under this region's control");
+         }
+         if (this.allEntities.add(entity)) {
++            entity.canvas$worldData = this; // Canvas - region threading
+             if (entity instanceof ServerPlayer player) {
+                 this.localPlayers.add(player);
+                 player.getBukkitEntity().updateRegion(this);
+@@ -768,7 +_,7 @@
+     }
+ 
+     public boolean hasEntity(final Entity entity) {
+-        return this.allEntities.contains(entity);
++        return entity.canvas$worldData == this || this.allEntities.contains(entity); // Canvas - region threading
+     }
+ 
+     public void removeEntity(final Entity entity) {
+@@ -776,6 +_,7 @@
+             throw new IllegalArgumentException("Entity " + entity + " is not under this region's control");
+         }
+         if (this.allEntities.remove(entity)) {
++            entity.canvas$worldData = null; // Canvas - region threading
+             if (entity instanceof ServerPlayer player) {
+                 this.localPlayers.remove(player);
+                 player.getBukkitEntity().updateRegion(null);

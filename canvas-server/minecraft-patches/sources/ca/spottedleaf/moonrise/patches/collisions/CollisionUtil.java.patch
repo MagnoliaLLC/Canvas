@@ -1,5 +1,22 @@
 --- a/ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.java
 +++ b/ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.java
+@@ -1937,11 +_,15 @@
+ 
+         final boolean loadChunks = (collisionFlags & COLLISION_FLAG_LOAD_CHUNKS) != 0;
+         final ChunkSource chunkSource = world.getChunkSource();
++        // Canvas start - region threading
++        final boolean ownsAllChunks = ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(world, minChunkX - 4, minChunkZ - 4, maxChunkX + 4, maxChunkZ + 4);
++        final boolean singleChunk = minChunkX == maxChunkX && minChunkZ == maxChunkZ;
++        // Canvas end - region threading
+ 
+         for (int currChunkZ = minChunkZ; currChunkZ <= maxChunkZ; ++currChunkZ) {
+             for (int currChunkX = minChunkX; currChunkX <= maxChunkX; ++currChunkX) {
+                 // Folia start - region threading
+-                if (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(world, currChunkX, currChunkZ, 4)) {
++                if (!ownsAllChunks && (singleChunk || !ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(world, currChunkX, currChunkZ, 4))) { // Canvas - region threading
+                     if (checkOnly) {
+                         return true;
+                     } else {
 @@ -1991,6 +_,15 @@
                      final int minYIterate = currChunkY == minChunkY ? (minBlockY & 15) + sectionAdjust : 0;
                      final int maxYIterate = currChunkY == maxChunkY ? (maxBlockY & 15) - sectionAdjust : 15;

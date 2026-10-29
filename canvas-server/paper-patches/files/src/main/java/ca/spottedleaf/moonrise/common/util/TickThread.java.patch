@@ -1,0 +1,11 @@
+--- a/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
++++ b/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
+@@ -410,7 +_,7 @@
+             return false;
+         }
+ 
+-        final RegionizedWorldData worldData = region.getData().world.worldRegionData.get(); // Canvas - optimize thread check
++        final RegionizedWorldData worldData = ((TickRegionScheduler.TickThreadRunner)thread).currentTickingWorldRegionizedData; // Canvas - region threading
+ 
+         // pass through the check if the entity is removed and we own its chunk
+         if (worldData.hasEntity(entity)) {
