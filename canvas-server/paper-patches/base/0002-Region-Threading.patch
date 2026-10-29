@@ -5237,7 +5237,7 @@ index 6ad86ba7abac537b42f8bb43bbb8d984cbbdf052..f6880ff590fdd3e30562a24de00c6a21
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
-index 18bb8c1287faff042b67343dfe14143a8e93327c..b956a464cc0c100a4c8076c3ef5dd7463ab82516 100644
+index f5b3086986c7a53dc65926b5882df4ef9b04350d..c1a6f1f4cd11156cd744b728ee014da5d2cdda79 100644
 --- a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
 +++ b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
 @@ -940,7 +940,7 @@ public class CraftEventFactory {
@@ -5258,7 +5258,7 @@ index 18bb8c1287faff042b67343dfe14143a8e93327c..b956a464cc0c100a4c8076c3ef5dd746
          if (event.callEvent()) {
              boolean result = snapshot.place(flags);
              return !checkSetResult || result;
-@@ -2413,7 +2413,7 @@ public class CraftEventFactory {
+@@ -2411,7 +2411,7 @@ public class CraftEventFactory {
  
      }
  
@@ -5267,7 +5267,7 @@ index 18bb8c1287faff042b67343dfe14143a8e93327c..b956a464cc0c100a4c8076c3ef5dd746
  
      public static boolean callBlockLockCheckEvent(
          BlockEntity blockEntity,
-@@ -2433,7 +2433,7 @@ public class CraftEventFactory {
+@@ -2431,7 +2431,7 @@ public class CraftEventFactory {
              if (event.getResult() == org.bukkit.event.Event.Result.ALLOW) {
                  return true;
              } else if (event.getResult() == org.bukkit.event.Event.Result.DENY || !code.canUnlock(player, event.isUsingCustomKeyItemStack() ? org.bukkit.craftbukkit.inventory.CraftItemStack.asNMSCopy(event.getKeyItem()) : player.getMainHandItem())) {
@@ -5276,7 +5276,7 @@ index 18bb8c1287faff042b67343dfe14143a8e93327c..b956a464cc0c100a4c8076c3ef5dd746
                  return false;
              }
          }
-@@ -2441,9 +2441,11 @@ public class CraftEventFactory {
+@@ -2439,9 +2439,11 @@ public class CraftEventFactory {
      }
  
      public static boolean sendChestLockedNotifications(Vec3 pos) {
