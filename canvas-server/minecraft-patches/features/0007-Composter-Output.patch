@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: RootBeer <rootb33rman@gmail.com>
+Date: Thu, 29 Oct 2026 18:37:10 -0400
+Subject: [PATCH] Composter Output
+
+
+diff --git a/net/minecraft/world/level/block/ComposterBlock.java b/net/minecraft/world/level/block/ComposterBlock.java
+index c89b85391ab2b982b7a6f0f11f74599d5acbb0fa..16287ae9281f5d67d56291d3a13e491fc95d76e9 100644
+--- a/net/minecraft/world/level/block/ComposterBlock.java
++++ b/net/minecraft/world/level/block/ComposterBlock.java
+@@ -279,6 +279,15 @@ public class ComposterBlock extends Block implements WorldlyContainerHolder {
+     public WorldlyContainer getContainer(final BlockState state, final LevelAccessor level, final BlockPos pos) {
+         int contentLevel = state.getValue(LEVEL);
+         if (contentLevel == 8) {
++            // Canvas start - composter output
++            final io.canvasmc.canvas.block.ComposterOutput output = io.canvasmc.canvas.block.ComposterOutput.current();
++            final org.bukkit.inventory.@Nullable ItemStack given = output == null ? null : output.output(org.bukkit.craftbukkit.block.CraftBlock.at(level, pos));
++            if (given != null) {
++                final ComposterBlock.OutputContainer container = new ComposterBlock.OutputContainer(state, level, pos, org.bukkit.craftbukkit.inventory.CraftItemStack.asNMSCopy(given));
++                container.canvas$output = output;
++                return container;
++            }
++            // Canvas end - composter output
+             return new ComposterBlock.OutputContainer(state, level, pos, new ItemStack(Items.BONE_MEAL));
+         } else {
+             return contentLevel < 7 ? new ComposterBlock.InputContainer(state, level, pos) : new ComposterBlock.EmptyContainer(level, pos); // CraftBukkit - empty levelAccessor, blockPos
+@@ -364,6 +373,7 @@ public class ComposterBlock extends Block implements WorldlyContainerHolder {
+         private final LevelAccessor level;
+         private final BlockPos pos;
+         private boolean changed;
++        private io.canvasmc.canvas.block.@Nullable ComposterOutput canvas$output; // Canvas - composter output
+ 
+         public OutputContainer(final BlockState state, final LevelAccessor level, final BlockPos pos, final ItemStack contents) {
+             super(contents);
+@@ -390,13 +400,14 @@ public class ComposterBlock extends Block implements WorldlyContainerHolder {
+ 
+         @Override
+         public boolean canTakeItemThroughFace(final int slot, final ItemStack itemStack, final Direction direction) {
+-            return !this.changed && direction == Direction.DOWN && itemStack.is(Items.BONE_MEAL);
++            return !this.changed && direction == Direction.DOWN && (this.canvas$output != null || itemStack.is(Items.BONE_MEAL)); // Canvas - composter output
+         }
+ 
+         @Override
+         public void setChanged() {
+             // CraftBukkit start - allow putting items back (eg cancelled InventoryMoveItemEvent)
+             if (this.isEmpty()) {
++            if (this.canvas$output != null) this.canvas$output.taken(org.bukkit.craftbukkit.block.CraftBlock.at(this.level, this.pos)); // Canvas - composter output
+             ComposterBlock.empty(null, this.state, this.level, this.pos);
+             this.changed = true;
+             } else {
