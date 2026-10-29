@@ -1,5 +1,22 @@
 --- a/io/papermc/paper/threadedregions/RegionShutdownThread.java
 +++ b/io/papermc/paper/threadedregions/RegionShutdownThread.java
+@@ -136,6 +_,16 @@
+         }
+     }
+ 
++    // Canvas start - region threading
++    public void closeChunkSystem(final ServerLevel world) {
++        try {
++            world.moonrise$getChunkTaskScheduler().chunkHolderManager.close(false, true, false, true, false);
++        } catch (final Throwable thrown) {
++            LOGGER.error("Failed to close chunk system for world '{}'", world.getWorld().getName(), thrown);
++        }
++    }
++    // Canvas end - region threading
++
+     private void closePlayerInventories(final ThreadedRegionizer.ThreadedRegion<TickRegions.TickRegionData, TickRegions.TickRegionSectionData> region) {
+         ChunkPos center = null;
+         try {
 @@ -157,6 +_,7 @@
                          player.containerMenu.setCarried(ItemStack.EMPTY);
                          player.drop(carried, false, Prediction.SERVER_ONLY);
@@ -8,3 +25,11 @@
                  } catch (final Throwable thrown) {
                      LOGGER.error("Failed to close player inventory for player: {}", player, thrown);
                  }
+@@ -332,6 +_,7 @@
+             for (int i = 0, len = regions.size(); i < len; ++i) {
+                 this.saveRegionChunks(regions.get(i), (i + 1) == len);
+             }
++            if (regions.isEmpty()) this.closeChunkSystem(world); // Canvas - region threading
+             LOGGER.info("Saved chunks");
+ 
+             LOGGER.info("Saving level data...");

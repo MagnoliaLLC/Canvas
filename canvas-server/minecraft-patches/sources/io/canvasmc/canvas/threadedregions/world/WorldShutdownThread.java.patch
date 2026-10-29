@@ -1,0 +1,13 @@
+--- a/io/canvasmc/canvas/threadedregions/world/WorldShutdownThread.java
++++ b/io/canvasmc/canvas/threadedregions/world/WorldShutdownThread.java
+@@ -177,6 +_,10 @@
+                     region = regions.get(i);
+                 saveRegionChunks(region, (i + 1) == regions.size());
+             }
++
++            if (regions.isEmpty()) {
++                closeChunkSystem(this.level);
++            }
+         } catch (final Throwable thrown) {
+             LOGGER.error("Failed to save chunks in {}", getWorldName(), thrown);
+             throw thrown;
