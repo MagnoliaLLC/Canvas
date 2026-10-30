@@ -31836,7 +31836,7 @@ index 65fe2c5b19e37c6800a54c6945eec7df9c505749..91ef5fa03fd5f08b47532ee7146b8ffa
                  : new LodestoneTracker(Optional.empty(), true);
          } else {
 diff --git a/net/minecraft/world/level/BaseCommandBlock.java b/net/minecraft/world/level/BaseCommandBlock.java
-index e73026529520c1bc641681ad0709906101b48a4f..c64a0b50f2678f4ec00b16e4e9ed5ed15477ffe9 100644
+index e73026529520c1bc641681ad0709906101b48a4f..633e829cded5e75dd4413740f45af8b271c417b3 100644
 --- a/net/minecraft/world/level/BaseCommandBlock.java
 +++ b/net/minecraft/world/level/BaseCommandBlock.java
 @@ -91,6 +91,7 @@ public abstract class BaseCommandBlock {
@@ -31847,7 +31847,7 @@ index e73026529520c1bc641681ad0709906101b48a4f..c64a0b50f2678f4ec00b16e4e9ed5ed1
          if (level.getGameTime() == this.lastExecution) {
              return false;
          }
-@@ -172,10 +173,15 @@ public abstract class BaseCommandBlock {
+@@ -172,6 +173,11 @@ public abstract class BaseCommandBlock {
      public abstract CommandSourceStack createCommandSourceStack(ServerLevel level, CommandSource source);
  
      public abstract boolean isValid();
@@ -31859,21 +31859,14 @@ index e73026529520c1bc641681ad0709906101b48a4f..c64a0b50f2678f4ec00b16e4e9ed5ed1
  
      public class CloseableCommandBlockSource implements CommandSource, AutoCloseable { // Paper - public
          private final ServerLevel level;
--        private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.ROOT);
-+        private static final ThreadLocal<DateTimeFormatter> TIME_FORMAT = ThreadLocal.withInitial(() -> DateTimeFormatter.ofPattern("HH:mm:ss", Locale.ROOT)); // Folia - region threading - SDF is not thread-safe
-         private boolean closed;
- 
-         // Paper start - add back source when output disabled
-@@ -209,7 +215,8 @@ public abstract class BaseCommandBlock {
+@@ -209,6 +215,7 @@ public abstract class BaseCommandBlock {
          public void sendSystemMessage(final Component message) {
              if (this.trackOutput && !this.closed) { // Paper - add back source when output disabled
                  org.spigotmc.AsyncCatcher.catchOp("sendSystemMessage to a command block"); // Paper - Don't broadcast messages to command blocks
--                BaseCommandBlock.this.lastOutput = Component.literal("[" + this.level.paperConfig().commandBlocks.timeFormatPattern.or(TIME_FORMAT).format(ZonedDateTime.now()) + "] ").append(message); // Paper - per-world configurable time format
 +                BaseCommandBlock.this.threadCheck(); // Folia - region threading
-+                BaseCommandBlock.this.lastOutput = Component.literal("[" + this.level.paperConfig().commandBlocks.timeFormatPattern.or(TIME_FORMAT.get()).format(ZonedDateTime.now()) + "] ").append(message); // Paper - per-world configurable time format // Folia - region threading - SDF is not thread-safe
+                 BaseCommandBlock.this.lastOutput = Component.literal("[" + this.level.paperConfig().commandBlocks.timeFormatPattern.or(TIME_FORMAT).format(ZonedDateTime.now()) + "] ").append(message); // Paper - per-world configurable time format
                  BaseCommandBlock.this.onUpdated(this.level);
              }
-         }
 diff --git a/net/minecraft/world/level/EntityGetter.java b/net/minecraft/world/level/EntityGetter.java
 index cc938f43c4a5e947ed87ca2001cbaca4084bf64c..e6c47a0332c8313c30f2f90cd030f1e80c100ee2 100644
 --- a/net/minecraft/world/level/EntityGetter.java
