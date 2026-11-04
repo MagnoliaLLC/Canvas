@@ -114,3 +114,16 @@
              spawningChunks.clear();
          }
  
+@@ -656,6 +_,12 @@
+ 
+     @Override
+     public void onLightUpdate(final LightLayer layer, final SectionPos pos) {
++        // Canvas start - skip saving unchanged chunks loaded from disk
++        final LevelChunk relit = this.moonrise$getFullChunkIfLoaded(pos.getX(), pos.getZ());
++        if (relit != null) {
++            relit.markUnsaved();
++        }
++        // Canvas end - skip saving unchanged chunks loaded from disk
+         Runnable run = () -> { // Folia - region threading
+             ChunkHolder chunk = this.getVisibleChunkIfPresent(pos.chunk().pack());
+             if (chunk != null && chunk.sectionLightChanged(layer, pos.y())) {
