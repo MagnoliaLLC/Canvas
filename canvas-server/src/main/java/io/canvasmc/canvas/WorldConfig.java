@@ -111,9 +111,8 @@ public class WorldConfig extends Part {
                 ).endLine()
                 .blank()
                 .wordWrap(
-                    "All defaults for the options provided in this configuration are configured for upstream",
-                    "compatibility over performance. You must do some manual configuration to get some of the performance",
-                    "benefits Canvas provides."
+                    "All defaults for the options provided in this configuration are tuned for production on this",
+                    "build, and some of them trade Vanilla behavior for performance."
                 ).endLine()
                 .blank()
                 .wordWrap(
@@ -243,7 +242,7 @@ public class WorldConfig extends Part {
                 );
         }
 
-        public boolean hideFlamesOnEntitiesWithFireResistance = false;
+        public boolean hideFlamesOnEntitiesWithFireResistance = true;
         public boolean hideFlamesOnEntitiesWithInvisibility = false;
 
         public Particles particles = new Particles();
@@ -255,12 +254,12 @@ public class WorldConfig extends Part {
                 option("disableNewCombatParticles").docs("Note that when enabled this option breaks Vanilla visual compatibility");
             }
 
-            public boolean disableSprintParticles = false;
+            public boolean disableSprintParticles = true;
             public boolean disableFallParticles = false;
-            public boolean disableDeathParticles = false;
-            public boolean disableEffectParticles = false;
-            public boolean disableWaterSplashParticles = false;
-            public boolean disableBubbleColumnParticles = false;
+            public boolean disableDeathParticles = true;
+            public boolean disableEffectParticles = true;
+            public boolean disableWaterSplashParticles = true;
+            public boolean disableBubbleColumnParticles = true;
             public boolean disableNewCombatParticles = false;
         }
 
@@ -326,7 +325,7 @@ public class WorldConfig extends Part {
                 );
         }
 
-        public boolean fastOrbs = false;
+        public boolean fastOrbs = true;
 
         public ItemEntities itemEntities = new ItemEntities();
         public static class ItemEntities extends Part {
@@ -582,9 +581,9 @@ public class WorldConfig extends Part {
     }
 
     public double waypointUpdateScale = 4000.0D;
-    public boolean disableCriterionTrigger = false;
-    public boolean cactusCheckSurvivalBeforeGrowth = false;
-    public boolean enableSuffocationOptimization = false;
+    public boolean disableCriterionTrigger = true;
+    public boolean cactusCheckSurvivalBeforeGrowth = true;
+    public boolean enableSuffocationOptimization = true;
 
     public Sleeping sleeping = new Sleeping();
 

@@ -142,9 +142,8 @@ public class GlobalConfiguration extends Part {
                 ).endLine()
                 .blank()
                 .wordWrap(
-                    "All defaults for the options provided in this configuration are configured for upstream",
-                    "compatibility over performance. You must do some manual configuration to get some of the performance",
-                    "benefits Canvas provides."
+                    "All defaults for the options provided in this configuration are tuned for production on this",
+                    "build, and some of them trade Vanilla behavior for performance."
                 ).endLine()
                 .blank()
                 .wordWrap(
@@ -346,7 +345,7 @@ public class GlobalConfiguration extends Part {
             }
 
             public long stealThresholdMillis = AffinitySchedulerThreadPool.DEFAULT_STEAL_THRESH_MILLIS;
-            public double runTasksBufferMillis = AffinitySchedulerThreadPool.DEFAULT_RUN_TASKS_BUFFER_MILLIS;
+            public double runTasksBufferMillis = 0.1D;
 
             public int[] tickRegionAffinity = new int[0];
             public boolean enableAffinitySchedulerCpuAffinity = false;
@@ -380,7 +379,7 @@ public class GlobalConfiguration extends Part {
 
         public long overloadedLogMillis = 5_000L;
         public float defaultTickRate = 20.0F;
-        public GuardSeverity guardSeverity = GuardSeverity.THROW;
+        public GuardSeverity guardSeverity = GuardSeverity.LOG;
 
         public enum GuardSeverity {
             SILENT,
@@ -398,7 +397,7 @@ public class GlobalConfiguration extends Part {
             );
         }
 
-        public boolean preventExcessiveVelocityMoveOutOfRegion = false;
+        public boolean preventExcessiveVelocityMoveOutOfRegion = true;
     }
 
     public ChunkSystem chunkSystem = new ChunkSystem();
@@ -420,7 +419,7 @@ public class GlobalConfiguration extends Part {
                 );
         }
 
-        public FluidPostProcessingMode fluidPostProcessingAlgorithm = FluidPostProcessingMode.VANILLA;
+        public FluidPostProcessingMode fluidPostProcessingAlgorithm = FluidPostProcessingMode.FILTERED;
 
         public enum FluidPostProcessingMode {
             VANILLA,
@@ -437,7 +436,7 @@ public class GlobalConfiguration extends Part {
                 );
         }
 
-        public boolean optimizeTreasureMapLocating = false;
+        public boolean optimizeTreasureMapLocating = true;
 
         public VisualViewDistance visualViewDistance = new VisualViewDistance();
         public static class VisualViewDistance extends Part {
@@ -500,22 +499,22 @@ public class GlobalConfiguration extends Part {
             option("mc136249").docs("Fixes wearing enchanted boots with depth strider decreasing the strength of the riptide enchantment");
         }
 
-        public boolean mc261810 = false;
-        public boolean mc223153 = false;
-        public boolean mc200418 = false;
-        public boolean mc94054 = false;
-        public boolean mc245394 = false;
-        public boolean mc227337 = false;
-        public boolean mc221257 = false;
-        public boolean mc206922 = false;
-        public boolean mc155509 = false;
-        public boolean mc132878 = false;
-        public boolean mc121706 = false;
-        public boolean mc119754 = false;
-        public boolean mc100991 = false;
-        public boolean mc30391 = false;
-        public boolean mc183990 = false;
-        public boolean mc136249 = false;
+        public boolean mc261810 = true;
+        public boolean mc223153 = true;
+        public boolean mc200418 = true;
+        public boolean mc94054 = true;
+        public boolean mc245394 = true;
+        public boolean mc227337 = true;
+        public boolean mc221257 = true;
+        public boolean mc206922 = true;
+        public boolean mc155509 = true;
+        public boolean mc132878 = true;
+        public boolean mc121706 = true;
+        public boolean mc119754 = true;
+        public boolean mc100991 = true;
+        public boolean mc30391 = true;
+        public boolean mc183990 = true;
+        public boolean mc136249 = true;
     }
 
     public Networking networking = new Networking();
@@ -556,15 +555,15 @@ public class GlobalConfiguration extends Part {
                 );
         }
 
-        public boolean filterVelocityPacket = false;
-        public boolean stripLoreFromEntityItems = false;
-        public boolean alternativePlayerListTick = false;
+        public boolean filterVelocityPacket = true;
+        public boolean stripLoreFromEntityItems = true;
+        public boolean alternativePlayerListTick = true;
         public int playerInfoSendInterval = 600;
         public boolean purpurAlternativeKeepalive = false;
 
         // Originally from Leaf: https://github.com/Winds-Studio/Leaf/blob/58a4a9cb7994474e63ba49205cd21e89f8dacc9a/leaf-server/minecraft-patches/features/0216-Flush-location-while-knockback.patch
         // License described in Leaf-Flush-location-while-knockback.patch
-        public boolean flushLocationWhileKnockback = false;
+        public boolean flushLocationWhileKnockback = true;
     }
 
     {
@@ -579,11 +578,11 @@ public class GlobalConfiguration extends Part {
         option("tileEntitySnapshotCreation").docs("Enables creation of tile entity snapshots on retrieving blockstates");
     }
 
-    public String serverModName = ServerBuildInfo.buildInfo().brandName();
+    public String serverModName = "Filter";
 
     public boolean displayWorldLoadScreenForCrossRegionTransfers = true;
 
-    public boolean cacheMinecraft2BukkitEntityTypeConversion = false;
+    public boolean cacheMinecraft2BukkitEntityTypeConversion = true;
     public boolean tileEntitySnapshotCreation = false;
 
     public PurpurContainers purpurContainers = new PurpurContainers();
@@ -606,9 +605,9 @@ public class GlobalConfiguration extends Part {
             option("enderChestPersistHiddenRows").docs("Whether items should remain stored in slots, even if those slots become inaccessible through permissions");
         }
 
-        public int barrelRows = 3;
-        public boolean enderChestSixRows = false;
-        public boolean enderChestPermissionRows = false;
+        public int barrelRows = 6;
+        public boolean enderChestSixRows = true;
+        public boolean enderChestPermissionRows = true;
         public boolean enderChestPersistHiddenRows = true;
     }
 
@@ -627,8 +626,8 @@ public class GlobalConfiguration extends Part {
             option("disableChatVerificationOrder").docs("Disables Minecraft chat verification ordering");
         }
 
-        public boolean disableChatReporting = false;
-        public boolean disableChatVerificationOrder = false;
+        public boolean disableChatReporting = true;
+        public boolean disableChatVerificationOrder = true;
     }
 
     public Logs logs = new Logs();
@@ -641,7 +640,7 @@ public class GlobalConfiguration extends Part {
             option("logEnderPearlRewriteActions").docs("Logs when a pearl is saved or loaded from Canvas' pearl save rewrite");
         }
 
-        private boolean enableLogCleaner = false;
+        private boolean enableLogCleaner = true;
         private String cleanerTimeSpan = "30d";
         public boolean logEnderPearlRewriteActions = true;
     }
@@ -655,16 +654,16 @@ public class GlobalConfiguration extends Part {
             option("allowEnchantingWithIncompatibleEnchants").docs("Allows setting enchants on items with incompatible enchants. e.g. Protection & Blast Protection");
         }
 
-        public boolean uncapMaxLevel = false;
-        public boolean allowEnchantsOnUnsupportedItems = false;
-        public boolean allowEnchantingWithIncompatibleEnchants = false;
+        public boolean uncapMaxLevel = true;
+        public boolean allowEnchantsOnUnsupportedItems = true;
+        public boolean allowEnchantingWithIncompatibleEnchants = true;
     }
 
     {
         option("disableLocatorBarInAllWorlds").docs("Disables the locator bar globally, removing the need to disable it using gamerules per-world");
     }
 
-    public boolean disableLocatorBarInAllWorlds = false;
+    public boolean disableLocatorBarInAllWorlds = true;
 
     {
         option("autosave").docs(
