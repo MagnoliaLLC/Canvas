@@ -3010,7 +3010,7 @@ index 0000000000000000000000000000000000000000..4e92caea35cd65eb5ca7000350d76e06
 +import org.jspecify.annotations.NullMarked;
 diff --git a/io/canvasmc/canvas/threadedregions/scheduler/AffinitySchedulerThreadPool.java b/io/canvasmc/canvas/threadedregions/scheduler/AffinitySchedulerThreadPool.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..71725a3ee7f26d2d39d6410eeb010927f1dc13ca
+index 0000000000000000000000000000000000000000..d5271e4f65173484c09a811f5e48896c76a784ac
 --- /dev/null
 +++ b/io/canvasmc/canvas/threadedregions/scheduler/AffinitySchedulerThreadPool.java
 @@ -0,0 +1,868 @@
@@ -3061,7 +3061,7 @@ index 0000000000000000000000000000000000000000..71725a3ee7f26d2d39d6410eeb010927
 +public final class AffinitySchedulerThreadPool extends Scheduler {
 +
 +    public static final long DEFAULT_STEAL_THRESH_MILLIS = 3L;
-+    public static final double DEFAULT_RUN_TASKS_BUFFER_MILLIS = (double) 80_000 / 1_000_000; // 0.08ms
++    public static final double DEFAULT_RUN_TASKS_BUFFER_MILLIS = (double) 100_000 / 1_000_000; // 0.1ms
 +
 +    static final Comparator<AffinitySchedulerThreadPool.ScheduledState> TICK_COMPARATOR_BY_TIME = (final AffinitySchedulerThreadPool.ScheduledState s1, final AffinitySchedulerThreadPool.ScheduledState s2) -> {
 +        final SchedulableTick t1 = s1.tick;
