@@ -1,0 +1,48 @@
+--- a/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/task/ChunkLoadTask.java
++++ b/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/task/ChunkLoadTask.java
+@@ -339,6 +_,7 @@
+             }
+ 
+             try {
++                final int storedVersion = data.getIntOr("DataVersion", -1); // Canvas - skip saving unchanged chunks loaded from disk
+                 // run converters
+                 final CompoundTag converted = this.world.getChunkSource().chunkMap.upgradeChunkTag(data);
+ 
+@@ -357,12 +_,37 @@
+                     new ChunkPos(this.chunkX, this.chunkZ)
+                 );
+ 
++                // Canvas start - skip saving unchanged chunks loaded from disk
++                // reading a chunk marks it unsaved, so a full chunk read unchanged was serialised and written again
++                if (chunk instanceof net.minecraft.world.level.chunk.ImposterProtoChunk imposter && readUnchanged(storedVersion, chunkData, imposter)) {
++                    imposter.getWrapped().tryMarkSaved();
++                }
++                // Canvas end - skip saving unchanged chunks loaded from disk
++
+                 return new TaskResult<>(new ReadChunk(chunk, chunkData), null);
+             } catch (final Throwable thr2) {
+                 LOGGER.error("Failed to parse chunk data for task: " + this.toString() + ", chunk data will be lost", thr2);
+                 return new TaskResult<>(null, null);
+             }
+         }
++
++        // Canvas start - skip saving unchanged chunks loaded from disk
++        private static boolean readUnchanged(final int storedVersion, final SerializableChunkData chunkData, final net.minecraft.world.level.chunk.ImposterProtoChunk chunk) {
++            if (storedVersion != net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version() || !chunkData.lightCorrect()
++                || !chunk.getWrapped().getUpgradeData().isEmpty() || chunk.getWrapped().getBlendingData() != null
++                || !chunkData.heightmaps().keySet().containsAll(net.minecraft.world.level.chunk.status.ChunkStatus.FULL.heightmapsAfter())) {
++                return false;
++            }
++
++            for (final it.unimi.dsi.fastutil.shorts.ShortList positions : chunkData.postProcessingSections()) {
++                if (positions != null && !positions.isEmpty()) {
++                    return false;
++                }
++            }
++
++            return true;
++        }
++        // Canvas end - skip saving unchanged chunks loaded from disk
+ 
+         @Override
+         protected TaskResult<ChunkAccess, Throwable> runOnMain(final ReadChunk data, final Throwable throwable) {

@@ -337,3 +337,11 @@
              this.pendingBlockEntities.put(posFromTag, entityTag);
          }
      }
+@@ -454,6 +_,7 @@
+ 
+     public void incrementInhabitedTime() {
+         this.inhabitedTime++;
++        if (!this.unsaved) this.markUnsaved(); // Canvas - skip saving unchanged chunks loaded from disk
+     }
+ 
+     public void setInhabitedTime(final long inhabitedTime) {
