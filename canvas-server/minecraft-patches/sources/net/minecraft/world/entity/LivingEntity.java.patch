@@ -8,6 +8,15 @@
      public Set<UUID> collidableExemptions = new java.util.HashSet<>();
      public boolean bukkitPickUpLoot;
      public boolean silentDeath = true; // Paper - mark entity as dying silently for cancellable death event
+@@ -334,6 +_,8 @@
+     }
+     // Folia end - region threading
+ 
++    private float canvas$health = 1.0F; // Canvas - cache living entity health
++
+     protected LivingEntity(final EntityType<? extends LivingEntity> type, final Level level) {
+         super(type, level);
+         this.attributes = new AttributeMap(DefaultAttributes.getSupplier(type));
 @@ -421,7 +_,7 @@
          if (this.level() instanceof ServerLevel level && onGround && this.fallDistance > 0.0) {
              this.onChangedBlock(level, pos);
@@ -155,7 +164,16 @@
      }
  
      private void updateGlowingStatus() {
-@@ -2237,7 +_,7 @@
+@@ -1424,7 +_,7 @@
+             return (float) player.getBukkitEntity().getHealth();
+         }
+         // CraftBukkit end
+-        return this.entityData.get(DATA_HEALTH_ID);
++        return this.canvas$health; // Canvas - cache living entity health
+     }
+ 
+     // Paper start - Check for NaN
+@@ -2236,7 +_,7 @@
  
      @Override
      public boolean isAlive() {
@@ -399,3 +417,15 @@
          return entity;
      }
  
+@@ -4295,6 +_,11 @@
+     @Override
+     public void onSyncedDataUpdated(final EntityDataAccessor<?> accessor) {
+         super.onSyncedDataUpdated(accessor);
++        // Canvas start - cache living entity health
++        if (DATA_HEALTH_ID.equals(accessor)) {
++            this.canvas$health = this.entityData.get(DATA_HEALTH_ID);
++        }
++        // Canvas end - cache living entity health
+         if (SLEEPING_POS_ID.equals(accessor)) {
+             if (this.level().isClientSide()) {
+                 this.getSleepingPos().ifPresent(this::setPosToBed);
