@@ -9,6 +9,34 @@
          this.chatMessageChain = new FutureChain(server.chatExecutor); // CraftBukkit - async chat
          this.commandSuggestionsProvider = new ServerCommandSuggestionsProvider(player);
          this.tickEndEvent = new io.papermc.paper.event.packet.ClientTickEndEvent(player.getBukkitEntity()); // Paper - add client tick end event
+@@ -2012,22 +_,24 @@
+         if (level.paperConfig().chunks.preventMovingIntoUnloadedChunks) {
+             flags |= ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.COLLISION_FLAG_COLLIDE_WITH_UNLOADED_CHUNKS;
+         }
++        final AABB deflatedNewBox = newBox.deflate(1.0E-5F); // Canvas - vanilla collision tolerance
+         ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.getCollisions(
+-            level, entity, newBox, collisionsVoxel, collisionsBB,
++            level, entity, deflatedNewBox, collisionsVoxel, collisionsBB, // Canvas - vanilla collision tolerance
+             flags,
+             null, null
+         );
+ 
++        final AABB deflatedOldBox = oldBox.deflate(1.0E-5F); // Canvas - vanilla collision tolerance
+         for (int i = 0, len = collisionsBB.size(); i < len; ++i) {
+             final AABB box = collisionsBB.get(i);
+-            if (!ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.voxelShapeIntersect(box, oldBox)) {
++            if (!ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.voxelShapeIntersect(box, deflatedOldBox)) { // Canvas - vanilla collision tolerance
+                 return true;
+             }
+         }
+ 
+         for (int i = 0, len = collisionsVoxel.size(); i < len; ++i) {
+             final VoxelShape voxel = collisionsVoxel.get(i);
+-            if (!ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.voxelShapeIntersectNoEmpty(voxel, oldBox)) {
++            if (!ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.voxelShapeIntersectNoEmpty(voxel, deflatedOldBox)) { // Canvas - vanilla collision tolerance
+                 return true;
+             }
+         }
 @@ -2617,7 +_,7 @@
          command = event.getMessage().substring(1);
          // CraftBukkit end
