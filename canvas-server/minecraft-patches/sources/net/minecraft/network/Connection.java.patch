@@ -75,7 +75,18 @@
  
      public void setListenerForServerboundHandshake(final PacketListener packetListener) {
          if (this.packetListener != null) {
-@@ -535,10 +_,55 @@
+@@ -474,7 +_,9 @@
+                 this.pendingActions.addAll(actions);
+             }
+ 
+-            this.flushQueue();
++            if (flush || !this.canvas$hold()) { // Canvas - coalesce tracker sends
++                this.flushQueue();
++            }
+             // Paper end - Optimize network
+         }
+     }
+@@ -535,10 +_,114 @@
          if (this.channel.eventLoop().inEventLoop()) {
              this.doSendPacket(packet, listener, flush);
          } else {
@@ -89,6 +100,65 @@
          }
      }
  
++    // Canvas start - coalesce tracker sends
++    private volatile io.papermc.paper.threadedregions.TickRegionScheduler.@Nullable TickThreadRunner canvas$heldBy;
++
++    public static io.papermc.paper.threadedregions.TickRegionScheduler.@Nullable TickThreadRunner canvas$holdSends() {
++        if (Thread.currentThread() instanceof io.papermc.paper.threadedregions.TickRegionScheduler.TickThreadRunner runner && !runner.canvas$holdingSends) {
++            runner.canvas$holdingSends = true;
++            return runner;
++        }
++
++        return null;
++    }
++
++    public static void canvas$releaseSends(final io.papermc.paper.threadedregions.TickRegionScheduler.@Nullable TickThreadRunner runner) {
++        if (runner == null) {
++            return;
++        }
++
++        runner.canvas$holdingSends = false;
++        final java.util.List<Connection> held = runner.canvas$heldConnections;
++        try {
++            for (int i = 0, len = held.size(); i < len; ++i) {
++                held.get(i).canvas$drainHeld();
++            }
++        } finally {
++            held.clear();
++        }
++    }
++
++    private boolean canvas$hold() {
++        if (!(Thread.currentThread() instanceof io.papermc.paper.threadedregions.TickRegionScheduler.TickThreadRunner runner) || !runner.canvas$holdingSends) {
++            return false;
++        }
++
++        if (this.canvas$heldBy != runner) {
++            this.canvas$heldBy = runner;
++            runner.canvas$heldConnections.add(this);
++        }
++
++        return true;
++    }
++
++    private void canvas$drainHeld() {
++        this.canvas$heldBy = null;
++        final Channel channel = this.channel;
++        if (channel == null) {
++            return;
++        }
++
++        try {
++            if (channel.eventLoop() instanceof io.netty.util.concurrent.SingleThreadEventExecutor eventLoop) {
++                eventLoop.lazyExecute(this::processQueue);
++            } else {
++                channel.eventLoop().execute(this::processQueue);
++            }
++        } catch (final RejectedExecutionException ignored) {
++        }
++    }
++    // Canvas end - coalesce tracker sends
++
 +    // Canvas start - one event loop task per queue drain
 +    private void sendPackets(final java.util.List<PacketSendAction> sends) {
 +        if (sends.size() == 1) {
