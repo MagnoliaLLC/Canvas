@@ -1,0 +1,85 @@
+--- a/net/minecraft/world/level/block/RedstoneTorchBlock.java
++++ b/net/minecraft/world/level/block/RedstoneTorchBlock.java
+@@ -140,26 +_,16 @@
+ 
+     private static boolean isToggledTooFrequently(final Level level, final BlockPos pos, final boolean add) {
+         // Paper start - Faster redstone torch rapid clock removal
+-        java.util.ArrayDeque<RedstoneTorchBlock.Toggle> toggles = level.getCurrentWorldData().redstoneUpdateInfos; // Folia - region threading
++        RedstoneTorchBlock.Toggles toggles = level.getCurrentWorldData().redstoneUpdateInfos; // Folia - region threading // Canvas - count each torch's toggles beside the queue
+         if (toggles == null) {
+-            toggles = level.getCurrentWorldData().redstoneUpdateInfos = new java.util.ArrayDeque<>(); // Folia - region threading
++            toggles = level.getCurrentWorldData().redstoneUpdateInfos = new RedstoneTorchBlock.Toggles(); // Folia - region threading // Canvas - count each torch's toggles beside the queue
+         }
+         // Paper end - Faster redstone torch rapid clock removal
+         if (add) {
+             toggles.add(new RedstoneTorchBlock.Toggle(pos.immutable(), level.getRedstoneGameTime())); // Folia - region threading
+         }
+ 
+-        int count = 0;
+-
+-        for (RedstoneTorchBlock.Toggle toggle : toggles) {
+-            if (toggle.pos.equals(pos)) {
+-                if (++count >= 8) {
+-                    return true;
+-                }
+-            }
+-        }
+-
+-        return false;
++        return toggles.count(pos) >= 8; // Canvas - count each torch's toggles beside the queue
+     }
+ 
+     protected @Nullable Orientation randomOrientation(final Level level, final BlockState state) {
+@@ -181,4 +_,52 @@
+         }
+         // Folia end - region threading
+     }
++
++    // Canvas start - count each torch's toggles beside the queue
++    public static final class Toggles extends java.util.ArrayDeque<RedstoneTorchBlock.Toggle> {
++        private final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap counts = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
++
++        public int count(final BlockPos pos) {
++            return this.counts.get(pos.asLong());
++        }
++
++        @Override
++        public void addFirst(final RedstoneTorchBlock.Toggle toggle) {
++            super.addFirst(toggle);
++            this.counts.addTo(toggle.pos.asLong(), 1);
++        }
++
++        @Override
++        public void addLast(final RedstoneTorchBlock.Toggle toggle) {
++            super.addLast(toggle);
++            this.counts.addTo(toggle.pos.asLong(), 1);
++        }
++
++        @Override
++        public RedstoneTorchBlock.Toggle pollFirst() {
++            return this.forget(super.pollFirst());
++        }
++
++        @Override
++        public RedstoneTorchBlock.Toggle pollLast() {
++            return this.forget(super.pollLast());
++        }
++
++        @Override
++        public void clear() {
++            super.clear();
++            this.counts.clear();
++        }
++
++        private RedstoneTorchBlock.Toggle forget(final RedstoneTorchBlock.Toggle toggle) {
++            if (toggle != null) {
++                final long key = toggle.pos.asLong();
++                if (this.counts.addTo(key, -1) == 1) {
++                    this.counts.remove(key);
++                }
++            }
++            return toggle;
++        }
++    }
++    // Canvas end - count each torch's toggles beside the queue
+ }
