@@ -1,0 +1,11 @@
+--- a/io/papermc/paper/threadedregions/TickRegionScheduler.java
++++ b/io/papermc/paper/threadedregions/TickRegionScheduler.java
+@@ -378,6 +_,8 @@
+         public ThreadedRegionizer.ThreadedRegion<TickRegions.TickRegionData, TickRegions.TickRegionSectionData> currentTickingRegion;
+         public RegionizedWorldData currentTickingWorldRegionizedData;
+         public SchedulableTick currentTickingTask;
++        public boolean canvas$holdingSends; // Canvas - coalesce tracker sends
++        public final java.util.List<net.minecraft.network.Connection> canvas$heldConnections = new java.util.ArrayList<>(); // Canvas - coalesce tracker sends
+ 
+         public TickThreadRunner(final ThreadGroup group, final Runnable run, final String name) {
+             super(group, run, name);
