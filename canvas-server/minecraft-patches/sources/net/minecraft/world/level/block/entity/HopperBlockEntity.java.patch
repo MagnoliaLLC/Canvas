@@ -400,6 +400,23 @@
          if (org.bukkit.event.inventory.HopperInventorySearchEvent.getHandlerList().getRegisteredListeners().length == 0) return inventory;
  
          final BlockPos hopperPos = BlockPos.containing(hopper.getLevelX(), hopper.getLevelY(), hopper.getLevelZ());
+@@ -710,9 +_,16 @@
+ 
+     public static List<ItemEntity> getItemsAtAndAbove(final Level level, final Hopper hopper) {
+         AABB aabb = hopper.getSuckAabb().move(hopper.getLevelX() - 0.5, hopper.getLevelY() - 0.5, hopper.getLevelZ() - 0.5);
++        // Canvas start - skip empty item entity searches
++        if (((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel) level).moonrise$getEntityLookup().canvas$noneOfClass(CANVAS_ITEM_CLASS_INDEX, ItemEntity.class, aabb)) {
++            return java.util.List.of();
++        }
++        // Canvas end - skip empty item entity searches
+         return level.getEntitiesOfClass(ItemEntity.class, aabb, EntitySelector.ENTITY_STILL_ALIVE);
+     }
+ 
++    private static final int CANVAS_ITEM_CLASS_INDEX = io.canvasmc.canvas.util.EntityClassIndex.of(ItemEntity.class); // Canvas - skip empty item entity searches
++
+     public static @Nullable Container getContainerAt(final Level level, final BlockPos pos) {
+         return getContainerAt(level, pos, level.getBlockState(pos), pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, true); // Paper - Optimize hoppers
+     }
 @@ -727,8 +_,17 @@
          final Level level, final BlockPos pos, final BlockState state, final double x, final double y, final double z,
          final boolean optimizeEntities

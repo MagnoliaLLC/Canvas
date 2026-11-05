@@ -114,7 +114,7 @@
 +                            continue;
 +                        }
 +
-+                        if (!chunk.canvas$noneOfClass(classIndex, clazz)) {
++                        if (!chunk.canvas$noneOfClass(classIndex, clazz, box)) { // Canvas - skip empty entity searches by section
 +                            return false;
 +                        }
 +                    }
