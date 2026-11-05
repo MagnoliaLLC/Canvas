@@ -68,11 +68,41 @@
 +    }
 +
 +    // Canvas start - skip empty container entity searches
-+    public boolean canvas$noneOfClass(final int classIndex, final Class<? extends Entity> clazz) {
-+        return this.canvas$byClass(classIndex, clazz).count == 0;
++    public boolean canvas$noneOfClass(final int classIndex, final Class<? extends Entity> clazz, final AABB box) {
++        return this.canvas$byClass(classIndex, clazz).canvas$noneIn(box); // Canvas - skip empty entity searches by section
 +    }
 +    // Canvas end - skip empty container entity searches
 +    // Canvas end - index entity classes
  
      private static final class BasicEntityList<E extends Entity> {
  
+@@ -516,6 +_,29 @@
+                 this.entitiesBySection[sectionIndex] = null;
+             }
+         }
++
++        // Canvas start - skip empty entity searches by section
++        public boolean canvas$noneIn(final AABB box) {
++            if (this.count == 0) {
++                return true;
++            }
++
++            final int minSection = this.slices.minSection;
++            final int maxSection = this.slices.maxSection;
++            final int min = Mth.clamp(Mth.floor(box.minY - 4.0) >> 4, minSection, maxSection);
++            final int max = Mth.clamp(Mth.floor(box.maxY + 0.0) >> 4, minSection, maxSection);
++
++            for (int section = min; section <= max; ++section) {
++                final BasicEntityList<Entity> list = this.entitiesBySection[section - minSection];
++
++                if (list != null && !list.isEmpty()) {
++                    return false;
++                }
++            }
++
++            return true;
++        }
++        // Canvas end - skip empty entity searches by section
+ 
+         public void getEntities(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate) {
+             if (this.count == 0) {
