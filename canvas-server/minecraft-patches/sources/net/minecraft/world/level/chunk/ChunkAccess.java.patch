@@ -328,6 +328,23 @@
      }
  
      @Override
+@@ -359,6 +_,16 @@
+         return this.unsaved || this.persistentDataContainer.dirty(); // CraftBukkit - SPIGOT-6814: chunk is unsaved if pdc was mutated
+     }
+ 
++    // Canvas start - skip saving unchanged chunks loaded from disk
++    // the base flags only: a chunk being read off the region has no ticks queued yet, and the full chunk's tick check needs the region's game time
++    public final void canvas$markReadSaved() {
++        if (this.unsaved) {
++            this.unsaved = false;
++            this.persistentDataContainer.dirty(false);
++        }
++    }
++    // Canvas end - skip saving unchanged chunks loaded from disk
++
+     public abstract ChunkStatus getPersistedStatus();
+ 
+     public ChunkStatus getHighestGeneratedStatus() {
 @@ -388,7 +_,7 @@
  
      public void setBlockEntityNbt(final CompoundTag entityTag) {
