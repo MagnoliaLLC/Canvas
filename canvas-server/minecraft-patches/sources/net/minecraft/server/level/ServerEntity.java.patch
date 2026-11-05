@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/level/ServerEntity.java
 +++ b/net/minecraft/server/level/ServerEntity.java
-@@ -77,6 +_,11 @@
+@@ -77,6 +_,12 @@
      private boolean wasOnGround;
      private @Nullable List<SynchedEntityData.DataValue<?>> trackedDataValues;
      private final Set<net.minecraft.server.network.ServerPlayerConnection> trackedPlayers; // Paper
@@ -9,9 +9,18 @@
 +    private @Nullable ClientboundEntityPositionSyncPacket canvas$lastSync;
 +    private int canvas$settledUpdates;
 +    // Canvas end - skip movement packets that change nothing on the client
++    private byte canvas$lastSeenYHeadRot; // Canvas - hold a one-step head turn until the head stops or turns on
  
      public ServerEntity(
          final ServerLevel level,
+@@ -98,6 +_,7 @@
+         this.lastSentYRot = Mth.packDegrees(entity.getYRot());
+         this.lastSentXRot = Mth.packDegrees(entity.getXRot());
+         this.lastSentYHeadRot = Mth.packDegrees(entity.getYHeadRot());
++        this.canvas$lastSeenYHeadRot = this.lastSentYHeadRot; // Canvas - hold a one-step head turn until the head stops or turns on
+         this.wasOnGround = entity.onGround();
+         this.trackedDataValues = entity.getEntityData().getNonDefaultValues();
+     }
 @@ -169,6 +_,7 @@
                  this.positionCodec.setBase(currentPosition);
                  this.sendDirtyEntityData();
@@ -93,7 +102,22 @@
                      this.sendDirtyEntityData();
                      if (packet.hasPosition()) {
                          this.positionCodec.setBase(currentPosition);
-@@ -240,6 +_,7 @@
+@@ -230,16 +_,21 @@
+             }
+ 
+             byte yHeadRot = Mth.packDegrees(this.entity.getYHeadRot());
+-            if (Math.abs(yHeadRot - this.lastSentYHeadRot) >= 1) {
++            // Canvas start - hold a one-step head turn until the head stops or turns on
++            final int headTurn = Math.abs(yHeadRot - this.lastSentYHeadRot);
++            if (headTurn > 1 || headTurn == 1 && yHeadRot == this.canvas$lastSeenYHeadRot) {
+                 this.synchronizer.sendToTrackingPlayers(new ClientboundRotateHeadPacket(this.entity, yHeadRot));
+                 this.lastSentYHeadRot = yHeadRot;
+             }
++            this.canvas$lastSeenYHeadRot = yHeadRot;
++            // Canvas end - hold a one-step head turn until the head stops or turns on
+ 
+             this.entity.needsSync = false;
+             this.forceStateResync = false; // Paper - fix desync when a player is added to the tracker
          }
  
          this.tickCount++;
