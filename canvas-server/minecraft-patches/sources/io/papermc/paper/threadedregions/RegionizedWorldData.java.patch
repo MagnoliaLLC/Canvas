@@ -1,5 +1,13 @@
 --- a/io/papermc/paper/threadedregions/RegionizedWorldData.java
 +++ b/io/papermc/paper/threadedregions/RegionizedWorldData.java
+@@ -15,7 +_,6 @@
+ import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
+ import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
+ import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
+-import java.util.ArrayDeque;
+ import java.util.ArrayList;
+ import java.util.Arrays;
+ import java.util.Collection;
 @@ -104,6 +_,7 @@
              into.endCreditsPlayers.addAll(from.endCreditsPlayers); // Canvas - region threading
              for (final Entity entity : from.allEntities) {
@@ -23,6 +31,15 @@
                  if (tileEntity != null) {
                      tileEntity.updateTicks(fromTickOffset, fromRedstoneTimeOffset);
                  }
+@@ -157,7 +_,7 @@
+             // redstone torches
+             if (from.redstoneUpdateInfos != null && !from.redstoneUpdateInfos.isEmpty()) {
+                 if (into.redstoneUpdateInfos == null) {
+-                    into.redstoneUpdateInfos = new ArrayDeque<>();
++                    into.redstoneUpdateInfos = new net.minecraft.world.level.block.RedstoneTorchBlock.Toggles(); // Canvas - count each torch's toggles beside the queue
+                 }
+                 for (final net.minecraft.world.level.block.RedstoneTorchBlock.Toggle info : from.redstoneUpdateInfos) {
+                     info.offsetTime(fromRedstoneTimeOffset);
 @@ -220,6 +_,7 @@
                  // the chunk holder must _exist_, and so the region section exists.
                  final RegionizedWorldData into = regionToData.get(CoordinateUtils.getChunkKey(pos.x() >> chunkToRegionShift, pos.z() >> chunkToRegionShift));
@@ -51,6 +68,15 @@
                  final int chunkX = pos.getX() >> 4;
                  final int chunkZ = pos.getZ() >> 4;
  
+@@ -325,7 +_,7 @@
+                     final RegionizedWorldData worldData = regionToData.get(CoordinateUtils.getChunkKey((pos.getX() >> 4) >> chunkToRegionShift, (pos.getZ() >> 4) >> chunkToRegionShift));
+                     if (worldData != null) {
+                         if (worldData.redstoneUpdateInfos == null) {
+-                            worldData.redstoneUpdateInfos = new ArrayDeque<>();
++                            worldData.redstoneUpdateInfos = new net.minecraft.world.level.block.RedstoneTorchBlock.Toggles(); // Canvas - count each torch's toggles beside the queue
+                         }
+                         worldData.redstoneUpdateInfos.add(info);
+                     } // else: chunk unloaded
 @@ -418,8 +_,8 @@
      private final LevelTicks<Fluid> fluidLevelTicks;
  
@@ -81,7 +107,7 @@
      public List<ItemEntity> captureDrops;
      // Paper start
      public int wakeupInactiveRemainingAnimals;
-@@ -471,7 +_,7 @@
+@@ -471,11 +_,11 @@
      public boolean shouldSignal = true;
      public final Map<ServerExplosion.CacheKey, Float> explosionDensityCache = new HashMap<>(64, 0.25f);
      public final PathTypeCache pathTypesByPosCache = new PathTypeCache();
@@ -90,6 +116,11 @@
      public final Set<ChunkHolder> chunkHoldersToBroadcast = new ReferenceLinkedOpenHashSet<>();
  
      // not transient
+-    public java.util.ArrayDeque<net.minecraft.world.level.block.RedstoneTorchBlock.Toggle> redstoneUpdateInfos;
++    public net.minecraft.world.level.block.RedstoneTorchBlock.Toggles redstoneUpdateInfos; // Canvas - count each torch's toggles beside the queue
+ 
+     // Mob spawning
+     public final ca.spottedleaf.moonrise.common.misc.PositionCountingAreaMap<ServerPlayer> spawnChunkTracker = new ca.spottedleaf.moonrise.common.misc.PositionCountingAreaMap<>();
 @@ -563,6 +_,7 @@
          this.skipHopperEvents = this.world.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
          // always subtract from server init so that the tick starts at zero, allowing us to cast to int without much worry
