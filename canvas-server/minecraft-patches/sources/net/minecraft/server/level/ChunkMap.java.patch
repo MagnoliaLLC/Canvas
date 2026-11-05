@@ -27,6 +27,14 @@
                  if (((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity)tracker).moonrise$hasPlayers()
                      || ((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)entity).moonrise$getChunkStatus().isOrAfter(FullChunkStatus.ENTITY_TICKING)) {
                      tracker.serverEntity.sendChanges();
+@@ -1234,6 +_,7 @@
+     }
+ 
+     public class TrackedEntity implements ServerEntity.Synchronizer, ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity { // Paper - optimise entity tracker
++        private static final double INTERACTION_TRACKING_MARGIN = 16.0; // Canvas - optimize interaction tracking
+         public final ServerEntity serverEntity;
+         private final Entity entity;
+         private final int range;
 @@ -1243,6 +_,25 @@
          // Paper start - optimise entity tracker
          private long lastChunkUpdate = -1L;
@@ -53,7 +61,15 @@
  
          @Override
          public final void moonrise$tick(final ca.spottedleaf.moonrise.common.misc.NearbyPlayers.TrackedChunk chunk) {
-@@ -1393,7 +_,7 @@
+@@ -1390,10 +_,15 @@
+                 // Paper end - remove allocation of Vec3 here
+                 int playerViewDistance = ChunkMap.this.getPlayerViewDistance(player);
+                 double visibleRange = Math.min(this.getEffectiveRange(), playerViewDistance * 16);
++                // Canvas start - optimize interaction tracking
++                if (this.entity instanceof net.minecraft.world.entity.Interaction interaction && interaction.getPassengers().isEmpty()) {
++                    visibleRange = Math.min(visibleRange, player.entityInteractionRange() + interaction.getBbWidth() + INTERACTION_TRACKING_MARGIN);
++                }
++                // Canvas end - optimize interaction tracking
                  double distanceSquared = deltaToPlayerX * deltaToPlayerX + deltaToPlayerZ * deltaToPlayerZ; // Paper
                  double rangeSquared = visibleRange * visibleRange;
                  // Paper start - Configurable entity tracking range by Y
