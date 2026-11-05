@@ -47,3 +47,17 @@
  
          private static boolean isSpecialCollidingBlock(final net.minecraft.world.level.block.state.BlockBehaviour.BlockStateBase block) {
              // note: cannot reference Blocks here, as Blocks#<clinit> initialises the state caches in parallel
+@@ -593,6 +_,13 @@
+             return (org.bukkit.craftbukkit.block.data.CraftBlockData) this.cachedBlockData.clone();
+         }
+         // Paper end - Perf: impl cached craft block data, lazy load to fix issue with loading at the wrong time
++
++        // Canvas start - share the cached block data with physics events, which only hand out copies
++        public org.bukkit.craftbukkit.block.data.CraftBlockData canvas$sharedBlockData() {
++            if (this.cachedBlockData == null) this.cachedBlockData = org.bukkit.craftbukkit.block.data.CraftBlockData.createData(this.asState());
++            return this.cachedBlockData;
++        }
++        // Canvas end - share the cached block data with physics events, which only hand out copies
+ 
+         private boolean calculateSolid() {
+             if (this.owner.properties.forceSolidOn) {
