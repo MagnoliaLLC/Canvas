@@ -15,7 +15,7 @@
 +
 +    public ShapelessRecipe(
 +        final Recipe.CommonInfo commonInfo, final CraftingRecipe.CraftingBookInfo bookInfo, final ItemStackTemplate result, final List<Ingredient> ingredients, final boolean isBukkit
-+    ) { this.isBukkit = isBukkit; // Pufferfish end
++    ) { this.isBukkit = isBukkit || ingredients.stream().anyMatch(ingredient -> ingredient.isExact() || ingredient.stackPredicate != null); // Pufferfish end // Canvas - exact and predicate ingredients need Paper's matching
          super(commonInfo, bookInfo);
          this.result = result;
          this.ingredients = ingredients;
