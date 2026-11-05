@@ -1,0 +1,24 @@
+--- a/net/minecraft/world/level/redstone/CollectingNeighborUpdater.java
++++ b/net/minecraft/world/level/redstone/CollectingNeighborUpdater.java
+@@ -132,6 +_,7 @@
+         private @Nullable Orientation orientation;
+         private final @Nullable Direction skipDirection;
+         private int idx = 0;
++        private byte canvas$sourceOwned; // Canvas - check the source's ownership once for its neighbors
+ 
+         public MultiNeighborUpdate(
+             final BlockPos sourcePos, final Block sourceBlock, final @Nullable Orientation orientation, final @Nullable Direction skipDirection
+@@ -149,7 +_,12 @@
+         public boolean runNext(final Level level) {
+             Direction direction = NeighborUpdater.UPDATE_ORDER[this.idx++];
+             BlockPos neighborPos = this.sourcePos.relative(direction);
+-            BlockState state = !ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(level, neighborPos, 25) ? null : level.getBlockStateIfLoaded(neighborPos); // Folia - block updates in unloaded chunks
++            // Canvas start - check the source's ownership once for its neighbors
++            if (this.canvas$sourceOwned == 0) {
++                this.canvas$sourceOwned = ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(level, this.sourcePos, 25 + 1) ? (byte) 1 : (byte) -1;
++            }
++            BlockState state = this.canvas$sourceOwned < 0 && !ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(level, neighborPos, 25) ? null : level.getBlockStateIfLoaded(neighborPos); // Folia - block updates in unloaded chunks
++            // Canvas end - check the source's ownership once for its neighbors
+             if (state != null) { // Folia - block updates in unloaded chunks
+             Orientation orientation = null;
+             if (level.enabledFeatures().contains(FeatureFlags.REDSTONE_EXPERIMENTS)) {
