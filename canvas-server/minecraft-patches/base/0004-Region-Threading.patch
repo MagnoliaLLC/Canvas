@@ -35921,7 +35921,7 @@ index ff9a61db79f8488612f77ceb92226d83cf3ba75e..6adb43ea1418fa144caa6b6e0394b56e
  
      protected int getMaxReferences() {
 diff --git a/net/minecraft/world/level/redstone/CollectingNeighborUpdater.java b/net/minecraft/world/level/redstone/CollectingNeighborUpdater.java
-index 1c7862ae4eaeb4d83e0fb423c86489f534e92be5..16a0a789b930ec4fb92a03bc8f25e98053f0773a 100644
+index 1c7862ae4eaeb4d83e0fb423c86489f534e92be5..f0c26c6610a6196cb93e245072911c8eee25c80c 100644
 --- a/net/minecraft/world/level/redstone/CollectingNeighborUpdater.java
 +++ b/net/minecraft/world/level/redstone/CollectingNeighborUpdater.java
 @@ -66,6 +66,7 @@ public class CollectingNeighborUpdater implements NeighborUpdater {
@@ -35932,17 +35932,30 @@ index 1c7862ae4eaeb4d83e0fb423c86489f534e92be5..16a0a789b930ec4fb92a03bc8f25e980
          boolean runningAlready = this.count > 0;
          boolean tooManyUpdates = this.maxChainedNeighborUpdates >= 0 && this.count >= this.maxChainedNeighborUpdates;
          this.count++;
-@@ -148,7 +149,8 @@ public class CollectingNeighborUpdater implements NeighborUpdater {
+@@ -131,6 +132,7 @@ public class CollectingNeighborUpdater implements NeighborUpdater {
+         private @Nullable Orientation orientation;
+         private final @Nullable Direction skipDirection;
+         private int idx = 0;
++        private byte canvas$sourceOwned; // Canvas - region threading
+ 
+         public MultiNeighborUpdate(
+             final BlockPos sourcePos, final Block sourceBlock, final @Nullable Orientation orientation, final @Nullable Direction skipDirection
+@@ -148,7 +150,13 @@ public class CollectingNeighborUpdater implements NeighborUpdater {
          public boolean runNext(final Level level) {
              Direction direction = NeighborUpdater.UPDATE_ORDER[this.idx++];
              BlockPos neighborPos = this.sourcePos.relative(direction);
 -            BlockState state = level.getBlockState(neighborPos);
-+            BlockState state = !ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(level, neighborPos, 25) ? null : level.getBlockStateIfLoaded(neighborPos); // Folia - block updates in unloaded chunks
++            // Canvas start - region threading
++            if (this.canvas$sourceOwned == 0) {
++                this.canvas$sourceOwned = ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(level, this.sourcePos, 25 + 1) ? (byte) 1 : (byte) -1;
++            }
++            BlockState state = this.canvas$sourceOwned < 0 && !ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(level, neighborPos, 25) ? null : level.getBlockStateIfLoaded(neighborPos); // Folia - block updates in unloaded chunks
++            // Canvas end - region threading
 +            if (state != null) { // Folia - block updates in unloaded chunks
              Orientation orientation = null;
              if (level.enabledFeatures().contains(FeatureFlags.REDSTONE_EXPERIMENTS)) {
                  if (this.orientation == null) {
-@@ -161,6 +163,7 @@ public class CollectingNeighborUpdater implements NeighborUpdater {
+@@ -161,6 +169,7 @@ public class CollectingNeighborUpdater implements NeighborUpdater {
              }
  
              NeighborUpdater.executeUpdate(level, state, neighborPos, this.sourceBlock, orientation, false, this.sourcePos); // Paper - Add source block to BlockPhysicsEvent
@@ -35950,7 +35963,7 @@ index 1c7862ae4eaeb4d83e0fb423c86489f534e92be5..16a0a789b930ec4fb92a03bc8f25e980
              if (this.idx < NeighborUpdater.UPDATE_ORDER.length && NeighborUpdater.UPDATE_ORDER[this.idx] == this.skipDirection) {
                  this.idx++;
              }
-@@ -190,7 +193,9 @@ public class CollectingNeighborUpdater implements NeighborUpdater {
+@@ -190,7 +199,9 @@ public class CollectingNeighborUpdater implements NeighborUpdater {
      ) implements CollectingNeighborUpdater.NeighborUpdates {
          @Override
          public boolean runNext(final Level level) {
@@ -35960,7 +35973,7 @@ index 1c7862ae4eaeb4d83e0fb423c86489f534e92be5..16a0a789b930ec4fb92a03bc8f25e980
              return false;
          }
  
-@@ -203,8 +208,8 @@ public class CollectingNeighborUpdater implements NeighborUpdater {
+@@ -203,8 +214,8 @@ public class CollectingNeighborUpdater implements NeighborUpdater {
      private record SimpleNeighborUpdate(BlockPos pos, Block block, @Nullable Orientation orientation) implements CollectingNeighborUpdater.NeighborUpdates {
          @Override
          public boolean runNext(final Level level) {
