@@ -27,7 +27,7 @@
                  if (((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity)tracker).moonrise$hasPlayers()
                      || ((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)entity).moonrise$getChunkStatus().isOrAfter(FullChunkStatus.ENTITY_TICKING)) {
                      tracker.serverEntity.sendChanges();
-@@ -1234,6 +_,7 @@
+@@ -1234,15 +_,36 @@
      }
  
      public class TrackedEntity implements ServerEntity.Synchronizer, ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity { // Paper - optimise entity tracker
@@ -35,7 +35,10 @@
          public final ServerEntity serverEntity;
          private final Entity entity;
          private final int range;
-@@ -1243,6 +_,25 @@
+         private SectionPos lastSectionPos;
+         public final Set<ServerPlayerConnection> seenBy = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>(); // Paper - Perf: optimise map impl
++        private final Set<ServerPlayerConnection> canvas$refusedBy = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>(); // Canvas - keep a canceled track refused
+ 
          // Paper start - optimise entity tracker
          private long lastChunkUpdate = -1L;
          private ca.spottedleaf.moonrise.common.misc.NearbyPlayers.TrackedChunk lastTrackedChunk;
@@ -61,6 +64,41 @@
  
          @Override
          public final void moonrise$tick(final ca.spottedleaf.moonrise.common.misc.NearbyPlayers.TrackedChunk chunk) {
+@@ -1279,11 +_,17 @@
+                         this.removePlayer(player);
+                     }
+                 }
++                if (!this.canvas$refusedBy.isEmpty()) { // Canvas - keep a canceled track refused
++                    this.canvas$refusedBy.removeIf(conn -> !players.contains(conn.getPlayer()));
++                }
+             }
+         }
+ 
+         @Override
+         public final void moonrise$removeNonTickThreadPlayers() {
++            if (!this.canvas$refusedBy.isEmpty()) { // Canvas - keep a canceled track refused
++                this.canvas$refusedBy.removeIf(conn -> !ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(conn.getPlayer()));
++            }
+             boolean foundToRemove = false;
+             for (final ServerPlayerConnection conn : this.seenBy) {
+                 if (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(conn.getPlayer())) {
+@@ -1308,6 +_,7 @@
+         public final void moonrise$clearPlayers() {
+             this.lastChunkUpdate = -1;
+             this.lastTrackedChunk = null;
++            this.canvas$refusedBy.clear(); // Canvas - keep a canceled track refused
+             if (this.seenBy.isEmpty()) {
+                 return;
+             }
+@@ -1377,6 +_,8 @@
+                 if (this.seenBy.isEmpty()) {
+                     ChunkMap.this.level.debugSynchronizers().dropEntity(this.entity);
+                 }
++            } else if (!this.canvas$refusedBy.isEmpty()) { // Canvas - keep a canceled track refused
++                this.canvas$refusedBy.remove(player.connection);
+             }
+         }
+ 
 @@ -1390,10 +_,15 @@
                  // Paper end - remove allocation of Vec3 here
                  int playerViewDistance = ChunkMap.this.getPlayerViewDistance(player);
@@ -78,7 +116,7 @@
                  if (visibleToPlayer && level.paperConfig().entities.trackingRangeY.enabled) {
                      double rangeY = level.paperConfig().entities.trackingRangeY.get(this.entity, -1);
                      if (rangeY != -1) {
-@@ -1411,7 +_,7 @@
+@@ -1411,23 +_,26 @@
                  }
                  // Folia end - region threading
                  // CraftBukkit start - respect vanish API
@@ -87,3 +125,25 @@
                      visibleToPlayer = false;
                  }
                  // CraftBukkit end
+                 if (visibleToPlayer) {
+-                    if (this.seenBy.add(player.connection)) {
++                    if (!this.seenBy.contains(player.connection) && (this.canvas$refusedBy.isEmpty() || !this.canvas$refusedBy.contains(player.connection))) { // Canvas - keep a canceled track refused
+                         // Paper start - entity tracking events
+                         if (io.papermc.paper.event.player.PlayerTrackEntityEvent.getHandlerList().getRegisteredListeners().length == 0 || new io.papermc.paper.event.player.PlayerTrackEntityEvent(player.getBukkitEntity(), this.entity.getBukkitEntity()).callEvent()) {
++                        this.seenBy.add(player.connection); // Canvas - keep a canceled track refused
+                         this.serverEntity.addPairing(player);
+                         if (this.seenBy.size() == 1) {
+                             ChunkMap.this.level.debugSynchronizers().registerEntity(this.entity);
+                         }
+ 
+                         ChunkMap.this.level.debugSynchronizers().startTrackingEntity(player, this.entity);
+-                        }
+-                        // Paper end - entity tracking events
+                         this.serverEntity.onPlayerAdd(); // Paper - fix desync when a player is added to the tracker
++                        } else {
++                            this.canvas$refusedBy.add(player.connection); // Canvas - keep a canceled track refused
++                        }
++                        // Paper end - entity tracking events
+                     }
+                 } else {
+                     this.removePlayer(player);
