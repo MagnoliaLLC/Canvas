@@ -15,7 +15,7 @@
 +                // Canvas start - skip saving unchanged chunks
 +                // reading marks the chunk unsaved, so an unchanged chunk was written again
 +                if (chunk instanceof net.minecraft.world.level.chunk.ImposterProtoChunk imposter && readUnchanged(storedVersion, chunkData, imposter)) {
-+                    imposter.getWrapped().tryMarkSaved();
++                    imposter.getWrapped().canvas$markReadSaved();
 +                }
 +                // Canvas end - skip saving unchanged chunks
 +
