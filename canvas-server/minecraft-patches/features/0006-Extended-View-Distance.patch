@@ -1320,10 +1320,10 @@ index e881f4554ab8459e1ddcfa0b4ed814b87baba06d..96bd8858485943023defa99afff533fc
  
      // Folia start - region threading
 diff --git a/net/minecraft/world/level/block/state/BlockBehaviour.java b/net/minecraft/world/level/block/state/BlockBehaviour.java
-index 41176326afeda91806f502c20d71a749b6c4fefb..2853d8cc6a2e30a843823fa867c90f7483861024 100644
+index 12b331c37d856f72ed0632022c2fb11836c5f80f..b7980b867e018ad7ca3d20d75ead7ff720447763 100644
 --- a/net/minecraft/world/level/block/state/BlockBehaviour.java
 +++ b/net/minecraft/world/level/block/state/BlockBehaviour.java
-@@ -809,6 +809,13 @@ public abstract class BlockBehaviour implements FeatureElement {
+@@ -816,6 +816,13 @@ public abstract class BlockBehaviour implements FeatureElement {
          public final boolean isAir() { // Paper - Perf: Final for inlining
              return this.isAir;
          }
