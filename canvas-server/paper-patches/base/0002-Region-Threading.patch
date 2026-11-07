@@ -766,10 +766,10 @@ index bd68139ae635f2ad7ec8e7a21e0056a139c4c62e..48a43341b17247355a531164019d5cc9
      }
  
 diff --git a/src/main/java/io/papermc/paper/configuration/GlobalConfiguration.java b/src/main/java/io/papermc/paper/configuration/GlobalConfiguration.java
-index 30ce38cddf26367710b127999a3e16f99112a3de..bef8c60b4133f8c8e8a039d6326a648b3264dc3f 100644
+index 014f8488af19ba4c95365d6867784e76406c9165..d8462fdb17248267720bbc2437007c975bee23e4 100644
 --- a/src/main/java/io/papermc/paper/configuration/GlobalConfiguration.java
 +++ b/src/main/java/io/papermc/paper/configuration/GlobalConfiguration.java
-@@ -393,4 +393,20 @@ public class GlobalConfiguration extends ConfigurationPart {
+@@ -395,4 +395,20 @@ public class GlobalConfiguration extends ConfigurationPart {
      public class UpdateChecker extends ConfigurationPart {
          public boolean enabled = true;
      }
