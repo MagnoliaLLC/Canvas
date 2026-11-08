@@ -8,7 +8,7 @@
  import java.util.ArrayList;
  import java.util.Arrays;
  import java.util.Collection;
-@@ -138,7 +_,13 @@
+@@ -143,7 +_,13 @@
              }
              for (final TickingBlockEntity tileEntityWrapped : from.blockEntityTickers) {
                  into.blockEntityTickers.add(tileEntityWrapped);
@@ -23,7 +23,7 @@
                  if (tileEntity != null) {
                      tileEntity.updateTicks(fromTickOffset, fromRedstoneTimeOffset);
                  }
-@@ -158,7 +_,7 @@
+@@ -163,7 +_,7 @@
              // redstone torches
              if (from.redstoneUpdateInfos != null && !from.redstoneUpdateInfos.isEmpty()) {
                  if (into.redstoneUpdateInfos == null) {
@@ -32,7 +32,7 @@
                  }
                  for (final net.minecraft.world.level.block.RedstoneTorchBlock.Toggle info : from.redstoneUpdateInfos) {
                      info.offsetTime(fromRedstoneTimeOffset);
-@@ -282,7 +_,18 @@
+@@ -292,7 +_,18 @@
                    //       marked as removed. So if there is no section, it's probably removed!
              }
              for (final TickingBlockEntity tileEntity : from.blockEntityTickers) {
@@ -52,7 +52,7 @@
                  final int chunkX = pos.getX() >> 4;
                  final int chunkZ = pos.getZ() >> 4;
  
-@@ -327,7 +_,7 @@
+@@ -337,7 +_,7 @@
                      final RegionizedWorldData worldData = regionToData.get(CoordinateUtils.getChunkKey((pos.getX() >> 4) >> chunkToRegionShift, (pos.getZ() >> 4) >> chunkToRegionShift));
                      if (worldData != null) {
                          if (worldData.redstoneUpdateInfos == null) {
@@ -61,7 +61,7 @@
                          }
                          worldData.redstoneUpdateInfos.add(info);
                      } // else: chunk unloaded
-@@ -420,8 +_,8 @@
+@@ -431,8 +_,8 @@
      private final LevelTicks<Fluid> fluidLevelTicks;
  
      // tile entity ticking
@@ -72,7 +72,7 @@
      private boolean tickingBlockEntities;
  
      // time
-@@ -450,6 +_,7 @@
+@@ -461,6 +_,7 @@
      public boolean skipPullModeEventFire = false;
      public boolean skipPushModeEventFire = false;
      public boolean skipHopperEvents = false;
@@ -80,7 +80,7 @@
      // Paper end - Optimize Hoppers
      public long lastMidTickExecute;
      public long lastMidTickExecuteFailure;
-@@ -458,8 +_,8 @@
+@@ -469,8 +_,8 @@
      public final CollectingNeighborUpdater neighborUpdater;
      public boolean captureBlockStates = false;
      public boolean captureTreeGeneration = false;
@@ -91,7 +91,7 @@
      public List<ItemEntity> captureDrops;
      // Paper start
      public int wakeupInactiveRemainingAnimals;
-@@ -473,11 +_,11 @@
+@@ -484,11 +_,11 @@
      public boolean shouldSignal = true;
      public final Map<ServerExplosion.CacheKey, Float> explosionDensityCache = new HashMap<>(64, 0.25f);
      public final PathTypeCache pathTypesByPosCache = new PathTypeCache();
@@ -105,7 +105,7 @@
  
      // Mob spawning
      public final ca.spottedleaf.moonrise.common.misc.PositionCountingAreaMap<ServerPlayer> spawnChunkTracker = new ca.spottedleaf.moonrise.common.misc.PositionCountingAreaMap<>();
-@@ -567,6 +_,7 @@
+@@ -578,6 +_,7 @@
          this.skipHopperEvents = this.world.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
          // always subtract from server init so that the tick starts at zero, allowing us to cast to int without much worry
          this.lagCompensationTick = (System.nanoTime() - MinecraftServer.SERVER_INIT) / TickRegionScheduler.getTimeBetweenTicks(); // Canvas - region threading
