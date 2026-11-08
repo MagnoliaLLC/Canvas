@@ -13,6 +13,15 @@
  
              while (this.running) {
                  final long tickStart = System.nanoTime(); // Paper - improve tick loop
+@@ -1643,7 +_,7 @@
+             }
+ 
+             // fix passenger desync
+-            for (final net.minecraft.world.entity.Entity entity : regionizedWorldData.getLocalEntitiesCopy()) {
++            for (final net.minecraft.world.entity.Entity entity : regionizedWorldData.getVehiclesCopy()) { // Canvas - track vehicles
+                 entity.fixPassengerDesync();
+             }
+         }
 @@ -1827,6 +_,8 @@
          if (false) while (!this.processQueue.isEmpty()) { // Folia - region threading
              this.processQueue.remove().run();

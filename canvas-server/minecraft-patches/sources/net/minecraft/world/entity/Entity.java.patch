@@ -342,6 +342,14 @@
              }
  
              this.setPose(Pose.STANDING);
+@@ -3608,6 +_,7 @@
+ 
+             this.passengers = ImmutableList.copyOf(newPassengers);
+         }
++        this.canvas$trackVehicle(); // Canvas - track vehicles
+     }
+ 
+     // Paper start - Force entity dismount during teleportation
 @@ -3812,8 +_,9 @@
      }
  
@@ -379,7 +387,29 @@
          if (level instanceof ServerLevel serverLevel) {
              RandomSource random = level.getRandom();
  
-@@ -5638,6 +_,7 @@
+@@ -4357,6 +_,7 @@
+                 }
+ 
+                 curr.root.passengers = ImmutableList.copyOf(newPassengers);
++                curr.root.canvas$trackVehicle(); // Canvas - track vehicles
+             }
+         }
+ 
+@@ -5633,11 +_,21 @@
+         return true;
+     }
+ 
++    // Canvas start - track vehicles
++    private void canvas$trackVehicle() {
++        final io.papermc.paper.threadedregions.RegionizedWorldData worldData = this.canvas$worldData;
++        if (worldData != null && ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(this)) {
++            worldData.addVehicle(this);
++        }
++    }
++    // Canvas end - track vehicles
++
+     public void fixPassengerDesync() {
+         if (this.isPassenger() || !this.isVehicle()) {
              return;
          }
  

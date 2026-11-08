@@ -8,13 +8,24 @@
  import java.util.ArrayList;
  import java.util.Arrays;
  import java.util.Collection;
-@@ -104,6 +_,7 @@
+@@ -104,12 +_,18 @@
              into.endCreditsPlayers.addAll(from.endCreditsPlayers); // Canvas - region threading
              for (final Entity entity : from.allEntities) {
                  into.allEntities.add(entity);
 +                entity.canvas$worldData = into; // Canvas - region threading
                  entity.updateTicks(fromTickOffset, fromRedstoneTimeOffset);
                  entity.getBukkitEntity().taskScheduler.registerTo(into.entitySchedulerTickList);
+             }
+             for (final Entity entity : from.loadedEntities) {
+                 into.loadedEntities.add(entity);
+             }
++            // Canvas start - track vehicles
++            for (final Entity vehicle : from.vehicles) {
++                into.vehicles.add(vehicle);
++            }
++            // Canvas end - track vehicles
+             for (final Iterator<Entity> iterator = from.entityTickList.unsafeIterator(); iterator.hasNext();) {
+                 into.entityTickList.add(iterator.next());
              }
 @@ -137,7 +_,13 @@
              }
@@ -48,6 +59,18 @@
                  // note: entityTickList is a subset of allEntities
                  if (from.entityTickList.contains(entity)) {
                      into.entityTickList.add(entity);
+@@ -228,6 +_,11 @@
+                 if (from.loadedEntities.contains(entity)) {
+                     into.loadedEntities.add(entity);
+                 }
++                // Canvas start - track vehicles
++                if (from.vehicles.contains(entity)) {
++                    into.vehicles.add(entity);
++                }
++                // Canvas end - track vehicles
+                 // note: navigatingMobs is a subset of allEntities
+                 if (entity instanceof Mob mob && from.navigatingMobs.contains(mob)) {
+                     into.navigatingMobs.add(mob);
 @@ -280,7 +_,18 @@
                    //       marked as removed. So if there is no section, it's probably removed!
              }
@@ -77,6 +100,14 @@
                          }
                          worldData.redstoneUpdateInfos.add(info);
                      } // else: chunk unloaded
+@@ -407,6 +_,7 @@
+     public final io.papermc.paper.threadedregions.EntityScheduler.EntitySchedulerTickList entitySchedulerTickList = new io.papermc.paper.threadedregions.EntityScheduler.EntitySchedulerTickList();
+     private final ReferenceList<Entity> allEntities = new ReferenceList<>(EMPTY_ENTITY_ARRAY);
+     private final ReferenceList<Entity> loadedEntities = new ReferenceList<>(EMPTY_ENTITY_ARRAY);
++    private final ReferenceList<Entity> vehicles = new ReferenceList<>(EMPTY_ENTITY_ARRAY); // Canvas - track vehicles
+     private final IteratorSafeOrderedReferenceSet<Entity> entityTickList = new IteratorSafeOrderedReferenceSet<>();
+     private final IteratorSafeOrderedReferenceSet<Mob> navigatingMobs = new IteratorSafeOrderedReferenceSet<>();
+     public ReferenceList<Entity> trackerEntities = new ReferenceList<>(EMPTY_ENTITY_ARRAY); // Moonrise - entity tracker
 @@ -418,8 +_,8 @@
      private final LevelTicks<Fluid> fluidLevelTicks;
  
@@ -129,11 +160,38 @@
      }
  
      public NearbyPlayers getNearbyPlayers() {
-@@ -759,6 +_,7 @@
+@@ -703,6 +_,25 @@
+         return Arrays.copyOf(this.allEntities.getRawData(), this.allEntities.size(), Entity[].class);
+     }
+ 
++    // Canvas start - track vehicles
++    public void addVehicle(final Entity vehicle) {
++        this.vehicles.add(vehicle);
++    }
++
++    public Entity @NonNull [] getVehiclesCopy() {
++        final Entity[] vehicles = Arrays.copyOf(this.vehicles.getRawData(), this.vehicles.size(), Entity[].class);
++        int kept = 0;
++        for (final Entity vehicle : vehicles) {
++            if (vehicle.canvas$worldData != this || !vehicle.isVehicle()) {
++                this.vehicles.remove(vehicle);
++                continue;
++            }
++            vehicles[kept++] = vehicle;
++        }
++        return kept == vehicles.length ? vehicles : Arrays.copyOf(vehicles, kept);
++    }
++    // Canvas end - track vehicles
++
+     public List<ServerPlayer> getLocalPlayers() {
+         return this.localPlayers;
+     }
+@@ -759,6 +_,8 @@
              throw new IllegalArgumentException("Entity " + entity + " is not under this region's control");
          }
          if (this.allEntities.add(entity)) {
 +            entity.canvas$worldData = this; // Canvas - region threading
++            if (entity.isVehicle()) this.vehicles.add(entity); // Canvas - track vehicles
              if (entity instanceof ServerPlayer player) {
                  this.localPlayers.add(player);
                  player.getBukkitEntity().updateRegion(this);
@@ -146,11 +204,12 @@
      }
  
      public void removeEntity(final Entity entity) {
-@@ -776,6 +_,7 @@
+@@ -776,6 +_,8 @@
              throw new IllegalArgumentException("Entity " + entity + " is not under this region's control");
          }
          if (this.allEntities.remove(entity)) {
 +            entity.canvas$worldData = null; // Canvas - region threading
++            this.vehicles.remove(entity); // Canvas - track vehicles
              if (entity instanceof ServerPlayer player) {
                  this.localPlayers.remove(player);
                  player.getBukkitEntity().updateRegion(null);
