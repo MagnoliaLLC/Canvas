@@ -8590,10 +8590,10 @@ index 0000000000000000000000000000000000000000..9b0ce6d268218f92b77f610047e9afb5
 +}
 diff --git a/io/papermc/paper/threadedregions/RegionizedWorldData.java b/io/papermc/paper/threadedregions/RegionizedWorldData.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..72c07031fa60b10a63b7812f1909290a4e9e0d2f
+index 0000000000000000000000000000000000000000..6993ad191ae05e45ed9a5eff940536e3b2099318
 --- /dev/null
 +++ b/io/papermc/paper/threadedregions/RegionizedWorldData.java
-@@ -0,0 +1,921 @@
+@@ -0,0 +1,953 @@
 +package io.papermc.paper.threadedregions;
 +
 +import alternate.current.wire.WireHandler;
@@ -8707,6 +8707,11 @@ index 0000000000000000000000000000000000000000..72c07031fa60b10a63b7812f1909290a
 +            for (final Entity entity : from.loadedEntities) {
 +                into.loadedEntities.add(entity);
 +            }
++            // Canvas start - optimize passenger desync check
++            for (final Entity vehicle : from.vehicles) {
++                into.vehicles.add(vehicle);
++            }
++            // Canvas end - optimize passenger desync check
 +            for (final Iterator<Entity> iterator = from.entityTickList.unsafeIterator(); iterator.hasNext();) {
 +                into.entityTickList.add(iterator.next());
 +            }
@@ -8826,6 +8831,11 @@ index 0000000000000000000000000000000000000000..72c07031fa60b10a63b7812f1909290a
 +                if (from.loadedEntities.contains(entity)) {
 +                    into.loadedEntities.add(entity);
 +                }
++                // Canvas start - optimize passenger desync check
++                if (from.vehicles.contains(entity)) {
++                    into.vehicles.add(entity);
++                }
++                // Canvas end - optimize passenger desync check
 +                // note: navigatingMobs is a subset of allEntities
 +                if (entity instanceof Mob mob && from.navigatingMobs.contains(mob)) {
 +                    into.navigatingMobs.add(mob);
@@ -8991,6 +9001,7 @@ index 0000000000000000000000000000000000000000..72c07031fa60b10a63b7812f1909290a
 +    public final io.papermc.paper.threadedregions.EntityScheduler.EntitySchedulerTickList entitySchedulerTickList = new io.papermc.paper.threadedregions.EntityScheduler.EntitySchedulerTickList();
 +    private final ReferenceList<Entity> allEntities = new ReferenceList<>(EMPTY_ENTITY_ARRAY);
 +    private final ReferenceList<Entity> loadedEntities = new ReferenceList<>(EMPTY_ENTITY_ARRAY);
++    private final ReferenceList<Entity> vehicles = new ReferenceList<>(EMPTY_ENTITY_ARRAY); // Canvas - optimize passenger desync check
 +    private final IteratorSafeOrderedReferenceSet<Entity> entityTickList = new IteratorSafeOrderedReferenceSet<>();
 +    private final IteratorSafeOrderedReferenceSet<Mob> navigatingMobs = new IteratorSafeOrderedReferenceSet<>();
 +    public ReferenceList<Entity> trackerEntities = new ReferenceList<>(EMPTY_ENTITY_ARRAY); // Moonrise - entity tracker
@@ -9289,6 +9300,25 @@ index 0000000000000000000000000000000000000000..72c07031fa60b10a63b7812f1909290a
 +        return Arrays.copyOf(this.allEntities.getRawData(), this.allEntities.size(), Entity[].class);
 +    }
 +
++    // Canvas start - optimize passenger desync check
++    public void addVehicle(final Entity vehicle) {
++        this.vehicles.add(vehicle);
++    }
++
++    public Entity @NonNull [] getVehiclesCopy() {
++        final Entity[] vehicles = Arrays.copyOf(this.vehicles.getRawData(), this.vehicles.size(), Entity[].class);
++        int kept = 0;
++        for (final Entity vehicle : vehicles) {
++            if (vehicle.canvas$worldData != this || !vehicle.isVehicle()) {
++                this.vehicles.remove(vehicle);
++                continue;
++            }
++            vehicles[kept++] = vehicle;
++        }
++        return kept == vehicles.length ? vehicles : Arrays.copyOf(vehicles, kept);
++    }
++    // Canvas end - optimize passenger desync check
++
 +    public List<ServerPlayer> getLocalPlayers() {
 +        return this.localPlayers;
 +    }
@@ -9346,6 +9376,7 @@ index 0000000000000000000000000000000000000000..72c07031fa60b10a63b7812f1909290a
 +        }
 +        if (this.allEntities.add(entity)) {
 +            entity.canvas$worldData = this; // Canvas - optimize thread check
++            if (entity.isVehicle()) this.vehicles.add(entity); // Canvas - optimize passenger desync check
 +            if (entity instanceof ServerPlayer player) {
 +                this.localPlayers.add(player);
 +                player.getBukkitEntity().updateRegion(this);
@@ -9364,6 +9395,7 @@ index 0000000000000000000000000000000000000000..72c07031fa60b10a63b7812f1909290a
 +        }
 +        if (this.allEntities.remove(entity)) {
 +            entity.canvas$worldData = null; // Canvas - optimize thread check
++            this.vehicles.remove(entity); // Canvas - optimize passenger desync check
 +            if (entity instanceof ServerPlayer player) {
 +                this.localPlayers.remove(player);
 +                player.getBukkitEntity().updateRegion(null);
@@ -15403,7 +15435,7 @@ index d037272004e2ff74c183748ec01e3e9f44684cac..2198d3410d525e90e57c2fec01b5d521
 +            }
 +
 +            // fix passenger desync
-+            for (final net.minecraft.world.entity.Entity entity : regionizedWorldData.getLocalEntitiesCopy()) {
++            for (final net.minecraft.world.entity.Entity entity : regionizedWorldData.getVehiclesCopy()) { // Canvas - optimize passenger desync check
 +                entity.fixPassengerDesync();
 +            }
 +        }

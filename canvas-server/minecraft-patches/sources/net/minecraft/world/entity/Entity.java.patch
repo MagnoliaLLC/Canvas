@@ -314,6 +314,14 @@
  
      public void push(final Vec3 impulse) {
          if (impulse.isFinite()) {
+@@ -3610,6 +_,7 @@
+ 
+             this.passengers = ImmutableList.copyOf(newPassengers);
+         }
++        this.canvas$trackVehicle(); // Canvas - optimize passenger desync check
+     }
+ 
+     // Paper start - Force entity dismount during teleportation
 @@ -3814,8 +_,7 @@
      }
  
@@ -349,6 +357,30 @@
          if (level instanceof ServerLevel serverLevel) {
              RandomSource random = level.getRandom();
  
+@@ -4359,6 +_,7 @@
+                 }
+ 
+                 curr.root.passengers = ImmutableList.copyOf(newPassengers);
++                curr.root.canvas$trackVehicle(); // Canvas - optimize passenger desync check
+             }
+         }
+ 
+@@ -5730,6 +_,15 @@
+         return true;
+     }
+ 
++    // Canvas start - optimize passenger desync check
++    private void canvas$trackVehicle() {
++        final io.papermc.paper.threadedregions.RegionizedWorldData worldData = this.canvas$worldData;
++        if (worldData != null && ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(this)) {
++            worldData.addVehicle(this);
++        }
++    }
++    // Canvas end - optimize passenger desync check
++
+     public void fixPassengerDesync() {
+         if (this.isPassenger() || !this.isVehicle()) {
+             return;
 @@ -6033,6 +_,7 @@
  
      public void placePortalTicket(final BlockPos ticketPosition) {
