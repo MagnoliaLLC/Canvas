@@ -1,5 +1,80 @@
 --- a/ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.java
 +++ b/ca/spottedleaf/moonrise/patches/collisions/CollisionUtil.java
+@@ -393,6 +_,12 @@
+     }
+ 
+     public static boolean voxelShapeIntersectNoEmpty(final VoxelShape voxel, final AABB aabb) {
++        return voxelShapeIntersectNoEmpty(voxel, aabb.minX, aabb.minY, aabb.minZ, aabb.maxX, aabb.maxY, aabb.maxZ); // Canvas - allocation-free supporting block search
++    }
++
++    // Canvas start - allocation-free supporting block search
++    public static boolean voxelShapeIntersectNoEmpty(final VoxelShape voxel, final double minX, final double minY, final double minZ,
++                                                     final double maxX, final double maxY, final double maxZ) {
+         if (voxel.isEmpty()) {
+             return false;
+         }
+@@ -427,7 +_,7 @@
+ 
+         final int floor_min_x = Math.max(
+                 0,
+-                findFloor(coords_x, off_x, aabb.minX + COLLISION_EPSILON, 0, size_x)
++                findFloor(coords_x, off_x, minX + COLLISION_EPSILON, 0, size_x)
+         );
+         if (floor_min_x >= size_x) {
+             // cannot intersect
+@@ -436,7 +_,7 @@
+ 
+         final int ceil_max_x = Math.min(
+                 size_x,
+-                findFloor(coords_x, off_x, aabb.maxX - COLLISION_EPSILON, floor_min_x, size_x) + 1
++                findFloor(coords_x, off_x, maxX - COLLISION_EPSILON, floor_min_x, size_x) + 1
+         );
+         if (floor_min_x >= ceil_max_x) {
+             // cannot intersect
+@@ -445,7 +_,7 @@
+ 
+         final int floor_min_y = Math.max(
+                 0,
+-                findFloor(coords_y, off_y, aabb.minY + COLLISION_EPSILON, 0, size_y)
++                findFloor(coords_y, off_y, minY + COLLISION_EPSILON, 0, size_y)
+         );
+         if (floor_min_y >= size_y) {
+             // cannot intersect
+@@ -454,7 +_,7 @@
+ 
+         final int ceil_max_y = Math.min(
+                 size_y,
+-                findFloor(coords_y, off_y, aabb.maxY - COLLISION_EPSILON, floor_min_y, size_y) + 1
++                findFloor(coords_y, off_y, maxY - COLLISION_EPSILON, floor_min_y, size_y) + 1
+         );
+         if (floor_min_y >= ceil_max_y) {
+             // cannot intersect
+@@ -463,7 +_,7 @@
+ 
+         final int floor_min_z = Math.max(
+                 0,
+-                findFloor(coords_z, off_z, aabb.minZ + COLLISION_EPSILON, 0, size_z)
++                findFloor(coords_z, off_z, minZ + COLLISION_EPSILON, 0, size_z)
+         );
+         if (floor_min_z >= size_z) {
+             // cannot intersect
+@@ -472,7 +_,7 @@
+ 
+         final int ceil_max_z = Math.min(
+                 size_z,
+-                findFloor(coords_z, off_z, aabb.maxZ - COLLISION_EPSILON, floor_min_z, size_z) + 1
++                findFloor(coords_z, off_z, maxZ - COLLISION_EPSILON, floor_min_z, size_z) + 1
+         );
+         if (floor_min_z >= ceil_max_z) {
+             // cannot intersect
+@@ -498,6 +_,7 @@
+ 
+         return false;
+     }
++    // Canvas end - allocation-free supporting block search
+ 
+     // assume !target.isEmpty() && abs(source_move) >= COLLISION_EPSILON
+     public static double collideX(final VoxelShape target, final AABB source, final double source_move) {
 @@ -2005,6 +_,15 @@
                      final int minYIterate = currChunkY == minChunkY ? (minBlockY & 15) + sectionAdjust : 0;
                      final int maxYIterate = currChunkY == maxChunkY ? (maxBlockY & 15) - sectionAdjust : 15;

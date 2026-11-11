@@ -18,6 +18,97 @@
  
          ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getHardCollidingEntities(entity, box, ret, predicate);
  
+@@ -609,8 +_,13 @@
+         final int maxBlockZ = Mth.floor(aabb.maxZ + ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.COLLISION_EPSILON) + 1;
+ 
+         final BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
+-        final ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.LazyEntityCollisionContext collisionShape = new ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.LazyEntityCollisionContext(entity);
+-        BlockPos selected = null;
++        // Canvas start - allocation-free supporting block search
++        ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.LazyEntityCollisionContext collisionShape = null;
++        boolean found = false;
++        int selectedX = 0;
++        int selectedY = 0;
++        int selectedZ = 0;
++        // Canvas end - allocation-free supporting block search
+         double selectedDistance = Double.MAX_VALUE;
+         final Vec3 entityPos = entity.position();
+ 
+@@ -684,7 +_,7 @@
+                                 }
+ 
+                                 final double distance = mutablePos.distToCenterSqr(entityPos);
+-                                if (distance > selectedDistance || (distance == selectedDistance && selected.compareTo(mutablePos) >= 0)) {
++                                if (distance > selectedDistance || (distance == selectedDistance && (selectedY == blockY ? (selectedZ == blockZ ? selectedX - blockX : selectedZ - blockZ) : selectedY - blockY) >= 0)) { // Canvas - allocation-free supporting block search
+                                     continue;
+                                 }
+ 
+@@ -698,6 +_,9 @@
+ 
+                                 if (edgeCount == 0 || ((edgeCount != 1 || blockData.hasLargeCollisionShape()) && (edgeCount != 2 || blockData.getBlock() == Blocks.MOVING_PISTON))) {
+                                     if (blockCollision == null) {
++                                        if (collisionShape == null) { // Canvas - allocation-free supporting block search
++                                            collisionShape = new ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.LazyEntityCollisionContext(entity); // Canvas - allocation-free supporting block search
++                                        } // Canvas - allocation-free supporting block search
+                                         blockCollision = blockData.getCollisionShape((Level)(Object)this, mutablePos, collisionShape);
+ 
+                                         if (blockCollision.isEmpty()) {
+@@ -706,24 +_,41 @@
+                                     }
+ 
+                                     // avoid VoxelShape#move by shifting the entity collision shape instead
+-                                    final AABB shiftedAABB = aabb.move(-(double)blockX, -(double)blockY, -(double)blockZ);
++                                    // Canvas start - allocation-free supporting block search
++                                    final double shiftedMinX = aabb.minX + -(double)blockX;
++                                    final double shiftedMinY = aabb.minY + -(double)blockY;
++                                    final double shiftedMinZ = aabb.minZ + -(double)blockZ;
++                                    final double shiftedMaxX = aabb.maxX + -(double)blockX;
++                                    final double shiftedMaxY = aabb.maxY + -(double)blockY;
++                                    final double shiftedMaxZ = aabb.maxZ + -(double)blockZ;
++                                    // Canvas end - allocation-free supporting block search
+ 
+                                     final AABB singleAABB = ((ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape)blockCollision).moonrise$getSingleAABBRepresentation();
+                                     if (singleAABB != null) {
+-                                        if (!ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.voxelShapeIntersect(singleAABB, shiftedAABB)) {
++                                        if (!ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.voxelShapeIntersect(singleAABB, shiftedMinX, shiftedMinY, shiftedMinZ, shiftedMaxX, shiftedMaxY, shiftedMaxZ)) { // Canvas - allocation-free supporting block search
+                                             continue;
+                                         }
+ 
+-                                        selected = mutablePos.immutable();
++                                        // Canvas start - allocation-free supporting block search
++                                        found = true;
++                                        selectedX = blockX;
++                                        selectedY = blockY;
++                                        selectedZ = blockZ;
++                                        // Canvas end - allocation-free supporting block search
+                                         selectedDistance = distance;
+                                         continue;
+                                     }
+ 
+-                                    if (!ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.voxelShapeIntersectNoEmpty(blockCollision, shiftedAABB)) {
++                                    if (!ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.voxelShapeIntersectNoEmpty(blockCollision, shiftedMinX, shiftedMinY, shiftedMinZ, shiftedMaxX, shiftedMaxY, shiftedMaxZ)) { // Canvas - allocation-free supporting block search
+                                         continue;
+                                     }
+ 
+-                                    selected = mutablePos.immutable();
++                                    // Canvas start - allocation-free supporting block search
++                                    found = true;
++                                    selectedX = blockX;
++                                    selectedY = blockY;
++                                    selectedZ = blockZ;
++                                    // Canvas end - allocation-free supporting block search
+                                     selectedDistance = distance;
+                                     continue;
+                                 }
+@@ -734,7 +_,7 @@
+             }
+         }
+ 
+-        return java.util.Optional.ofNullable(selected);
++        return found ? java.util.Optional.of(new BlockPos(selectedX, selectedY, selectedZ)) : java.util.Optional.empty(); // Canvas - allocation-free supporting block search
+     }
+     // Paper end - optimise collisions
+     // Paper start - getblock optimisations - cache world height/sections
 @@ -816,6 +_,13 @@
       */
      @Override
