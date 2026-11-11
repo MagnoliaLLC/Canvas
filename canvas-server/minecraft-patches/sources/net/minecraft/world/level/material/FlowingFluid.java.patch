@@ -1,5 +1,14 @@
 --- a/net/minecraft/world/level/material/FlowingFluid.java
 +++ b/net/minecraft/world/level/material/FlowingFluid.java
+@@ -43,7 +_,7 @@
+         map.defaultReturnValue((byte)127);
+         return map;
+     });
+-    private final Map<FluidState, VoxelShape> shapes = Maps.newIdentityHashMap();
++    private final Map<FluidState, VoxelShape> shapes = new java.util.concurrent.ConcurrentHashMap<>(); // Canvas - region threading: shared by every region
+ 
+     // Paper start - fluid method optimisations
+     private FluidState sourceFalling;
 @@ -340,30 +_,145 @@
          final LevelReader level, final BlockPos pos, final int pass, final Direction from, final BlockState state, final FlowingFluid.SpreadContext context
      ) {
@@ -183,7 +192,7 @@
              && canPassThroughWall(direction, level, sourcePos, sourceState, testPos, testState);
      }
  
-@@ -420,55 +_,93 @@
+@@ -420,47 +_,85 @@
          return count;
      }
  
@@ -298,15 +307,15 @@
 +        }
          return result;
      }
- 
++
 +    private int canvas$holeDistance(final ServerLevel level, final BlockPos testPos, final Direction direction, final BlockState testState, final FlowingFluid.SpreadContext context) {
 +        return context.isHole(testPos) ? 0 : this.getSlopeDistance(level, testPos, 1, direction.getOpposite(), testState, context);
 +    }
 +    // Canvas end - search slopes only for sides the fluid can fill
-+
+ 
      public static boolean canHoldAnyFluid(final BlockState state) {
          Block block = state.getBlock();
-         return block instanceof LiquidBlockContainer || state.is(BlockTags.WASHED_AWAY_BY_FLUIDS);
+@@ -468,7 +_,7 @@
      }
  
      private static boolean canHoldFluid(final BlockGetter level, final BlockPos pos, final BlockState state, final Fluid newFluid) {
