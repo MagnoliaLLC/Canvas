@@ -35948,6 +35948,19 @@ index ff9a61db79f8488612f77ceb92226d83cf3ba75e..6adb43ea1418fa144caa6b6e0394b56e
      }
  
      protected int getMaxReferences() {
+diff --git a/net/minecraft/world/level/material/FlowingFluid.java b/net/minecraft/world/level/material/FlowingFluid.java
+index 49789b2efe70b904b73e25ace4981cc5bc9908da..50818ff21c3786238380debaed5c6c79d71d43ed 100644
+--- a/net/minecraft/world/level/material/FlowingFluid.java
++++ b/net/minecraft/world/level/material/FlowingFluid.java
+@@ -43,7 +43,7 @@ public abstract class FlowingFluid extends Fluid {
+         map.defaultReturnValue((byte)127);
+         return map;
+     });
+-    private final Map<FluidState, VoxelShape> shapes = Maps.newIdentityHashMap();
++    private final Map<FluidState, VoxelShape> shapes = new java.util.concurrent.ConcurrentHashMap<>(); // Canvas - region threading
+ 
+     // Paper start - fluid method optimisations
+     private FluidState sourceFalling;
 diff --git a/net/minecraft/world/level/redstone/CollectingNeighborUpdater.java b/net/minecraft/world/level/redstone/CollectingNeighborUpdater.java
 index 1c7862ae4eaeb4d83e0fb423c86489f534e92be5..f0c26c6610a6196cb93e245072911c8eee25c80c 100644
 --- a/net/minecraft/world/level/redstone/CollectingNeighborUpdater.java
