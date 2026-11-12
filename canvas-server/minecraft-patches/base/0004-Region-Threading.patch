@@ -4780,10 +4780,10 @@ index 0000000000000000000000000000000000000000..a514338526e636162a8d301293e1d3d4
 +}
 diff --git a/io/canvasmc/canvas/threadedregions/world/entities/EnderPearls.java b/io/canvasmc/canvas/threadedregions/world/entities/EnderPearls.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..df638cef3b9d17019e1b53a7c680e9e3251fad77
+index 0000000000000000000000000000000000000000..80de24be7395d7482b2424b3a9042811432f944f
 --- /dev/null
 +++ b/io/canvasmc/canvas/threadedregions/world/entities/EnderPearls.java
-@@ -0,0 +1,243 @@
+@@ -0,0 +1,247 @@
 +package io.canvasmc.canvas.threadedregions.world.entities;
 +
 +import ca.spottedleaf.concurrentutil.util.Priority;
@@ -4889,12 +4889,16 @@ index 0000000000000000000000000000000000000000..df638cef3b9d17019e1b53a7c680e9e3
 +            return;
 +        }
 +
-+        final List<Pearl> pearlsForUUID = pearls.computeIfAbsent(uuid, (ignored) -> new CopyOnWriteArrayList<>());
 +        final Pearl encoded = Pearl.of(thrownEnderpearl);
 +
-+        // remove if it's already in the list, we don't want duplicates
-+        pearlsForUUID.remove(encoded);
-+        pearlsForUUID.add(encoded);
++        pearls.compute(uuid, (_, existing) -> {
++            final List<Pearl> pearlsForUUID = existing == null ? new CopyOnWriteArrayList<>() : existing;
++
++            // remove if it's already in the list, we don't want duplicates
++            pearlsForUUID.remove(encoded);
++            pearlsForUUID.add(encoded);
++            return pearlsForUUID;
++        });
 +
 +        // mark dirty, we added a pearl(even if the pearl was present already)
 +        setDirty();
@@ -19827,7 +19831,7 @@ index 3cb3b93851ccbbb8879fc871954da30a12dd54a4..515dcdb065ac09eb9212a9181fb739f0
      }
  }
 diff --git a/net/minecraft/server/commands/SpreadPlayersCommand.java b/net/minecraft/server/commands/SpreadPlayersCommand.java
-index 04cf77b77516fc3eae7231586a9519c24bc1fcf8..e1757be06db7922d479863a48c068b420256a761 100644
+index 04cf77b77516fc3eae7231586a9519c24bc1fcf8..473cab72cfc8e22dacd8d4de8afdbdd0600a106c 100644
 --- a/net/minecraft/server/commands/SpreadPlayersCommand.java
 +++ b/net/minecraft/server/commands/SpreadPlayersCommand.java
 @@ -32,6 +32,45 @@ import net.minecraft.world.phys.Vec2;
@@ -20007,7 +20011,7 @@ index 04cf77b77516fc3eae7231586a9519c24bc1fcf8..e1757be06db7922d479863a48c068b42
 +                    io.papermc.paper.threadedregions.RegionizedServer.getInstance().taskQueue.queueChunkTask(
 +                        level, Mth.floor(pileToCheck.x) >> 4, Mth.floor(pileToCheck.z) >> 4, () -> {
 +                            if (!pileToCheck.isSafe(level, maxY)) {
-+                                pileToCheck.randomize(random, minX, minZ, maxX, maxZ);
++                                pileToCheck.randomize(RandomSource.createThreadLocalInstance(), minX, minZ, maxX, maxZ);
 +                                invalidPositionFound.set(true);
 +                            }
 +                            future.complete(null);
@@ -30491,7 +30495,7 @@ index c756d28b396520264336832f17527981248556f3..4e150f4807c83e8f673b53e5e8b9e1da
                      }
                  }
 diff --git a/net/minecraft/world/entity/LivingEntity.java b/net/minecraft/world/entity/LivingEntity.java
-index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269abf4c475b 100644
+index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..ae79d3c6119b80cf6d450fd540f6dfa81ffba67e 100644
 --- a/net/minecraft/world/entity/LivingEntity.java
 +++ b/net/minecraft/world/entity/LivingEntity.java
 @@ -277,7 +277,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
@@ -30637,6 +30641,15 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
          if (!this.isRemoved() && !this.dead) {
              Entity sourceEntity = source.getEntity();
              LivingEntity killer = this.getKillCredit();
+@@ -1997,7 +2035,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+             .withOptionalParameter(LootContextParams.ATTACKING_ENTITY, source.getEntity())
+             .withOptionalParameter(LootContextParams.DIRECT_ATTACKING_ENTITY, source.getDirectEntity());
+         Player killerPlayer = this.getLastHurtByPlayer();
+-        if (playerKilled && killerPlayer != null) {
++        if (playerKilled && killerPlayer != null && ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(killerPlayer)) { // Canvas - region threading
+             builder = builder.withParameter(LootContextParams.LAST_DAMAGE_PLAYER, killerPlayer).withLuck(killerPlayer.getLuck());
+         }
+ 
 @@ -2574,7 +2612,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
                          }
                      }
@@ -34999,7 +35012,7 @@ index 803e36f33c706d8484739cb21af25b9289dc8808..c63352c14ce2be4ece0d0953b932caa9
                  success = true;
              } else if (canMergeItems(current, itemStack)) {
 diff --git a/net/minecraft/world/level/block/entity/SculkCatalystBlockEntity.java b/net/minecraft/world/level/block/entity/SculkCatalystBlockEntity.java
-index a1b0168077b83575f16dd377da2e1ba520d3bd19..a2e349bb5ab2860f67a7fda4e56f95cac1327988 100644
+index a1b0168077b83575f16dd377da2e1ba520d3bd19..3ef77569d0d69e1b30c31121c9670bba32324ea9 100644
 --- a/net/minecraft/world/level/block/entity/SculkCatalystBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/SculkCatalystBlockEntity.java
 @@ -43,9 +43,9 @@ public class SculkCatalystBlockEntity extends BlockEntity implements GameEventLi
@@ -35014,6 +35027,28 @@ index a1b0168077b83575f16dd377da2e1ba520d3bd19..a2e349bb5ab2860f67a7fda4e56f95ca
      }
  
      @Override
+@@ -126,7 +126,7 @@ public class SculkCatalystBlockEntity extends BlockEntity implements GameEventLi
+         }
+ 
+         private void tryAwardItSpreadsAdvancement(final Level level, final LivingEntity mob) {
+-            if (mob.getLastHurtByMob() instanceof ServerPlayer player) {
++            if (mob.getLastHurtByMob() instanceof ServerPlayer player && ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(player)) { // Canvas - region threading
+                 DamageSource damageSource = mob.getLastDamageSource() == null ? level.damageSources().playerAttack(player) : mob.getLastDamageSource();
+                 CriteriaTriggers.KILL_MOB_NEAR_SCULK_CATALYST.trigger(player, mob, damageSource);
+             }
+diff --git a/net/minecraft/world/level/block/entity/SculkShriekerBlockEntity.java b/net/minecraft/world/level/block/entity/SculkShriekerBlockEntity.java
+index 3adfffd3f0a7e6b4867248f6483a36ca9f5f1ee3..fe43dd80c00f921e12c1000e94a3e784ecb5290c 100644
+--- a/net/minecraft/world/level/block/entity/SculkShriekerBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/SculkShriekerBlockEntity.java
+@@ -119,7 +119,7 @@ public class SculkShriekerBlockEntity extends BlockEntity implements GameEventLi
+     }
+ 
+     public void tryShriek(final ServerLevel level, final @Nullable ServerPlayer player) {
+-        if (player != null) {
++        if (player != null && ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(player)) { // Canvas - region threading
+             BlockState state = this.getBlockState();
+             if (!state.getValue(SculkShriekerBlock.SHRIEKING)) {
+                 this.warningLevel = 0;
 diff --git a/net/minecraft/world/level/block/entity/TheEndGatewayBlockEntity.java b/net/minecraft/world/level/block/entity/TheEndGatewayBlockEntity.java
 index 0eb38edc4cea67390f998eb5cff4c55146e811d6..726397ecd5b9418174f480356f71da8cca037257 100644
 --- a/net/minecraft/world/level/block/entity/TheEndGatewayBlockEntity.java
