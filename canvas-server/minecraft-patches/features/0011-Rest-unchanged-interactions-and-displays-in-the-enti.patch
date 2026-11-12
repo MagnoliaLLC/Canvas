@@ -1,0 +1,672 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: RootBeer <rootb33rman@gmail.com>
+Date: Thu, 12 Nov 2026 13:57:08 -0500
+Subject: [PATCH] Rest unchanged interactions and displays in the entity
+ tracker
+
+
+diff --git a/ca/spottedleaf/moonrise/common/misc/NearbyPlayers.java b/ca/spottedleaf/moonrise/common/misc/NearbyPlayers.java
+index 1792bb79010d27bd44f185c6223714219e9f2a86..c0196197ada03a94988bda97a7439d69f6dc1165 100644
+--- a/ca/spottedleaf/moonrise/common/misc/NearbyPlayers.java
++++ b/ca/spottedleaf/moonrise/common/misc/NearbyPlayers.java
+@@ -73,6 +73,62 @@ public final class NearbyPlayers {
+         this.world = world;
+     }
+ 
++    // Canvas start - rest tracked entities nothing changed for
++    private long canvas$wakes;
++    private long canvas$createdChunks;
++    private boolean canvas$trackingRangeY;
++    private int canvas$displayRangeY = Integer.MIN_VALUE;
++    private int canvas$otherRangeY = Integer.MIN_VALUE;
++    private int canvas$broadcastPercentage = Integer.MIN_VALUE;
++
++    public long canvas$wakes() {
++        return this.canvas$wakes;
++    }
++
++    public long canvas$createdChunks() {
++        return this.canvas$createdChunks;
++    }
++
++    public void canvas$trackingSettings(final boolean trackingRangeY, final int displayRangeY, final int otherRangeY, final int broadcastPercentage) {
++        if (this.canvas$trackingRangeY != trackingRangeY || this.canvas$displayRangeY != displayRangeY
++            || this.canvas$otherRangeY != otherRangeY || this.canvas$broadcastPercentage != broadcastPercentage) {
++            this.canvas$trackingRangeY = trackingRangeY;
++            this.canvas$displayRangeY = displayRangeY;
++            this.canvas$otherRangeY = otherRangeY;
++            this.canvas$broadcastPercentage = broadcastPercentage;
++            ++this.canvas$wakes;
++        }
++    }
++
++    public void canvas$wakeChunk(final int chunkX, final int chunkZ) {
++        final TrackedChunk chunk = this.byChunk.get(CoordinateUtils.getChunkKey(chunkX, chunkZ));
++        if (chunk != null) {
++            ++chunk.canvas$wakes;
++        }
++    }
++
++    public void canvas$wakeViewArea(final ServerPlayer player) {
++        final TrackedPlayer[] trackers = this.players.get(player);
++        if (trackers == null) {
++            return;
++        }
++
++        final TrackedPlayer view = trackers[NearbyMapType.VIEW_DISTANCE.ordinal()];
++        final int distance = view.getLastDistance();
++        if (distance == SingleUserAreaMap.NOT_SET) {
++            return;
++        }
++
++        final int centerX = view.getLastChunkX();
++        final int centerZ = view.getLastChunkZ();
++        for (int chunkX = centerX - distance; chunkX <= centerX + distance; ++chunkX) {
++            for (int chunkZ = centerZ - distance; chunkZ <= centerZ + distance; ++chunkZ) {
++                this.canvas$wakeChunk(chunkX, chunkZ);
++            }
++        }
++    }
++    // Canvas end - rest tracked entities nothing changed for
++
+     public void addPlayer(final ServerPlayer player) {
+         final TrackedPlayer[] newTrackers = new TrackedPlayer[TOTAL_MAP_TYPES];
+         if (this.players.putIfAbsent(player, newTrackers) != null) {
+@@ -166,6 +222,7 @@ public final class NearbyPlayers {
+         private int nonEmptyLists;
+         private long updateCount;
+         private boolean canvas$removed; // Canvas - cache the tracked chunk of tracked entities
++        private long canvas$wakes; // Canvas - rest tracked entities nothing changed for
+ 
+         public TrackedChunk(final long chunkKey, final NearbyPlayers nearbyPlayers) {
+             this.chunkKey = chunkKey;
+@@ -186,6 +243,12 @@ public final class NearbyPlayers {
+         }
+         // Canvas end - cache the tracked chunk of tracked entities
+ 
++        // Canvas start - rest tracked entities nothing changed for
++        public long canvas$wakes() {
++            return this.canvas$wakes;
++        }
++        // Canvas end - rest tracked entities nothing changed for
++
+         public ReferenceList<ServerPlayer> getPlayers(final NearbyMapType type) {
+             return this.players[type.ordinal()];
+         }
+@@ -250,6 +313,7 @@ public final class NearbyPlayers {
+             } else {
+                 final TrackedChunk created = new TrackedChunk(chunkKey, NearbyPlayers.this);
+                 NearbyPlayers.this.byChunk.put(chunkKey, created);
++                ++NearbyPlayers.this.canvas$createdChunks; // Canvas - rest tracked entities nothing changed for
+                 created.addPlayer(parameter, type);
+                 type.addTo(parameter, NearbyPlayers.this.world, chunkX, chunkZ);
+ 
+diff --git a/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java b/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java
+index ece708951041d7032e5cb17b6524e3d0d6017494..2b031e72f6d926c054b2f8539eb717d0139e8111 100644
+--- a/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java
++++ b/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java
+@@ -402,7 +402,37 @@ public final class RegionizedPlayerChunkLoader {
+         private boolean canGenerateChunks = true;
+ 
+         private final ArrayDeque<ChunkHolderManager.TicketOperation<?, ?>> delayedTicketOps = new ArrayDeque<>();
+-        private final LongOpenHashSet sentChunks = new LongOpenHashSet();
++        // Canvas start - rest tracked entities nothing changed for
++        public final io.canvasmc.canvas.world.entities.TrackerViewer canvas$viewer = new io.canvasmc.canvas.world.entities.TrackerViewer();
++        private final LongOpenHashSet sentChunks = new LongOpenHashSet() {
++            @Override
++            public boolean add(final long chunkKey) {
++                if (!super.add(chunkKey)) {
++                    return false;
++                }
++                PlayerChunkLoaderData.this.canvas$wakeChunk(chunkKey);
++                return true;
++            }
++
++            @Override
++            public boolean remove(final long chunkKey) {
++                if (!super.remove(chunkKey)) {
++                    return false;
++                }
++                PlayerChunkLoaderData.this.canvas$wakeChunk(chunkKey);
++                return true;
++            }
++        };
++
++        private void canvas$wakeChunk(final long chunkKey) {
++            final io.papermc.paper.threadedregions.RegionizedWorldData worldData = io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData();
++            if (worldData != null && worldData.world == this.world) {
++                worldData.getNearbyPlayers().canvas$wakeChunk(CoordinateUtils.getChunkX(chunkKey), CoordinateUtils.getChunkZ(chunkKey));
++            } else {
++                this.canvas$viewer.wakeLater();
++            }
++        }
++        // Canvas end - rest tracked entities nothing changed for
+         // Canvas start - extended view distance
+         private final LongOpenHashSet fakeChunks = new LongOpenHashSet();
+         // Canvas end - extended view distance
+diff --git a/io/canvasmc/canvas/world/entities/TrackerViewer.java b/io/canvasmc/canvas/world/entities/TrackerViewer.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..6d6c28d4e560ee2183779eaed115333979f2d7ee
+--- /dev/null
++++ b/io/canvasmc/canvas/world/entities/TrackerViewer.java
+@@ -0,0 +1,129 @@
++package io.canvasmc.canvas.world.entities;
++
++/**
++ * Where a player stood, and what else its tracking verdicts read, when the entities resting in its view last checked it.
++ * The anchor moves once the player strays more than its slack from it, or its view distance, entity reach or vertical
++ * tracking changes; then every chunk in its view wakes. Between moves, an entity whose distance to the anchor sits more
++ * than the slack away from its tracking range is in or out of range wherever the player stands. A moving player gets
++ * {@link #MOVING_SLACK}; one that stays within {@link #STANDING_SLACK} for {@link #STANDING_CHECKS} checks is anchored
++ * again with that narrower slack, so fewer entities around it sit too close to their range to rest.
++ */
++public final class TrackerViewer {
++
++    public static final double MOVING_SLACK = 8.0;
++    public static final double STANDING_SLACK = 0.5;
++    public static final int STANDING_CHECKS = 20;
++    private static final double MARGIN = 1.0E-3;
++    private boolean anchored;
++    private double anchorX;
++    private double anchorY;
++    private double anchorZ;
++    private double slack = MOVING_SLACK;
++    private double standX;
++    private double standY;
++    private double standZ;
++    private int standingChecks;
++    private boolean followsY;
++    private int viewDistance;
++    private double reach;
++    private long unplacedWakes;
++    private long unplacedWakesSeen;
++
++    /**
++     * A sent chunk changed where its own chunk could not be woken, so the next check wakes the whole view instead.
++     */
++    public void wakeLater() {
++        ++this.unplacedWakes;
++    }
++
++    /**
++     * Moves the anchor to the player when it strayed, changed what its verdicts read or settled into standing, answering
++     * whether every chunk in its view must wake.
++     */
++    public boolean move(final double x, final double y, final double z, final boolean followsY, final int viewDistance, final double reach) {
++        if (!this.anchored
++            || followsY != this.followsY
++            || viewDistance != this.viewDistance
++            || reach != this.reach
++            || this.unplacedWakes != this.unplacedWakesSeen
++            || !this.within(x, y, z, this.anchorX, this.anchorY, this.anchorZ, this.slack)) {
++            this.anchor(x, y, z, MOVING_SLACK);
++            this.followsY = followsY;
++            this.viewDistance = viewDistance;
++            this.reach = reach;
++            this.unplacedWakesSeen = this.unplacedWakes;
++            return true;
++        }
++
++        if (this.slack == STANDING_SLACK) {
++            return false;
++        }
++
++        if (!this.within(x, y, z, this.standX, this.standY, this.standZ, STANDING_SLACK)) {
++            this.stand(x, y, z);
++            return false;
++        }
++
++        if (++this.standingChecks < STANDING_CHECKS) {
++            return false;
++        }
++
++        this.anchor(x, y, z, STANDING_SLACK);
++        return true;
++    }
++
++    private boolean within(final double x, final double y, final double z, final double fromX, final double fromY, final double fromZ, final double slack) {
++        final double dx = x - fromX;
++        final double dz = z - fromZ;
++        return dx * dx + dz * dz <= slack * slack && (!this.followsY || Math.abs(y - fromY) <= slack);
++    }
++
++    private void anchor(final double x, final double y, final double z, final double slack) {
++        this.anchored = true;
++        this.anchorX = x;
++        this.anchorY = y;
++        this.anchorZ = z;
++        this.slack = slack;
++        this.stand(x, y, z);
++    }
++
++    private void stand(final double x, final double y, final double z) {
++        this.standX = x;
++        this.standY = y;
++        this.standZ = z;
++        this.standingChecks = 0;
++    }
++
++    /**
++     * Whether an entity at the given position stays on the same side of its tracking range, and of its vertical range
++     * when one applies, wherever the player stands within the slack of its anchor.
++     */
++    public boolean settles(final double x, final double y, final double z, final double range, final double rangeY) {
++        if (!this.anchored) {
++            return false;
++        }
++
++        final double slack = this.slack;
++        final double dx = this.anchorX - x;
++        final double dz = this.anchorZ - z;
++        final double distance = Math.sqrt(dx * dx + dz * dz);
++        if (distance - slack > range + MARGIN) {
++            return true;
++        }
++
++        if (distance + slack >= range - MARGIN) {
++            return false;
++        }
++
++        if (rangeY < 0.0) {
++            return true;
++        }
++
++        if (!this.followsY) {
++            return false;
++        }
++
++        final double dy = Math.abs(this.anchorY - y);
++        return dy - slack > rangeY + MARGIN || dy + slack < rangeY - MARGIN;
++    }
++}
+diff --git a/net/minecraft/server/level/ChunkMap.java b/net/minecraft/server/level/ChunkMap.java
+index 917401106269d72caa12b58156ad4182294d9a5d..f1c1ab5621496a7521403277e552322b33c7f1f0 100644
+--- a/net/minecraft/server/level/ChunkMap.java
++++ b/net/minecraft/server/level/ChunkMap.java
+@@ -1101,6 +1101,7 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+         // Folia end - region threading
+         final io.papermc.paper.threadedregions.TickRegionScheduler.TickThreadRunner heldSends = net.minecraft.network.Connection.canvas$holdSends(); // Canvas - coalesce tracker sends
+         try {
++            this.canvas$checkViewers(nearbyPlayers); // Canvas - rest tracked entities nothing changed for
+             final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.world.entity.Entity> trackerEntities = worldData.trackerEntities; // Folia - region threading
+             final Entity[] trackerEntitiesRaw = trackerEntities.getRawDataUnchecked();
+             for (int i = 0, len = trackerEntities.size(); i < len; ++i) {
+@@ -1109,17 +1110,37 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+                 if (tracker == null) {
+                     continue;
+                 }
++                // Canvas start - rest tracked entities nothing changed for
++                if (tracker.canvas$resting && tracker.canvas$keepsResting(nearbyPlayers)) {
++                    continue;
++                }
++                // Canvas end - rest tracked entities nothing changed for
+                 ((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity)tracker).moonrise$tick(tracker.canvas$getTrackedChunk(nearbyPlayers, entity.chunkPosition())); // Folia - region threading // Canvas - cache the tracked chunk of tracked entities
+-                if (((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity)tracker).moonrise$hasPlayers()
+-                    || ((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)entity).moonrise$getChunkStatus().isOrAfter(FullChunkStatus.ENTITY_TICKING)) {
++                final boolean sendsChanges = ((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity)tracker).moonrise$hasPlayers() // Canvas - rest tracked entities nothing changed for
++                    || ((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)entity).moonrise$getChunkStatus().isOrAfter(FullChunkStatus.ENTITY_TICKING);
++                if (sendsChanges) { // Canvas - rest tracked entities nothing changed for
+                     tracker.serverEntity.sendChanges();
+                 }
++                tracker.canvas$tryRest(sendsChanges); // Canvas - rest tracked entities nothing changed for
+             }
+         } finally {
+             worldData.iteratingTrackerEntities = false; // Folia - region threading
+             net.minecraft.network.Connection.canvas$releaseSends(heldSends); // Canvas - coalesce tracker sends
+         }
+     }
++
++    // Canvas start - rest tracked entities nothing changed for
++    private void canvas$checkViewers(final ca.spottedleaf.moonrise.common.misc.NearbyPlayers nearbyPlayers) {
++        final io.papermc.paper.configuration.WorldConfiguration.Entities.TrackingRangeY trackingRangeY = this.level.paperConfig().entities.trackingRangeY;
++        nearbyPlayers.canvas$trackingSettings(trackingRangeY.enabled, trackingRangeY.display.or(-1), trackingRangeY.other.or(-1), this.level.getServer().getScaledTrackingDistance(100));
++        for (final ServerPlayer player : this.level.getLocalPlayers()) {
++            final ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.PlayerChunkLoaderData loader = ((ca.spottedleaf.moonrise.patches.chunk_system.player.ChunkSystemServerPlayer)player).moonrise$getChunkLoader();
++            if (loader != null && loader.canvas$viewer.move(player.getX(), player.getY(), player.getZ(), trackingRangeY.enabled, this.getPlayerViewDistance(player), player.entityInteractionRange())) {
++                nearbyPlayers.canvas$wakeViewArea(player);
++            }
++        }
++    }
++    // Canvas end - rest tracked entities nothing changed for
+     // Paper end - optimise entity tracker
+ 
+     protected void tick() {
+@@ -1243,6 +1264,30 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+         private SectionPos lastSectionPos;
+         public final Set<ServerPlayerConnection> seenBy = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>(); // Paper - Perf: optimise map impl
+         private final Set<ServerPlayerConnection> canvas$refusedBy = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>(); // Canvas - keep a canceled track refused
++        // Canvas start - rest tracked entities nothing changed for
++        private final boolean canvas$mayRest;
++        public boolean canvas$resting;
++        private boolean canvas$settled;
++        private int canvas$viewerChanges;
++        private int canvas$tickViewerChanges;
++        private int canvas$restViewerChanges;
++        private double canvas$range;
++        private long canvas$chunkUpdates;
++        private long canvas$chunkWakes;
++        private long canvas$regionWakes;
++        private long canvas$createdChunks;
++        private boolean canvas$restSendsChanges;
++        private int canvas$skippedChanges;
++        private int canvas$changeBudget;
++        private @Nullable Vec3 canvas$position;
++        private @Nullable Vec3 canvas$movement;
++        private float canvas$yRot;
++        private float canvas$xRot;
++        private boolean canvas$onGround;
++        private @Nullable List<Entity> canvas$passengers;
++        private @Nullable FullChunkStatus canvas$chunkStatus;
++        private boolean canvas$visibleByDefault;
++        // Canvas end - rest tracked entities nothing changed for
+ 
+         // Paper start - optimise entity tracker
+         private long lastChunkUpdate = -1L;
+@@ -1269,8 +1314,10 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+ 
+         @Override
+         public final void moonrise$tick(final ca.spottedleaf.moonrise.common.misc.NearbyPlayers.TrackedChunk chunk) {
++            this.canvas$tickViewerChanges = this.canvas$viewerChanges; // Canvas - rest tracked entities nothing changed for
+             if (chunk == null) {
+                 this.moonrise$clearPlayers();
++                this.canvas$settled = this.canvas$mayRest; // Canvas - rest tracked entities nothing changed for
+                 return;
+             }
+ 
+@@ -1278,6 +1325,7 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+ 
+             if (players == null) {
+                 this.moonrise$clearPlayers();
++                this.canvas$settled = this.canvas$mayRest; // Canvas - rest tracked entities nothing changed for
+                 return;
+             }
+ 
+@@ -1289,9 +1337,11 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+ 
+             final ServerPlayer[] playersRaw = players.getRawDataUnchecked();
+ 
++            boolean settled = this.canvas$mayRest; // Canvas - rest tracked entities nothing changed for
+             for (int i = 0, len = players.size(); i < len; ++i) {
+                 final ServerPlayer player = playersRaw[i];
+                 this.updatePlayer(player);
++                settled = settled && this.canvas$settles(player); // Canvas - rest tracked entities nothing changed for
+             }
+ 
+             if (lastChunkUpdate != currChunkUpdate || lastTrackedChunk != chunk) {
+@@ -1302,16 +1352,17 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+                         this.removePlayer(player);
+                     }
+                 }
+-                if (!this.canvas$refusedBy.isEmpty()) { // Canvas - keep a canceled track refused
+-                    this.canvas$refusedBy.removeIf(conn -> !players.contains(conn.getPlayer()));
++                if (!this.canvas$refusedBy.isEmpty() && this.canvas$refusedBy.removeIf(conn -> !players.contains(conn.getPlayer()))) { // Canvas - keep a canceled track refused // Canvas - rest tracked entities nothing changed for
++                    ++this.canvas$viewerChanges; // Canvas - rest tracked entities nothing changed for
+                 }
+             }
++            this.canvas$settled = settled; // Canvas - rest tracked entities nothing changed for
+         }
+ 
+         @Override
+         public final void moonrise$removeNonTickThreadPlayers() {
+-            if (!this.canvas$refusedBy.isEmpty()) { // Canvas - keep a canceled track refused
+-                this.canvas$refusedBy.removeIf(conn -> !ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(conn.getPlayer()));
++            if (!this.canvas$refusedBy.isEmpty() && this.canvas$refusedBy.removeIf(conn -> !ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(conn.getPlayer()))) { // Canvas - keep a canceled track refused // Canvas - rest tracked entities nothing changed for
++                ++this.canvas$viewerChanges; // Canvas - rest tracked entities nothing changed for
+             }
+             boolean foundToRemove = false;
+             for (final ServerPlayerConnection conn : this.seenBy) {
+@@ -1337,7 +1388,12 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+         public final void moonrise$clearPlayers() {
+             this.lastChunkUpdate = -1;
+             this.lastTrackedChunk = null;
+-            this.canvas$refusedBy.clear(); // Canvas - keep a canceled track refused
++            // Canvas start - rest tracked entities nothing changed for
++            if (!this.canvas$refusedBy.isEmpty()) {
++                this.canvas$refusedBy.clear(); // Canvas - keep a canceled track refused
++                ++this.canvas$viewerChanges;
++            }
++            // Canvas end - rest tracked entities nothing changed for
+             if (this.seenBy.isEmpty()) {
+                 return;
+             }
+@@ -1358,7 +1414,109 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+             this.entity = entity;
+             this.range = range;
+             this.lastSectionPos = SectionPos.of(entity);
++            this.canvas$mayRest = entity instanceof net.minecraft.world.entity.Interaction || entity instanceof net.minecraft.world.entity.Display; // Canvas - rest tracked entities nothing changed for
++        }
++
++        // Canvas start - rest tracked entities nothing changed for
++        public boolean canvas$keepsResting(final ca.spottedleaf.moonrise.common.misc.NearbyPlayers nearbyPlayers) {
++            final ca.spottedleaf.moonrise.common.misc.NearbyPlayers.TrackedChunk chunk = this.canvas$trackedChunk;
++            final Entity entity = this.entity;
++            if (this.canvas$viewerChanges == this.canvas$restViewerChanges
++                && this.canvas$trackedChunkOwner == nearbyPlayers
++                && nearbyPlayers.canvas$wakes() == this.canvas$regionWakes
++                && (chunk == null
++                    ? nearbyPlayers.canvas$createdChunks() == this.canvas$createdChunks
++                    : !chunk.canvas$isRemoved() && chunk.getUpdateCount() == this.canvas$chunkUpdates && chunk.canvas$wakes() == this.canvas$chunkWakes)
++                && entity.position() == this.canvas$position
++                && entity.getDeltaMovement() == this.canvas$movement
++                && entity.getYRot() == this.canvas$yRot
++                && entity.getXRot() == this.canvas$xRot
++                && entity.onGround() == this.canvas$onGround
++                && entity.getPassengers() == this.canvas$passengers
++                && entity.getVehicle() == null
++                && !entity.needsSync
++                && !entity.syncPosition
++                && !entity.syncVelocity
++                && entity.visibleByDefault == this.canvas$visibleByDefault
++                && !entity.getRequiresPrecisePosition()
++                && ((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)entity).moonrise$getChunkStatus() == this.canvas$chunkStatus
++                && !entity.getEntityData().isDirty()) {
++                if (!this.canvas$restSendsChanges) {
++                    return true;
++                }
++                if (this.canvas$skippedChanges < this.canvas$changeBudget) {
++                    ++this.canvas$skippedChanges;
++                    return true;
++                }
++            }
++
++            this.canvas$resting = false;
++            if (this.canvas$skippedChanges != 0) {
++                this.serverEntity.canvas$skip(this.canvas$skippedChanges, this.canvas$position);
++                this.canvas$skippedChanges = 0;
++            }
++            return false;
++        }
++
++        public void canvas$tryRest(final boolean sendsChanges) {
++            final boolean settled = this.canvas$settled;
++            this.canvas$settled = false;
++            final Entity entity = this.entity;
++            if (!settled
++                || this.canvas$viewerChanges != this.canvas$tickViewerChanges
++                || entity.getVehicle() != null
++                || !entity.getPassengers().isEmpty()
++                || entity.needsSync
++                || entity.syncPosition
++                || entity.syncVelocity
++                || entity.getRequiresPrecisePosition()
++                || entity.getEntityData().isDirty()) {
++                return;
++            }
++
++            int budget = 0;
++            if (sendsChanges) {
++                budget = this.serverEntity.canvas$restBudget();
++                if (budget <= 0) {
++                    return;
++                }
++            }
++
++            final ca.spottedleaf.moonrise.common.misc.NearbyPlayers owner = this.canvas$trackedChunkOwner;
++            final ca.spottedleaf.moonrise.common.misc.NearbyPlayers.TrackedChunk chunk = this.canvas$trackedChunk;
++            if (owner == null) {
++                return;
++            }
++
++            this.canvas$restViewerChanges = this.canvas$viewerChanges;
++            this.canvas$regionWakes = owner.canvas$wakes();
++            this.canvas$createdChunks = owner.canvas$createdChunks();
++            this.canvas$chunkUpdates = chunk == null ? 0L : chunk.getUpdateCount();
++            this.canvas$chunkWakes = chunk == null ? 0L : chunk.canvas$wakes();
++            this.canvas$position = entity.position();
++            this.canvas$movement = entity.getDeltaMovement();
++            this.canvas$yRot = entity.getYRot();
++            this.canvas$xRot = entity.getXRot();
++            this.canvas$onGround = entity.onGround();
++            this.canvas$passengers = entity.getPassengers();
++            this.canvas$visibleByDefault = entity.visibleByDefault;
++            this.canvas$chunkStatus = ((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)entity).moonrise$getChunkStatus();
++            this.canvas$restSendsChanges = sendsChanges;
++            this.canvas$changeBudget = budget;
++            this.canvas$resting = true;
++        }
++
++        private boolean canvas$settles(final ServerPlayer player) {
++            final ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.PlayerChunkLoaderData loader = ((ca.spottedleaf.moonrise.patches.chunk_system.player.ChunkSystemServerPlayer)player).moonrise$getChunkLoader();
++            if (loader == null) {
++                return false;
++            }
++
++            final io.papermc.paper.configuration.WorldConfiguration.Entities.TrackingRangeY trackingRangeY = ChunkMap.this.level.paperConfig().entities.trackingRangeY;
++            final double rangeY = trackingRangeY.enabled ? trackingRangeY.get(this.entity, -1) : -1.0;
++            return loader.canvas$viewer.settles(this.entity.getX(), this.entity.getY(), this.entity.getZ(), this.canvas$range, rangeY);
+         }
++        // Canvas end - rest tracked entities nothing changed for
+ 
+         @Override
+         public boolean equals(final Object obj) {
+@@ -1403,12 +1561,13 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+         public void removePlayer(final ServerPlayer player) {
+             org.spigotmc.AsyncCatcher.catchOp("player tracker clear"); // Spigot
+             if (this.seenBy.remove(player.connection)) {
++                ++this.canvas$viewerChanges; // Canvas - rest tracked entities nothing changed for
+                 this.serverEntity.removePairing(player);
+                 if (this.seenBy.isEmpty()) {
+                     ChunkMap.this.level.debugSynchronizers().dropEntity(this.entity);
+                 }
+-            } else if (!this.canvas$refusedBy.isEmpty()) { // Canvas - keep a canceled track refused
+-                this.canvas$refusedBy.remove(player.connection);
++            } else if (!this.canvas$refusedBy.isEmpty() && this.canvas$refusedBy.remove(player.connection)) { // Canvas - keep a canceled track refused // Canvas - rest tracked entities nothing changed for
++                ++this.canvas$viewerChanges; // Canvas - rest tracked entities nothing changed for
+             }
+         }
+ 
+@@ -1427,6 +1586,7 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+                     visibleRange = Math.min(visibleRange, player.entityInteractionRange() + interaction.getBbWidth() + CANVAS_INTERACTION_TRACKING_MARGIN);
+                 }
+                 // Canvas end - track a bare interaction hitbox only near the viewer's reach
++                this.canvas$range = visibleRange; // Canvas - rest tracked entities nothing changed for
+                 double distanceSquared = deltaToPlayerX * deltaToPlayerX + deltaToPlayerZ * deltaToPlayerZ; // Paper
+                 double rangeSquared = visibleRange * visibleRange;
+                 // Paper start - Configurable entity tracking range by Y
+@@ -1457,6 +1617,7 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+                         // Paper start - entity tracking events
+                         if (io.papermc.paper.event.player.PlayerTrackEntityEvent.getHandlerList().getRegisteredListeners().length == 0 || new io.papermc.paper.event.player.PlayerTrackEntityEvent(player.getBukkitEntity(), this.entity.getBukkitEntity()).callEvent()) {
+                         this.seenBy.add(player.connection); // Canvas - keep a canceled track refused
++                        ++this.canvas$viewerChanges; // Canvas - rest tracked entities nothing changed for
+                         this.serverEntity.addPairing(player);
+                         if (this.seenBy.size() == 1) {
+                             ChunkMap.this.level.debugSynchronizers().registerEntity(this.entity);
+@@ -1466,6 +1627,7 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+                         this.serverEntity.onPlayerAdd(); // Paper - fix desync when a player is added to the tracker
+                         } else {
+                             this.canvas$refusedBy.add(player.connection); // Canvas - keep a canceled track refused
++                            ++this.canvas$viewerChanges; // Canvas - rest tracked entities nothing changed for
+                         }
+                         // Paper end - entity tracking events
+                     }
+diff --git a/net/minecraft/server/level/ServerEntity.java b/net/minecraft/server/level/ServerEntity.java
+index bc8b630255c73eaa0d07222c80fb90cddf1cdf55..000cfab5a973031287bd8f81fde7b1c77c938ba9 100644
+--- a/net/minecraft/server/level/ServerEntity.java
++++ b/net/minecraft/server/level/ServerEntity.java
+@@ -355,6 +355,86 @@ public class ServerEntity {
+     }
+     // Canvas end - skip movement packets that change nothing on the client
+ 
++    // Canvas start - rest tracked entities nothing changed for
++    /**
++     * How many of the next calls send nothing and change only the counters, while the entity keeps its position,
++     * rotation, movement, data, riders and flags: none when it is not settled that far. The call whose position update
++     * would push the teleport delay past its period, and send the forced full sync, is never one of them.
++     */
++    public int canvas$restBudget() {
++        final Entity entity = this.entity;
++        if (this.interpolationTracker != InterpolationTracker.NO_OP
++            || ((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)entity).moonrise$isHardColliding()
++            || entity instanceof ItemFrame
++            || entity instanceof AbstractArrow
++            || entity instanceof AbstractMinecart
++            || entity instanceof LivingEntity
++            || this.forceStateResync
++            || this.wasRiding
++            || this.wasOnGround != entity.onGround()
++            || this.canvas$settledUpdates < CANVAS_SETTLED_UPDATES
++            || entity.getMoveSimulationType() != net.minecraft.world.entity.MoveSimulationType.AUTHORITATIVE_SIDE
++            || !entity.getPassengers().isEmpty()
++            || !this.lastPassengers.isEmpty()
++            || this.teleportDelay > FORCED_TELEPORT_PERIOD) {
++            return 0;
++        }
++
++        final Vec3 position = entity.trackingPosition();
++        final Vec3 base = this.positionCodec.base;
++        if (position.x != base.x || position.y != base.y || position.z != base.z
++            || Mth.packDegrees(entity.getYRot()) != this.lastSentYRot
++            || Mth.packDegrees(entity.getXRot()) != this.lastSentXRot
++            || Mth.packDegrees(entity.getYHeadRot()) != this.lastSentYHeadRot
++            || this.lastSentYHeadRot != this.canvas$lastSeenYHeadRot) {
++            return 0;
++        }
++
++        if (this.trackDelta) {
++            final Vec3 movement = entity.getDeltaMovement();
++            final double diff = movement.distanceToSqr(this.lastSentMovement);
++            if (diff > 1.0E-7 || diff > 0.0 && movement.lengthSqr() == 0.0) {
++                return 0;
++            }
++        }
++
++        final long tick = this.tickCount;
++        final long period = this.canvas$period();
++        long budget = Integer.MAX_VALUE - tick;
++        if (period != 0L) {
++            final long firstUpdate = Math.floorDiv(tick + period - 1L, period) * period;
++            budget = Math.min(budget, firstUpdate + (FORCED_TELEPORT_PERIOD - this.teleportDelay) * period - tick);
++        }
++        return (int)Math.clamp(budget, 0L, Integer.MAX_VALUE);
++    }
++
++    /**
++     * Advances the counters past calls skipped while their entity rested at the given position, as
++     * {@link #canvas$restBudget()} allowed. Runs as the rest ends, before the call that sees what woke it.
++     */
++    public void canvas$skip(final int calls, final Vec3 restingPosition) {
++        final long first = this.tickCount;
++        final long period = this.canvas$period();
++        if (period != 0L) {
++            final long last = first + calls - 1L;
++            this.teleportDelay += (int)(Math.floorDiv(last, period) - Math.floorDiv(first - 1L, period));
++            long heartbeat = period;
++            while (heartbeat % FORCED_POS_UPDATE_PERIOD != 0L) {
++                heartbeat += period;
++            }
++            if (Math.floorDiv(last, heartbeat) != Math.floorDiv(first - 1L, heartbeat)) {
++                this.positionCodec.setBase(restingPosition);
++            }
++        }
++        this.tickCount += calls;
++        this.canvas$settledUpdates = Math.min(this.canvas$settledUpdates + calls, CANVAS_SETTLED_UPDATES);
++    }
++
++    private long canvas$period() {
++        return this.updateInterval == UpdateInterval.NEVER ? 0L : this.updateInterval.nextInterval(0);
++    }
++    // Canvas end - rest tracked entities nothing changed for
++
+     private @Nullable MovementPacket<ClientGamePacketListener> createMovePacket(
+         final PositionPath position, final byte yRotn, final byte xRotn, final boolean shouldSendPosition, final boolean shouldSendRotation
+     ) {
