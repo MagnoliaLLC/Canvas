@@ -395,7 +395,7 @@
              }
          }
  
-@@ -5633,11 +_,21 @@
+@@ -5725,11 +_,21 @@
          return true;
      }
  
@@ -417,7 +417,7 @@
          final List<Entity> indirectPassengers = (List<Entity>)this.getIndirectPassengers();
          final List<ChunkPos> positions = new java.util.ArrayList<>(indirectPassengers.size() + 1);
  
-@@ -5710,6 +_,19 @@
+@@ -5802,6 +_,19 @@
          );
      }
  
@@ -437,7 +437,7 @@
      // Folia & Canvas end - region threading
      public @Nullable Entity teleport(TeleportTransition transition) { // Paper - remove param final
          // Folia start - region threading
-@@ -5924,6 +_,7 @@
+@@ -6016,6 +_,7 @@
  
      public void placePortalTicket(final BlockPos ticketPosition) {
          if (this.level() instanceof ServerLevel serverLevel) {
