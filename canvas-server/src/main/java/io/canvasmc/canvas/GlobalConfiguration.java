@@ -63,7 +63,6 @@ public class GlobalConfiguration extends Part {
 
     @UnknownNullability("nonnull after reload is called")
     private static GlobalConfiguration INSTANCE;
-    private static ClientV2.BuildStatus BUILD_STATUS = ClientV2.BuildStatus.UNKNOWN;
     private static boolean ENABLE_FASTER_RANDOM = true;
 
     static {
@@ -115,7 +114,6 @@ public class GlobalConfiguration extends Part {
 
                         return buildStatus;
                     }).thenAccept(buildStatus -> RegionizedServer.getInstance().addTask(() -> {
-                        BUILD_STATUS = buildStatus;
                         switch (buildStatus) {
                             case UNKNOWN -> broadcast("Running unknown build channel, proceed with caution", WARN);
                             case EXPERIMENTAL ->
@@ -260,10 +258,6 @@ public class GlobalConfiguration extends Part {
 
     public static GlobalConfiguration getInstance() {
         return INSTANCE;
-    }
-
-    public static ClientV2.BuildStatus getBuildStatus() {
-        return BUILD_STATUS;
     }
 
     public static RandomSource createFastRandom() {
@@ -578,7 +572,7 @@ public class GlobalConfiguration extends Part {
         option("tileEntitySnapshotCreation").docs("Enables creation of tile entity snapshots on retrieving blockstates");
     }
 
-    public String serverModName = "Filter";
+    public String serverModName = ServerBuildInfo.buildInfo().brandName();
 
     public boolean displayWorldLoadScreenForCrossRegionTransfers = true;
 

@@ -145,7 +145,7 @@
 -            "Brand-Name" to "Paper",
 +            "Specification-Vendor" to "Canvas Team",
 +            "Brand-Id" to "canvasmc:canvas",
-+            "Brand-Name" to "Canvas",
++            "Brand-Name" to "Filter",
 +            "Brand-Vendor" to "Canvas Team",
 +            "Brand-Website" to "https://canvasmc.io",
              "Build-Number" to (build ?: ""),
