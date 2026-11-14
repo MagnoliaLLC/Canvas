@@ -30935,10 +30935,10 @@ index 60c66dba6c868578a49f468da70c1abe973f64f2..3b20494c7d3432e167ede4121b7a02ca
                          level.onReputationEvent(ReputationEventType.ZOMBIE_VILLAGER_CURED, player, villager);
                      }
 diff --git a/net/minecraft/world/entity/npc/CatSpawner.java b/net/minecraft/world/entity/npc/CatSpawner.java
-index aedd0a9b7dcfe15d0230ba09a1baf386563c71c6..e9b4234a330ac36f2ea33ec3173fca62e03a88b0 100644
+index aedd0a9b7dcfe15d0230ba09a1baf386563c71c6..44bf2165508a9dc7359eb597ac8da538bd9a6504 100644
 --- a/net/minecraft/world/entity/npc/CatSpawner.java
 +++ b/net/minecraft/world/entity/npc/CatSpawner.java
-@@ -17,14 +17,17 @@ import net.minecraft.world.phys.AABB;
+@@ -17,14 +17,19 @@ import net.minecraft.world.phys.AABB;
  
  public class CatSpawner implements CustomSpawner {
      private static final int TICK_DELAY = 1200;
@@ -30952,6 +30952,8 @@ index aedd0a9b7dcfe15d0230ba09a1baf386563c71c6..e9b4234a330ac36f2ea33ec3173fca62
 -            this.nextTick = 1200;
 -            Player player = level.getRandomPlayer();
 +        // Folia start - region threading
++        final int localPlayers = level.getLocalPlayers().size(); // Canvas - region threading
++        if (localPlayers < 1 || level.getRandom().nextInt(Math.max(level.players().size(), localPlayers)) >= localPlayers) return; // Canvas - region threading - take this region's share of the world's spawner ticks
 +        final io.papermc.paper.threadedregions.RegionizedWorldData worldData = level.getCurrentWorldData();
 +        worldData.catSpawnerNextTick--;
 +        if (worldData.catSpawnerNextTick <= 0) {
@@ -31014,10 +31016,10 @@ index ace1dd209f22b6662454f84695b05492d29287d3..640bb40c4b7c2cbde933e1f9aba46f82
              });
          }
 diff --git a/net/minecraft/world/entity/npc/wanderingtrader/WanderingTraderSpawner.java b/net/minecraft/world/entity/npc/wanderingtrader/WanderingTraderSpawner.java
-index 625996a7e1c6ec51312d25d7a94a08caccba32de..7514addc399e122504eaf93a2eff83effdd3d006 100644
+index 625996a7e1c6ec51312d25d7a94a08caccba32de..93600a5a1c2de245a2239329cf9d2e8f11ab0943 100644
 --- a/net/minecraft/world/entity/npc/wanderingtrader/WanderingTraderSpawner.java
 +++ b/net/minecraft/world/entity/npc/wanderingtrader/WanderingTraderSpawner.java
-@@ -30,30 +30,29 @@ public class WanderingTraderSpawner implements CustomSpawner {
+@@ -30,30 +30,31 @@ public class WanderingTraderSpawner implements CustomSpawner {
      private static final int SPAWN_CHANCE_INCREASE = 25;
      private static final int SPAWN_ONE_IN_X_CHANCE = 10;
      private static final int NUMBER_OF_SPAWN_ATTEMPTS = 10;
@@ -31037,6 +31039,8 @@ index 625996a7e1c6ec51312d25d7a94a08caccba32de..7514addc399e122504eaf93a2eff83ef
  
      @Override
      public void tick(final ServerLevel level, final boolean spawnEnemies) {
++        final int localPlayers = level.getLocalPlayers().size(); // Canvas - region threading
++        if (localPlayers < 1 || level.getRandom().nextInt(Math.max(level.players().size(), localPlayers)) >= localPlayers) return; // Canvas - region threading - take this region's share of the world's spawner ticks
 +        WanderingTraderData data = this.getTraderData(); // Folia - moved up
          // Paper start - Add Wandering Trader spawn rate config options
 -        if (this.tickDelay == Integer.MIN_VALUE) {
@@ -31058,7 +31062,7 @@ index 625996a7e1c6ec51312d25d7a94a08caccba32de..7514addc399e122504eaf93a2eff83ef
                  int spawnDelay = data.spawnDelay() - level.paperConfig().entities.spawning.wanderingTrader.spawnMinuteLength;
                  data.setSpawnDelay(spawnDelay);
                  if (spawnDelay <= 0) {
-@@ -68,20 +67,23 @@ public class WanderingTraderSpawner implements CustomSpawner {
+@@ -68,20 +69,23 @@ public class WanderingTraderSpawner implements CustomSpawner {
                          }
                      }
                  }
@@ -34372,7 +34376,7 @@ index 25dff45d0ee231fc525b50b7b4efa3cd1afc3936..293b5aad12fd30a689e830922bdf2cdc
      }
  
 diff --git a/net/minecraft/world/level/levelgen/PatrolSpawner.java b/net/minecraft/world/level/levelgen/PatrolSpawner.java
-index 002b721958e2b990d6bd902a562338e55ceb2f54..650ecfafda8fcf7d5e2476244bf4cd6f10cdcc3a 100644
+index 002b721958e2b990d6bd902a562338e55ceb2f54..76003584e4fbc775ce128c8e721c75d80436b040 100644
 --- a/net/minecraft/world/level/levelgen/PatrolSpawner.java
 +++ b/net/minecraft/world/level/levelgen/PatrolSpawner.java
 @@ -14,7 +14,7 @@ import net.minecraft.world.level.block.state.BlockState;
@@ -34384,7 +34388,7 @@ index 002b721958e2b990d6bd902a562338e55ceb2f54..650ecfafda8fcf7d5e2476244bf4cd6f
  
      @Override
      public void tick(final ServerLevel level, final boolean spawnEnemies) {
-@@ -22,14 +22,15 @@ public class PatrolSpawner implements CustomSpawner {
+@@ -22,14 +22,16 @@ public class PatrolSpawner implements CustomSpawner {
          if (spawnEnemies) {
              if (level.getGameRules().get(GameRules.SPAWN_PATROLS)) {
                  RandomSource random = level.getRandom();
@@ -34396,13 +34400,14 @@ index 002b721958e2b990d6bd902a562338e55ceb2f54..650ecfafda8fcf7d5e2476244bf4cd6f
                  if (playerCount < 1) {
                      return;
                  }
++                if (random.nextInt(Math.max(level.players().size(), playerCount)) >= playerCount) return; // Canvas - region threading - take this region's share of the world's spawner ticks
  
 -                net.minecraft.server.level.ServerPlayer player = level.players().get(random.nextInt(playerCount));
 +                net.minecraft.server.level.ServerPlayer player = level.getLocalPlayers().get(random.nextInt(playerCount)); // Folia - region threading
                  if (player.isSpectator()) {
                      return;
                  }
-@@ -39,8 +40,8 @@ public class PatrolSpawner implements CustomSpawner {
+@@ -39,8 +41,8 @@ public class PatrolSpawner implements CustomSpawner {
                      --player.patrolSpawnDelay;
                      patrolSpawnDelay = player.patrolSpawnDelay;
                  } else {
@@ -34413,7 +34418,7 @@ index 002b721958e2b990d6bd902a562338e55ceb2f54..650ecfafda8fcf7d5e2476244bf4cd6f
                  }
                  if (patrolSpawnDelay <= 0) {
                      long dayCount;
-@@ -56,7 +57,7 @@ public class PatrolSpawner implements CustomSpawner {
+@@ -56,7 +58,7 @@ public class PatrolSpawner implements CustomSpawner {
                      if (level.paperConfig().entities.behavior.pillagerPatrols.spawnDelay.perPlayer) {
                          player.patrolSpawnDelay += level.paperConfig().entities.behavior.pillagerPatrols.spawnDelay.ticks + random.nextInt(1200);
                      } else {
