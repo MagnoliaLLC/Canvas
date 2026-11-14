@@ -1,0 +1,12 @@
+--- a/net/minecraft/world/level/block/SmallDripleafBlock.java
++++ b/net/minecraft/world/level/block/SmallDripleafBlock.java
+@@ -124,7 +_,8 @@
+             BigDripleafBlock.placeWithRandomHeight(level, random, pos, state.getValue(FACING));
+         } else {
+             BlockPos belowPos = pos.below();
+-            this.performBonemeal(level, random, belowPos, level.getBlockState(belowPos), source);
++            BlockState belowState = level.getBlockState(belowPos); // Canvas - fix small dripleaf growth
++            if (belowState.is(this)) this.performBonemeal(level, random, belowPos, belowState, source); // Canvas - fix small dripleaf growth
+         }
+     }
+ 
