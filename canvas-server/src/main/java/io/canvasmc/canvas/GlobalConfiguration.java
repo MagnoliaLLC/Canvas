@@ -427,17 +427,6 @@ public class GlobalConfiguration extends Part {
             FILTERED
         }
 
-        {
-            option("optimizeTreasureMapLocating")
-                .docs(
-                    "Treasure map locating is a very expensive operation, leading to most production servers",
-                    "disabling it. This option tries to optimize the treasure map initial search to make this",
-                    "less expensive on item creation"
-                );
-        }
-
-        public boolean optimizeTreasureMapLocating = true;
-
         public VisualViewDistance visualViewDistance = new VisualViewDistance();
         public static class VisualViewDistance extends Part {
 

@@ -8,15 +8,86 @@
  
      public ChunkGenerator(final BiomeSource biomeSource) {
          this(biomeSource, biome -> biome.value().getGenerationSettings());
-@@ -238,7 +_,7 @@
+@@ -237,12 +_,22 @@
+         if (!randomSpreadEntries.isEmpty()) {
              int chunkOriginX = SectionPos.blockToSectionCoord(pos.getX());
              int chunkOriginZ = SectionPos.blockToSectionCoord(pos.getZ());
++            final net.minecraft.world.level.border.@Nullable WorldBorder worldBorder = level.paperConfig().environment.locateStructuresOutsideWorldBorder ? null : level.getWorldBorder(); // Canvas - bound treasure maps to world border
  
--            for (int radius = 0; radius <= maxSearchRadius; radius++) {
-+            for (int radius = (io.canvasmc.canvas.GlobalConfiguration.getInstance().chunkSystem.optimizeTreasureMapLocating ? maxSearchRadius : 0); radius <= maxSearchRadius; radius++) { // Canvas - optimize treasure map locating - just search the largest radius to avoid spamming iterations
+             for (int radius = 0; radius <= maxSearchRadius; radius++) {
                  boolean foundSomething = false;
++                boolean insideWorldBorder = worldBorder == null; // Canvas - bound treasure maps to world border
  
                  for (Entry<StructurePlacement, Set<Holder<Structure>>> entry : randomSpreadEntries) {
+                     RandomSpreadStructurePlacement randomPlacement = (RandomSpreadStructurePlacement)entry.getKey();
++                    // Canvas start - bound treasure maps to world border
++                    if (worldBorder != null) {
++                        if (isRingOutsideWorldBorder(worldBorder, chunkOriginX, chunkOriginZ, radius, randomPlacement.spacing())) {
++                            continue;
++                        }
++                        insideWorldBorder = true;
++                    }
++                    // Canvas end - bound treasure maps to world border
+                     Pair<BlockPos, Holder<Structure>> structurePos = getNearestGeneratedStructure(
+                         entry.getValue(),
+                         level,
+@@ -252,7 +_,8 @@
+                         radius,
+                         createReference,
+                         generatorState.getLevelSeed(),
+-                        randomPlacement
++                        randomPlacement,
++                        worldBorder // Canvas - bound treasure maps to world border
+                     );
+                     if (structurePos != null) {
+                         foundSomething = true;
+@@ -267,12 +_,28 @@
+                 if (foundSomething) {
+                     return nearest;
+                 }
++                // Canvas start - bound treasure maps to world border
++                if (!insideWorldBorder) {
++                    break;
++                }
++                // Canvas end - bound treasure maps to world border
+             }
+         }
+ 
+         return nearest;
+     }
+ 
++    // Canvas start - bound treasure maps to world border
++    private static boolean isRingOutsideWorldBorder(final net.minecraft.world.level.border.WorldBorder worldBorder, final int chunkOriginX, final int chunkOriginZ, final int radius, final int spacing) {
++        int gridX = Math.floorDiv(chunkOriginX, spacing);
++        int gridZ = Math.floorDiv(chunkOriginZ, spacing);
++        return SectionPos.sectionToBlockCoord((gridX + radius) * spacing, 15) >= worldBorder.getMaxX()
++            && SectionPos.sectionToBlockCoord((gridX - radius + 1) * spacing - 1, 15) < worldBorder.getMinX()
++            && SectionPos.sectionToBlockCoord((gridZ + radius) * spacing, 15) >= worldBorder.getMaxZ()
++            && SectionPos.sectionToBlockCoord((gridZ - radius + 1) * spacing - 1, 15) < worldBorder.getMinZ();
++    }
++    // Canvas end - bound treasure maps to world border
++
+     private @Nullable Pair<BlockPos, Holder<Structure>> getNearestGeneratedStructure(
+         final Set<Holder<Structure>> structures,
+         final ServerLevel level,
+@@ -316,7 +_,8 @@
+         final int radius,
+         final boolean createReference,
+         final long seed,
+-        final RandomSpreadStructurePlacement config
++        final RandomSpreadStructurePlacement config,
++        final net.minecraft.world.level.border.@Nullable WorldBorder worldBorder // Canvas - bound treasure maps to world border
+     ) {
+         int spacing = config.spacing();
+ 
+@@ -332,6 +_,7 @@
+                     int sectorX = chunkOriginX + spacing * x;
+                     int sectorZ = chunkOriginZ + spacing * z;
+                     ChunkPos chunkTarget = config.getPotentialStructureChunk(seed, sectorX, sectorZ);
++                    if (worldBorder != null && !worldBorder.isChunkInBounds(chunkTarget.x(), chunkTarget.z())) continue; // Canvas - bound treasure maps to world border
+                     Pair<BlockPos, Holder<Structure>> generating = getStructureGeneratingAt(
+                         structures, level, structureManager, createReference, config, chunkTarget
+                     );
 @@ -646,23 +_,50 @@
          final Level level, final StructureManager structureManager, final MobCategory mobCategory, final BlockPos pos
      ) {
