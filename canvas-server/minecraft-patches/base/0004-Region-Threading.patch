@@ -4523,10 +4523,10 @@ index 0000000000000000000000000000000000000000..6bbd878f80cf9f94c67ba42993b5619b
 +import org.jspecify.annotations.NullMarked;
 diff --git a/io/canvasmc/canvas/threadedregions/world/WorldShutdownThread.java b/io/canvasmc/canvas/threadedregions/world/WorldShutdownThread.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..832cca4b2ab486955cba98cd4ffd5b91c5fe3394
+index 0000000000000000000000000000000000000000..c7378da743a02225235ae308f4d8af8cc7b7eba3
 --- /dev/null
 +++ b/io/canvasmc/canvas/threadedregions/world/WorldShutdownThread.java
-@@ -0,0 +1,239 @@
+@@ -0,0 +1,252 @@
 +package io.canvasmc.canvas.threadedregions.world;
 +
 +import com.google.common.base.Preconditions;
@@ -4590,6 +4590,19 @@ index 0000000000000000000000000000000000000000..832cca4b2ab486955cba98cd4ffd5b91
 +        final List<ThreadedRegionizer.ThreadedRegion<TickRegions.TickRegionData, TickRegions.TickRegionSectionData>>
 +            regions = theWaiter.get();
 +        LOGGER.info("Beginning shutdown of {}", getWorldName());
++
++        // players still on their way into this world will never be placed
++        // now that its regions stopped, so we send them back
++
++        for (final ServerLevel.PendingTeleport pendingTeleport : this.level.removeAllRegionTeleports()) {
++            final net.minecraft.world.entity.Entity.EntityTreeNode passengerTree = pendingTeleport.rootVehicle();
++            if (passengerTree.hasPlayer()) {
++                // this thread passes every ownership check, so the chunk loads of the world it goes back to run on the global tick
++                RegionizedServer.getInstance().addTask(pendingTeleport.placeBack());
++            } else {
++                this.level.pushPendingTeleport(pendingTeleport);
++            }
++        }
 +
 +        // we have to do the following in the following order:
 +
@@ -20522,7 +20535,7 @@ index 6a79944b040307acef3d1c66bd0dacaba514c708..7e7423f494f71903f9358d1005940090
                          )
                  )
 diff --git a/net/minecraft/server/commands/TeleportCommand.java b/net/minecraft/server/commands/TeleportCommand.java
-index 97acb0c6ff95a04405eeebc9835ddb84f818128d..ea8cb0ac55bb7c23de57d1989ffeaf68372ad40f 100644
+index 97acb0c6ff95a04405eeebc9835ddb84f818128d..cc6bd73786e48044a324ea952596ee2632ab079d 100644
 --- a/net/minecraft/server/commands/TeleportCommand.java
 +++ b/net/minecraft/server/commands/TeleportCommand.java
 @@ -164,18 +164,7 @@ public class TeleportCommand {
@@ -20562,7 +20575,7 @@ index 97acb0c6ff95a04405eeebc9835ddb84f818128d..ea8cb0ac55bb7c23de57d1989ffeaf68
 +                        Entity.TELEPORT_FLAG_LOAD_CHUNK | Entity.TELEPORT_FLAG_TELEPORT_PASSENGERS,
 +                        // Canvas start - region threading
 +                        (entity) -> {
-+                            if (lookAt != null) {
++                            if (lookAt != null && entity != null) {
 +                                lookAt.perform(source, entity);
 +                            }
 +                        }
@@ -22727,7 +22740,7 @@ index cc6f4e2845ef1e95c765d65f17c8aa1b06652927..7316c756f1c228eef710219a659c7968
                  foundPlayers.add(player);
              }
 diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
-index f72d28e2824573e9bfbaf65080c35d7964a2094e..4ecc317e3d281538b2b9c760dadeca4eb5a11118 100644
+index f72d28e2824573e9bfbaf65080c35d7964a2094e..c03492aca4402f8346a34a45ac09e8df0ebc7d59 100644
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
 @@ -191,11 +191,11 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
@@ -23011,7 +23024,7 @@ index f72d28e2824573e9bfbaf65080c35d7964a2094e..4ecc317e3d281538b2b9c760dadeca4e
 +    }
 +    // Canvas end - region threading
 +
-+    public record PendingTeleport(Entity.EntityTreeNode rootVehicle, Vec3 to) {}
++    public record PendingTeleport(Entity.EntityTreeNode rootVehicle, Vec3 to, Runnable placeBack) {} // Canvas - region threading
 +    private final it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<PendingTeleport> pendingTeleports = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>();
 +
 +    // Canvas start - region threading
@@ -27852,7 +27865,7 @@ index f1c57bc4310784999784d77678ea88912d6e41db..88b1130f5fdd78c53978e497922b3d69
                  && position.closerThan(input.position(), radius)
                  && (
 diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
-index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fab38caf3f 100644
+index f4d8b5287fb34d8ef37a233f58647ab979f69269..67fecb8bf8bfa6cde4e8c716f5b88c1ef2a1c939 100644
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
 @@ -172,7 +172,7 @@ public abstract class Entity
@@ -28241,10 +28254,15 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
          // Paper end - Forward CraftEntity in teleport command
          try (ProblemReporter.ScopedCollector reporter = new ProblemReporter.ScopedCollector(this.problemPath(), LOGGER)) {
              TagValueOutput entityData = TagValueOutput.createWithContext(reporter, oldEntity.registryAccess());
-@@ -4158,7 +4296,1427 @@ public abstract class Entity
+@@ -4158,198 +4296,1713 @@ public abstract class Entity
          this.portalProcess = oldEntity.portalProcess;
      }
  
+-    public @Nullable Entity teleport(TeleportTransition transition) { // Paper - remove param final
+-        // Paper start - Fix item duplication and teleport issues
+-        if ((!this.isAlive() || !this.valid) && (transition.newLevel() != this.level)) {
+-            LOGGER.warn("Illegal Entity Teleport {} to {}:{}", this, transition.newLevel(), transition.position(), new Throwable());
+-            return null;
 +    // Folia & Canvas start - region threading
 +    public static class EntityTreeNode {
 +        public Entity root;
@@ -28258,7 +28276,24 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +        public EntityTreeNode(final @Nullable EntityTreeNode parent, final Entity root) {
 +            this.parent = parent;
 +            this.root = root;
-+        }
+         }
+-        // Paper end - Fix item duplication and teleport issues
+-        if (this.level() instanceof ServerLevel serverLevel && !this.isRemoved()) {
+-            // CraftBukkit start
+-            PositionMoveRotation absolutePosition = PositionMoveRotation.calculateAbsolute(PositionMoveRotation.of(this), PositionMoveRotation.of(transition), transition.relatives());
+-            Vec3 velocity = absolutePosition.deltaMovement(); // Paper
+-            org.bukkit.Location to = org.bukkit.craftbukkit.util.CraftLocation.toBukkit(absolutePosition.position(), transition.newLevel(), absolutePosition.yRot(), absolutePosition.xRot());
+-            // Paper start - gateway-specific teleport event
+-            final org.bukkit.event.entity.EntityTeleportEvent teleEvent;
+-            if (this.portalProcess != null && this.portalProcess.isSamePortal(((net.minecraft.world.level.block.EndGatewayBlock) Blocks.END_GATEWAY)) && this.level.getBlockEntity(this.portalProcess.getEntryPosition()) instanceof net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity theEndGatewayBlockEntity) {
+-                teleEvent = new com.destroystokyo.paper.event.entity.EntityTeleportEndGatewayEvent(this.getBukkitEntity(), this.getBukkitEntity().getLocation(), to, new org.bukkit.craftbukkit.block.CraftEndGateway(to.getWorld(), theEndGatewayBlockEntity, true));
+-                teleEvent.callEvent();
+-            } else {
+-                teleEvent = org.bukkit.craftbukkit.event.CraftEventFactory.callEntityTeleportEvent(this, to);
+-            }
+-            // Paper end - gateway-specific teleport event
+-            if (teleEvent.isCancelled() || teleEvent.getTo() == null) {
+-                return null;
 +
 +        public EntityTreeNode(final EntityTreeNode parent, final Entity root, final EntityTreeNode[] passengers) {
 +            this.parent = parent;
@@ -28282,7 +28317,12 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +                for (final EntityTreeNode passenger : passengers) {
 +                    ret.add(passenger);
 +                }
-+            }
+             }
+-            if (!to.equals(teleEvent.getTo())) {
+-                to = teleEvent.getTo();
+-                transition = transition.withChangedLocation(to).withVelocity(Vec3.ZERO).withRelatives(Set.of());
+-                // Paper start - Call EntityPortalExitEvent
+-                velocity = Vec3.ZERO;
 +
 +            return ret;
 +        }
@@ -28306,19 +28346,66 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +                }
 +
 +                curr.root.passengers = ImmutableList.copyOf(newPassengers);
-+            }
+             }
+-            if (this.portalProcess != null) { // if in a portal
+-                org.bukkit.entity.Entity bukkitEntity = this.getBukkitEntity();
+-                org.bukkit.util.Vector before = bukkitEntity.getVelocity();
+-                org.bukkit.util.Vector after = org.bukkit.craftbukkit.util.CraftVector.toBukkit(velocity);
+-                org.bukkit.event.entity.EntityPortalExitEvent event = new org.bukkit.event.entity.EntityPortalExitEvent(
+-                    bukkitEntity,
+-                    bukkitEntity.getLocation(), to.clone(),
+-                    before, after
+-                );
+-                event.callEvent();
 +        }
-+
+ 
+-                // Only change the target if actually needed, since we reset relative flags
+-                if (event.isCancelled() || !to.equals(event.getTo()) || !after.equals(event.getAfter())) {
+-                    if (event.isCancelled() || event.getTo() == null) {
+-                        org.bukkit.World toWorld = to.getWorld();
+-                        to = event.getFrom().clone();
+-                        to.setWorld(toWorld); // cancelling doesn't cancel the teleport just the position/velocity (old quirk)
+-                        velocity = org.bukkit.craftbukkit.util.CraftVector.toVec3(event.getBefore());
+-                    } else {
+-                        to = event.getTo().clone();
+-                        velocity = org.bukkit.craftbukkit.util.CraftVector.toVec3(event.getAfter());
 +        public void addTracker() {
 +            for (final EntityTreeNode node : this.getFullTree()) {
 +                if (node.root.moonrise$getTrackedEntity() != null) {
 +                    for (final ServerPlayer player : node.root.level.getLocalPlayers()) {
 +                        node.root.moonrise$getTrackedEntity().updatePlayer(player);
-+                    }
-+                }
-+            }
+                     }
+-                    transition = transition.withChangedLocation(to).withRelatives(Set.of()).withVelocity(velocity);
+                 }
+             }
+-            if (this.isRemoved()) {
+-                return null;
+-            }
+-            // Paper end - Call EntityPortalExitEvent
+-            // CraftBukkit end
+-            ServerLevel newLevel = transition.newLevel();
+-            boolean otherDimension = newLevel.dimension() != serverLevel.dimension();
+-            if (!transition.asPassenger()) {
+-                this.stopRiding();
 +        }
 +
++        public boolean hasPlayer() {
++            for (final EntityTreeNode node : this.getFullTree()) {
++                if (node.root instanceof ServerPlayer) {
++                    return true;
++                }
+             }
+ 
+-            return otherDimension ? this.teleportCrossDimension(serverLevel, newLevel, transition) : this.teleportSameDimension(serverLevel, transition);
+-        } else {
+-            return null;
++            return false;
+         }
+-    }
+ 
+-    private Entity teleportSameDimension(final ServerLevel level, final TeleportTransition transition) {
+-        for (Entity passenger : this.getPassengers()) {
+-            passenger.teleport(this.calculatePassengerTransition(transition, passenger));
 +        public void clearTracker() {
 +            for (final EntityTreeNode node : this.getFullTree()) {
 +                if (node.root.moonrise$getTrackedEntity() != null) {
@@ -28328,23 +28415,37 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +                    }
 +                }
 +            }
-+        }
-+
+         }
+ 
+-        this.teleportSetPosition(PositionMoveRotation.of(transition), transition.relatives());
+-        if (!transition.asPassenger()) {
+-            this.sendTeleportTransitionToPlayers(level, transition);
 +        public void adjustRiders(final boolean teleport) {
 +            this.adjustRiders(teleport, false);
-+        }
-+
+         }
+ 
+-        transition.postTeleportTransition().onTransition(this);
+-        return this;
+-    }
 +        public void adjustRiders(final boolean teleport, final boolean trackVehicleMoveStats) {
 +            final java.util.ArrayDeque<EntityTreeNode> queue = new java.util.ArrayDeque<>();
 +            queue.add(this);
-+
+ 
+-    private @Nullable Entity teleportCrossDimension(final ServerLevel oldLevel, final ServerLevel newLevel, final TeleportTransition transition) {
+-        List<Entity> oldPassengers = this.getPassengers();
+-        List<Entity> newPassengers = new ArrayList<>(oldPassengers.size());
+-        this.ejectPassengers();
 +            EntityTreeNode curr;
 +            while ((curr = queue.pollFirst()) != null) {
 +                final EntityTreeNode[] passengers = curr.passengers;
 +                if (passengers == null) {
 +                    continue;
 +                }
-+
+ 
+-        for (Entity passenger : oldPassengers) {
+-            Entity newPassenger = passenger.teleport(this.calculatePassengerTransition(transition, passenger));
+-            if (newPassenger != null) {
+-                newPassengers.add(newPassenger);
 +                for (final EntityTreeNode passenger : passengers) {
 +                    queue.add(passenger);
 +                    // this is required to fix the riding statistics for players
@@ -28359,21 +28460,42 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +                        player.checkRidingStatistics(player.getX() - x, player.getY() - y, player.getZ() - z);
 +                    }
 +                }
-+            }
-+        }
+             }
+         }
 +    }
-+
+ 
+-        Entity newEntity = this.getType().create(newLevel, EntitySpawnReason.DIMENSION_TRAVEL);
+-        if (newEntity == null) {
+-            return null;
+-        }
 +    public void repositionAllPassengers(final boolean teleport) {
 +        this.makePassengerTree().adjustRiders(teleport, true);
 +    }
-+
+ 
+-        // Paper start - Fix item duplication and teleport issues
+-        if (this instanceof Leashable leashable) {
+-            leashable.dropLeash(); // Paper drop lead
+-        }
+-        // Paper end - Fix item duplication and teleport issues
+-        newEntity.restoreFrom(this);
+-        this.removeAfterChangingDimensions();
+-        newEntity.teleportSetPosition(PositionMoveRotation.of(this), PositionMoveRotation.of(transition), transition.relatives());
+-        if (this.inWorld) newLevel.addDuringTeleport(newEntity); // CraftBukkit - Don't spawn the new entity if the current entity isn't spawned
 +    protected EntityTreeNode makePassengerTree() {
 +        ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(this, "Cannot read passengers off of the main thread");
-+
+ 
+-        for (Entity newPassenger : newPassengers) {
+-            newPassenger.startRiding(newEntity, true, false);
+-        }
 +        final EntityTreeNode root = new EntityTreeNode(null, this);
 +        final java.util.ArrayDeque<EntityTreeNode> queue = new java.util.ArrayDeque<>();
 +        queue.add(root);
-+
+ 
+-        newLevel.resetEmptyTime();
+-        transition.postTeleportTransition().onTransition(newEntity);
+-        this.teleportSpectators(transition, oldLevel);
+-        return newEntity;
+-    }
 +        EntityTreeNode curr;
 +        while ((curr = queue.pollFirst()) != null) {
 +            final Entity vehicle = curr.root;
@@ -28381,7 +28503,12 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +            if (passengers.isEmpty()) {
 +                continue;
 +            }
-+
+ 
+-    protected void teleportSpectators(final TeleportTransition transition, final ServerLevel oldLevel) {
+-        for (ServerPlayer serverPlayer : List.copyOf(oldLevel.players())) {
+-            if (serverPlayer.getCamera() == this) {
+-                serverPlayer.teleport(transition);
+-                serverPlayer.setCamera(null);
 +            final EntityTreeNode[] treePassengers = new EntityTreeNode[passengers.size()];
 +            curr.passengers = treePassengers;
 +
@@ -28389,15 +28516,47 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +                final Entity passenger = passengers.get(i);
 +
 +                queue.addLast(treePassengers[i] = new EntityTreeNode(curr, passenger));
-+            }
-+        }
-+
+             }
+         }
+-    }
+ 
+-    private TeleportTransition calculatePassengerTransition(final TeleportTransition transition, final Entity passenger) {
+-        float passengerYRot = transition.yRot() + (transition.relatives().contains(Relative.Y_ROT) ? 0.0F : passenger.getYRot() - this.getYRot());
+-        float passengerXRot = transition.xRot() + (transition.relatives().contains(Relative.X_ROT) ? 0.0F : passenger.getXRot() - this.getXRot());
+-        // Paper start - reposition entity as rider when teleporting via API call
+-        // This change is mostly required for plugins teleporting entities *every* tick with passengers, specifically player passengers.
+-        // The relative teleport of players, which base their location on the server -> client -> server teleport packet cycle, means player
+-        // positions can quickly be desynced from their rider position, leading to infinitely growing offsets from their vehicle.
+-        // The addition to the teleport transition allows existing callers to this method to not accidentally mutate the entity state.
+-        if (transition.passengerTeleportationMode() == TeleportTransition.PassengerTeleportationMode.POSITION_RIDER) this.positionRider(passenger);
+-        // Paper end - reposition entity as rider when teleporting via API call
+-        Vec3 passengerOffset = passenger.position().subtract(this.position());
+-        Vec3 passengerPos = transition.position()
+-            .add(
+-                transition.relatives().contains(Relative.X) ? 0.0 : passengerOffset.x(),
+-                transition.relatives().contains(Relative.Y) ? 0.0 : passengerOffset.y(),
+-                transition.relatives().contains(Relative.Z) ? 0.0 : passengerOffset.z()
+-            );
+-        return transition.withPosition(passengerPos).withRotation(passengerYRot, passengerXRot).transitionAsPassenger();
 +        return root;
-+    }
-+
+     }
+ 
+-    private void sendTeleportTransitionToPlayers(final ServerLevel serverLevel, final TeleportTransition transition) {
+-        Entity controller = this.getControllingPassenger();
+-        List<Entity> passengers = this.getIndirectPassengersStream().toList();
 +    protected EntityTreeNode detachPassengers() {
 +        ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(this, "Cannot adjust passengers/vehicle off of the main thread");
-+
+ 
+-        for (Entity passenger : passengers) {
+-            if (passenger instanceof ServerPlayer player) {
+-                if (controller != null && player.getId() == controller.getId()) {
+-                    player.connection
+-                        .send(
+-                            ClientboundTeleportEntityPacket.teleport(this.getId(), PositionMoveRotation.of(transition), transition.relatives(), this.onGround)
+-                        );
+-                } else {
+-                    player.connection.send(ClientboundTeleportEntityPacket.teleport(this.getId(), PositionMoveRotation.of(this), Set.of(), this.onGround));
+-                }
 +        final EntityTreeNode root = new EntityTreeNode(null, this);
 +        final java.util.ArrayDeque<EntityTreeNode> queue = new java.util.ArrayDeque<>();
 +        queue.add(root);
@@ -28408,8 +28567,16 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +            final List<Entity> passengers = vehicle.passengers;
 +            if (passengers.isEmpty()) {
 +                continue;
-+            }
-+
+             }
+-        }
+ 
+-        if (!this.type.hasUpdateInterval() || this.getMoveSimulationType() == MoveSimulationType.SERVER_AND_CLIENT) {
+-            serverLevel.getChunkSource()
+-                .sendToTrackingPlayersFiltered(
+-                    this,
+-                    ClientboundTeleportEntityPacket.teleport(this.getId(), PositionMoveRotation.of(this), Set.of(), this.onGround),
+-                    playerx -> !passengers.contains(playerx)
+-                );
 +            vehicle.passengers = ImmutableList.of();
 +
 +            final EntityTreeNode[] treePassengers = new EntityTreeNode[passengers.size()];
@@ -28421,11 +28588,13 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +                passenger.vehicle = null;
 +                queue.addLast(treePassengers[i] = new EntityTreeNode(curr, passenger));
 +            }
-+        }
+         }
 +
 +        return root;
-+    }
-+
+     }
+ 
+-    public void teleportSetPosition(final PositionMoveRotation destination, final Set<Relative> relatives) {
+-        this.teleportSetPosition(PositionMoveRotation.of(this), destination, relatives);
 +    /**
 +     * This flag will perform an async load on the chunks determined by
 +     * the entity's bounding box before teleporting the entity.
@@ -28452,8 +28621,17 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +        final boolean respawning
 +    ) {
 +        destination.addDuringTeleport(this);
-+    }
-+
+     }
+ 
+-    public void teleportSetPosition(final PositionMoveRotation currentValues, final PositionMoveRotation destination, final Set<Relative> relatives) {
+-        PositionMoveRotation absoluteDestination = PositionMoveRotation.calculateAbsolute(currentValues, destination, relatives);
+-        this.setPosRaw(absoluteDestination.position().x, absoluteDestination.position().y, absoluteDestination.position().z);
+-        this.setYRot(absoluteDestination.yRot());
+-        this.setYHeadRot(absoluteDestination.yRot());
+-        this.setXRot(absoluteDestination.xRot());
+-        this.reapplyPosition();
+-        this.setOldPosAndRot();
+-        this.setDeltaMovement(absoluteDestination.deltaMovement());
 +    protected void placeSingleSync(
 +        final ServerLevel originWorld,
 +        final ServerLevel destination,
@@ -28487,7 +28665,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +            teleportHoldId
 +        );
 +
-+        final ServerLevel.PendingTeleport pendingTeleport = new ServerLevel.PendingTeleport(passengerTree, pos);
++        final ServerLevel.PendingTeleport pendingTeleport = new ServerLevel.PendingTeleport(passengerTree, pos, () -> this.placeBackAsync(passengerTree, teleportFlags, respawning, teleportComplete)); // Canvas - region threading
 +        destination.pushPendingTeleport(pendingTeleport);
 +
 +        final Runnable scheduleEntityJoin = () -> {
@@ -28549,8 +28727,9 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +        if (destination.canvas$unloadTicket.isPresent()) {
 +
 +            // destination world is unloading, we need to abort this,
-+            // the shutdown thread will clean up for us
++            // the shutdown thread will clean up anything but players for us
 +
++            this.abortPlaceInAsync(destination, posChunk, teleportHoldId, pendingTeleport, passengerTree);
 +            return;
 +        }
 +
@@ -28674,6 +28853,76 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +        return copy;
 +    }
 +
++    private void abortPlaceInAsync(
++        final ServerLevel destination,
++        final ChunkPos posChunk,
++        final Long teleportHoldId,
++        final ServerLevel.PendingTeleport pendingTeleport,
++        final EntityTreeNode passengerTree
++    ) {
++        destination.moonrise$getChunkTaskScheduler().chunkHolderManager.removeTicketAtLevel(
++            TicketType.TELEPORT_HOLD_TICKET, posChunk,
++            ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkHolderManager.MAX_TICKET_LEVEL,
++            teleportHoldId
++        );
++
++        if (passengerTree.hasPlayer() && destination.removePendingTeleport(pendingTeleport)) {
++            pendingTeleport.placeBack().run();
++        }
++    }
++
++    public final void placeBackAsync(
++        final EntityTreeNode passengerTree,
++        final long teleportFlags,
++        final boolean respawning,
++        final java.util.function.@Nullable Consumer<Entity> teleportComplete
++    ) {
++        io.canvasmc.canvas.util.ServerLocation returnTo = null;
++
++        for (final EntityTreeNode node : passengerTree.getFullTree()) {
++            final io.canvasmc.canvas.threadedregions.world.entities.EntityRegionTransferState transferState = node.root.getRegionTransferState();
++            if (transferState != null) {
++                if (returnTo == null) {
++                    returnTo = transferState.getOrigin();
++                }
++                node.root.clearRegionTransferState();
++            }
++        }
++
++        if (returnTo == null || returnTo.level().canvas$unloadTicket.isPresent()) {
++            final ServerLevel overworld = net.minecraft.server.MinecraftServer.getServer().overworld();
++            final net.minecraft.world.level.storage.LevelData.RespawnData respawnData = overworld.getLevelData().getRespawnData();
++            returnTo = new io.canvasmc.canvas.util.ServerLocation(overworld, Vec3.atBottomCenterOf(respawnData.pos()), respawnData.yaw(), respawnData.pitch());
++        }
++
++        final List<ServerPlayer> players = new java.util.ArrayList<>();
++
++        for (final EntityTreeNode node : passengerTree.getFullTree()) {
++            if (node.root instanceof ServerPlayer player) {
++                player.setServerLevel(returnTo.level());
++                node.root.transform(returnTo.pos(), returnTo.yaw(), returnTo.pitch(), Vec3.ZERO);
++                if (!respawning) {
++                    // the client may already be loading the destination world, the rest
++                    // of the refresh needs the world's region so it waits for placement
++                    player.sendRespawnClientbound(false);
++                    players.add(player);
++                }
++            } else {
++                node.root = node.root.transformForAsyncTeleport(returnTo.level(), returnTo.pos(), returnTo.yaw(), returnTo.pitch(), Vec3.ZERO);
++            }
++        }
++
++        passengerTree.root.placeInAsync(returnTo.level(), returnTo.level(), teleportFlags | TELEPORT_FLAG_LOAD_CHUNK, passengerTree, (Entity placed) -> {
++            for (final ServerPlayer player : players) {
++                player.refresh(false);
++            }
++
++            if (teleportComplete != null) {
++                teleportComplete.accept(placed);
++            }
++        }, respawning);
++    }
++
 +    public final boolean teleportAsync(final TeleportTransition teleportTarget, final long teleportFlags,
 +                                       final java.util.function.Consumer<Entity> teleportComplete) {
 +        final PositionMoveRotation move = PositionMoveRotation.calculateAbsolute(PositionMoveRotation.of(this), PositionMoveRotation.of(teleportTarget), teleportTarget.relatives());
@@ -28744,6 +28993,17 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +            if (isPassenger()) throw new TeleportValidationException("Entity is passenger");
 +        } else {
 +            if (isVehicle() || isPassenger()) throw new TeleportValidationException("Entity is passenger or vehicle");
++        }
++    }
++
++    // checked again once plugins changed the destination, letting go of a transfer state a
++    // plugin left behind first, or it refuses every later teleport of this entity
++    private void canvas$recheckCanTeleportAsync(final ServerLevel destination, final Vec3 pos, final long teleportFlags) {
++        try {
++            canvas$ensureCanTeleportAsync(destination, pos, teleportFlags);
++        } catch (final TeleportValidationException thrown) {
++            clearRegionTransferState();
++            throw thrown;
 +        }
 +    }
 +
@@ -28887,7 +29147,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +            isSameRegion = isIsSameRegion(destination, pos, teleportFlags);
 +
 +            // if plugin did something funky, kill
-+            canvas$ensureCanTeleportAsync(destination, pos, teleportFlags);
++            canvas$recheckCanTeleportAsync(destination, pos, teleportFlags);
 +        }
 +
 +        // verify and set the transfer state
@@ -28998,22 +29258,24 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +        }
 +
 +        final ServerLevel finalLevelDest = destination;
-+        final Vec3 finalPos = pos;
-+        final Float finalYaw = yaw;
-+        final Float finalPitch = pitch;
 +
 +        passengerTree.root.placeInAsync(originWorld, destination, teleportFlags, passengerTree, (entity) -> {
 +            // reset the teleporting fields, we finished the teleport
 +            clearRegionTransferState();
 +
-+            // we need to check if the entity displayed the loading screen
-+            if (entity instanceof ServerPlayer serverPlayer && displayedScreen.isTrue()) {
++            // the entity is sent back instead if the destination unloads, and the completion may move it again
++            final org.bukkit.Location bukkitTo = new org.bukkit.Location(entity.level().getWorld(), entity.getX(), entity.getY(), entity.getZ(), entity.getYRot(), entity.getXRot());
++
++            final boolean placedBack = entity.level() != finalLevelDest;
++
++            // we need to check if the entity displayed the loading screen, the place-back refreshed a sent-back player
++            if (!placedBack && entity instanceof ServerPlayer serverPlayer && displayedScreen.isTrue()) {
 +                serverPlayer.refresh(false);
 +            }
 +
-+            // now we need to run teleport completion for the teleport call
++            // now we need to run teleport completion for the teleport call, with null if the entity was sent back
 +            if (teleportComplete != null) {
-+                teleportComplete.accept(entity);
++                teleportComplete.accept(placedBack ? null : entity);
 +            }
 +
 +            // we run post event afterward because the event can call another
@@ -29025,7 +29287,6 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +                io.canvasmc.canvas.event.EntityPostTeleportAsyncEvent.getHandlerList().getRegisteredListeners().length > 0
 +            ) {
 +                final org.bukkit.Location bukkitFrom = new org.bukkit.Location(originWorld.getWorld(), currPos.x, currPos.y, currPos.z, this.getYRot(), this.getXRot());
-+                final org.bukkit.Location bukkitTo = new org.bukkit.Location(finalLevelDest.getWorld(), finalPos.x, finalPos.y, finalPos.z, finalYaw == null ? 0 : finalYaw, finalPitch == null ? 0 : finalPitch);
 +
 +                new io.canvasmc.canvas.event.EntityPostTeleportAsyncEvent(
 +                    this.getBukkitEntity(), bukkitFrom, bukkitTo, cause
@@ -29504,7 +29765,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +            teleportHoldId
 +        );
 +
-+        final ServerLevel.PendingTeleport beforeFindDestination = new ServerLevel.PendingTeleport(passengerTree, initialPosition);
++        final ServerLevel.PendingTeleport beforeFindDestination = new ServerLevel.PendingTeleport(passengerTree, initialPosition, () -> passengerTree.root.placeBackAsync(passengerTree, Entity.TELEPORT_FLAG_LOAD_CHUNK, false, null)); // Canvas - region threading
 +        originWorld.pushPendingTeleport(beforeFindDestination);
 +
 +        final ca.spottedleaf.concurrentutil.completable.CallbackCompletable<TeleportTransition>
@@ -29547,13 +29808,15 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +                originWorld, finalDestination, Entity.TELEPORT_FLAG_LOAD_CHUNK | (takePassengers ? Entity.TELEPORT_FLAG_TELEPORT_PASSENGERS : 0L),
 +                passengerTree,
 +                (Entity teleported) -> {
-+                    if (info.postTeleportTransition() != null) {
++                    // sent back if the destination unloaded, so it never went through
++                    final boolean placedBack = teleported.level() != finalDestination;
++                    if (!placedBack && info.postTeleportTransition() != null) {
 +                        info.postTeleportTransition().onTransition(teleported);
 +                    }
 +
 +                    clearRegionTransferState();
 +                    if (teleportComplete != null) {
-+                        teleportComplete.accept(teleported);
++                        teleportComplete.accept(placedBack ? null : teleported);
 +                    }
 +
 +                    // check if the entity is the same region, since the teleport complete
@@ -29564,7 +29827,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +                        io.canvasmc.canvas.event.EntityPostPortalAsyncEvent.getHandlerList().getRegisteredListeners().length > 0
 +                    ) {
 +                        new io.canvasmc.canvas.event.EntityPostPortalAsyncEvent(
-+                            this.getBukkitEntity(), originWorld.getWorld(), finalDestination.getWorld(),
++                            this.getBukkitEntity(), originWorld.getWorld(), teleported.level().getWorld(),
 +                            switch (type) {
 +                                case END -> org.bukkit.PortalType.ENDER;
 +                                case NETHER -> org.bukkit.PortalType.NETHER;
@@ -29660,16 +29923,207 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
 +    }
 +
 +    // Folia & Canvas end - region threading
-     public @Nullable Entity teleport(TeleportTransition transition) { // Paper - remove param final
++    public @Nullable Entity teleport(TeleportTransition transition) { // Paper - remove param final
 +        // Folia start - region threading
 +        if (true) {
 +            throw new UnsupportedOperationException("Must use teleportAsync while in region threading");
 +        }
 +        // Folia end - region threading
-         // Paper start - Fix item duplication and teleport issues
-         if ((!this.isAlive() || !this.valid) && (transition.newLevel() != this.level)) {
-             LOGGER.warn("Illegal Entity Teleport {} to {}:{}", this, transition.newLevel(), transition.position(), new Throwable());
-@@ -4370,6 +5928,12 @@ public abstract class Entity
++        // Paper start - Fix item duplication and teleport issues
++        if ((!this.isAlive() || !this.valid) && (transition.newLevel() != this.level)) {
++            LOGGER.warn("Illegal Entity Teleport {} to {}:{}", this, transition.newLevel(), transition.position(), new Throwable());
++            return null;
++        }
++        // Paper end - Fix item duplication and teleport issues
++        if (this.level() instanceof ServerLevel serverLevel && !this.isRemoved()) {
++            // CraftBukkit start
++            PositionMoveRotation absolutePosition = PositionMoveRotation.calculateAbsolute(PositionMoveRotation.of(this), PositionMoveRotation.of(transition), transition.relatives());
++            Vec3 velocity = absolutePosition.deltaMovement(); // Paper
++            org.bukkit.Location to = org.bukkit.craftbukkit.util.CraftLocation.toBukkit(absolutePosition.position(), transition.newLevel(), absolutePosition.yRot(), absolutePosition.xRot());
++            // Paper start - gateway-specific teleport event
++            final org.bukkit.event.entity.EntityTeleportEvent teleEvent;
++            if (this.portalProcess != null && this.portalProcess.isSamePortal(((net.minecraft.world.level.block.EndGatewayBlock) Blocks.END_GATEWAY)) && this.level.getBlockEntity(this.portalProcess.getEntryPosition()) instanceof net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity theEndGatewayBlockEntity) {
++                teleEvent = new com.destroystokyo.paper.event.entity.EntityTeleportEndGatewayEvent(this.getBukkitEntity(), this.getBukkitEntity().getLocation(), to, new org.bukkit.craftbukkit.block.CraftEndGateway(to.getWorld(), theEndGatewayBlockEntity, true));
++                teleEvent.callEvent();
++            } else {
++                teleEvent = org.bukkit.craftbukkit.event.CraftEventFactory.callEntityTeleportEvent(this, to);
++            }
++            // Paper end - gateway-specific teleport event
++            if (teleEvent.isCancelled() || teleEvent.getTo() == null) {
++                return null;
++            }
++            if (!to.equals(teleEvent.getTo())) {
++                to = teleEvent.getTo();
++                transition = transition.withChangedLocation(to).withVelocity(Vec3.ZERO).withRelatives(Set.of());
++                // Paper start - Call EntityPortalExitEvent
++                velocity = Vec3.ZERO;
++            }
++            if (this.portalProcess != null) { // if in a portal
++                org.bukkit.entity.Entity bukkitEntity = this.getBukkitEntity();
++                org.bukkit.util.Vector before = bukkitEntity.getVelocity();
++                org.bukkit.util.Vector after = org.bukkit.craftbukkit.util.CraftVector.toBukkit(velocity);
++                org.bukkit.event.entity.EntityPortalExitEvent event = new org.bukkit.event.entity.EntityPortalExitEvent(
++                    bukkitEntity,
++                    bukkitEntity.getLocation(), to.clone(),
++                    before, after
++                );
++                event.callEvent();
++
++                // Only change the target if actually needed, since we reset relative flags
++                if (event.isCancelled() || !to.equals(event.getTo()) || !after.equals(event.getAfter())) {
++                    if (event.isCancelled() || event.getTo() == null) {
++                        org.bukkit.World toWorld = to.getWorld();
++                        to = event.getFrom().clone();
++                        to.setWorld(toWorld); // cancelling doesn't cancel the teleport just the position/velocity (old quirk)
++                        velocity = org.bukkit.craftbukkit.util.CraftVector.toVec3(event.getBefore());
++                    } else {
++                        to = event.getTo().clone();
++                        velocity = org.bukkit.craftbukkit.util.CraftVector.toVec3(event.getAfter());
++                    }
++                    transition = transition.withChangedLocation(to).withRelatives(Set.of()).withVelocity(velocity);
++                }
++            }
++            if (this.isRemoved()) {
++                return null;
++            }
++            // Paper end - Call EntityPortalExitEvent
++            // CraftBukkit end
++            ServerLevel newLevel = transition.newLevel();
++            boolean otherDimension = newLevel.dimension() != serverLevel.dimension();
++            if (!transition.asPassenger()) {
++                this.stopRiding();
++            }
++
++            return otherDimension ? this.teleportCrossDimension(serverLevel, newLevel, transition) : this.teleportSameDimension(serverLevel, transition);
++        } else {
++            return null;
++        }
++    }
++
++    private Entity teleportSameDimension(final ServerLevel level, final TeleportTransition transition) {
++        for (Entity passenger : this.getPassengers()) {
++            passenger.teleport(this.calculatePassengerTransition(transition, passenger));
++        }
++
++        this.teleportSetPosition(PositionMoveRotation.of(transition), transition.relatives());
++        if (!transition.asPassenger()) {
++            this.sendTeleportTransitionToPlayers(level, transition);
++        }
++
++        transition.postTeleportTransition().onTransition(this);
++        return this;
++    }
++
++    private @Nullable Entity teleportCrossDimension(final ServerLevel oldLevel, final ServerLevel newLevel, final TeleportTransition transition) {
++        List<Entity> oldPassengers = this.getPassengers();
++        List<Entity> newPassengers = new ArrayList<>(oldPassengers.size());
++        this.ejectPassengers();
++
++        for (Entity passenger : oldPassengers) {
++            Entity newPassenger = passenger.teleport(this.calculatePassengerTransition(transition, passenger));
++            if (newPassenger != null) {
++                newPassengers.add(newPassenger);
++            }
++        }
++
++        Entity newEntity = this.getType().create(newLevel, EntitySpawnReason.DIMENSION_TRAVEL);
++        if (newEntity == null) {
++            return null;
++        }
++
++        // Paper start - Fix item duplication and teleport issues
++        if (this instanceof Leashable leashable) {
++            leashable.dropLeash(); // Paper drop lead
++        }
++        // Paper end - Fix item duplication and teleport issues
++        newEntity.restoreFrom(this);
++        this.removeAfterChangingDimensions();
++        newEntity.teleportSetPosition(PositionMoveRotation.of(this), PositionMoveRotation.of(transition), transition.relatives());
++        if (this.inWorld) newLevel.addDuringTeleport(newEntity); // CraftBukkit - Don't spawn the new entity if the current entity isn't spawned
++
++        for (Entity newPassenger : newPassengers) {
++            newPassenger.startRiding(newEntity, true, false);
++        }
++
++        newLevel.resetEmptyTime();
++        transition.postTeleportTransition().onTransition(newEntity);
++        this.teleportSpectators(transition, oldLevel);
++        return newEntity;
++    }
++
++    protected void teleportSpectators(final TeleportTransition transition, final ServerLevel oldLevel) {
++        for (ServerPlayer serverPlayer : List.copyOf(oldLevel.players())) {
++            if (serverPlayer.getCamera() == this) {
++                serverPlayer.teleport(transition);
++                serverPlayer.setCamera(null);
++            }
++        }
++    }
++
++    private TeleportTransition calculatePassengerTransition(final TeleportTransition transition, final Entity passenger) {
++        float passengerYRot = transition.yRot() + (transition.relatives().contains(Relative.Y_ROT) ? 0.0F : passenger.getYRot() - this.getYRot());
++        float passengerXRot = transition.xRot() + (transition.relatives().contains(Relative.X_ROT) ? 0.0F : passenger.getXRot() - this.getXRot());
++        // Paper start - reposition entity as rider when teleporting via API call
++        // This change is mostly required for plugins teleporting entities *every* tick with passengers, specifically player passengers.
++        // The relative teleport of players, which base their location on the server -> client -> server teleport packet cycle, means player
++        // positions can quickly be desynced from their rider position, leading to infinitely growing offsets from their vehicle.
++        // The addition to the teleport transition allows existing callers to this method to not accidentally mutate the entity state.
++        if (transition.passengerTeleportationMode() == TeleportTransition.PassengerTeleportationMode.POSITION_RIDER) this.positionRider(passenger);
++        // Paper end - reposition entity as rider when teleporting via API call
++        Vec3 passengerOffset = passenger.position().subtract(this.position());
++        Vec3 passengerPos = transition.position()
++            .add(
++                transition.relatives().contains(Relative.X) ? 0.0 : passengerOffset.x(),
++                transition.relatives().contains(Relative.Y) ? 0.0 : passengerOffset.y(),
++                transition.relatives().contains(Relative.Z) ? 0.0 : passengerOffset.z()
++            );
++        return transition.withPosition(passengerPos).withRotation(passengerYRot, passengerXRot).transitionAsPassenger();
++    }
++
++    private void sendTeleportTransitionToPlayers(final ServerLevel serverLevel, final TeleportTransition transition) {
++        Entity controller = this.getControllingPassenger();
++        List<Entity> passengers = this.getIndirectPassengersStream().toList();
++
++        for (Entity passenger : passengers) {
++            if (passenger instanceof ServerPlayer player) {
++                if (controller != null && player.getId() == controller.getId()) {
++                    player.connection
++                        .send(
++                            ClientboundTeleportEntityPacket.teleport(this.getId(), PositionMoveRotation.of(transition), transition.relatives(), this.onGround)
++                        );
++                } else {
++                    player.connection.send(ClientboundTeleportEntityPacket.teleport(this.getId(), PositionMoveRotation.of(this), Set.of(), this.onGround));
++                }
++            }
++        }
++
++        if (!this.type.hasUpdateInterval() || this.getMoveSimulationType() == MoveSimulationType.SERVER_AND_CLIENT) {
++            serverLevel.getChunkSource()
++                .sendToTrackingPlayersFiltered(
++                    this,
++                    ClientboundTeleportEntityPacket.teleport(this.getId(), PositionMoveRotation.of(this), Set.of(), this.onGround),
++                    playerx -> !passengers.contains(playerx)
++                );
++        }
++    }
++
++    public void teleportSetPosition(final PositionMoveRotation destination, final Set<Relative> relatives) {
++        this.teleportSetPosition(PositionMoveRotation.of(this), destination, relatives);
++    }
++
++    public void teleportSetPosition(final PositionMoveRotation currentValues, final PositionMoveRotation destination, final Set<Relative> relatives) {
++        PositionMoveRotation absoluteDestination = PositionMoveRotation.calculateAbsolute(currentValues, destination, relatives);
++        this.setPosRaw(absoluteDestination.position().x, absoluteDestination.position().y, absoluteDestination.position().z);
++        this.setYRot(absoluteDestination.yRot());
++        this.setYHeadRot(absoluteDestination.yRot());
++        this.setXRot(absoluteDestination.xRot());
++        this.reapplyPosition();
++        this.setOldPosAndRot();
++        this.setDeltaMovement(absoluteDestination.deltaMovement());
+         this.clearMovementThisTick();
+     }
+ 
+@@ -4370,6 +6023,12 @@ public abstract class Entity
          }
      }
  
@@ -29682,7 +30136,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
      protected void removeAfterChangingDimensions() {
          this.setRemoved(Entity.RemovalReason.CHANGED_DIMENSION, null); // CraftBukkit - add Bukkit remove cause
          if (this instanceof Leashable leashable && leashable.isLeashed()) { // Paper - only call if it is leashed
-@@ -4714,6 +6278,12 @@ public abstract class Entity
+@@ -4714,6 +6373,12 @@ public abstract class Entity
      }
  
      public void startSeenByPlayer(final ServerPlayer player) {
@@ -29695,7 +30149,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
      }
  
      public void stopSeenByPlayer(final ServerPlayer player) {
-@@ -4723,6 +6293,12 @@ public abstract class Entity
+@@ -4723,6 +6388,12 @@ public abstract class Entity
              new io.papermc.paper.event.player.PlayerUntrackEntityEvent(player.getBukkitEntity(), this.getBukkitEntity()).callEvent();
          }
          // Paper end - entity tracking events
@@ -29708,7 +30162,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
      }
  
      public float rotate(final Rotation rotation) {
-@@ -5130,7 +6706,10 @@ public abstract class Entity
+@@ -5130,7 +6801,10 @@ public abstract class Entity
              return;
          }
          // Paper end - Block invalid positions and bounding box
@@ -29720,7 +30174,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
              this.position = new Vec3(x, y, z);
              int fx = Mth.floor(x);
              int fy = Mth.floor(y);
-@@ -5161,7 +6740,7 @@ public abstract class Entity
+@@ -5161,7 +6835,7 @@ public abstract class Entity
          }
          // Paper start - Block invalid positions and bounding box; don't allow desync of pos and AABB
          // hanging has its own special logic
@@ -29729,7 +30183,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
              this.setBoundingBox(this.makeBoundingBox());
          }
          // Paper end - Block invalid positions and bounding box
-@@ -5236,6 +6815,7 @@ public abstract class Entity
+@@ -5236,6 +6910,7 @@ public abstract class Entity
              Util.logAndPauseIfInIde("Invalid entity rotation: " + yRot + ", discarding.");
          } else {
              this.yRot = yRot;
@@ -29737,7 +30191,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
          }
      }
  
-@@ -5248,6 +6828,7 @@ public abstract class Entity
+@@ -5248,6 +6923,7 @@ public abstract class Entity
              Util.logAndPauseIfInIde("Invalid entity rotation: " + xRot + ", discarding.");
          } else {
              this.xRot = Math.clamp(xRot % 360.0F, -90.0F, 90.0F);
@@ -29745,7 +30199,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
          }
      }
  
-@@ -5280,6 +6861,12 @@ public abstract class Entity
+@@ -5280,6 +6956,12 @@ public abstract class Entity
          return this.removalReason != null;
      }
  
@@ -29758,7 +30212,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
      public Entity.@Nullable RemovalReason getRemovalReason() {
          return this.removalReason;
      }
-@@ -5294,6 +6881,7 @@ public abstract class Entity
+@@ -5294,6 +6976,7 @@ public abstract class Entity
          // Paper end - rewrite chunk system
          org.bukkit.craftbukkit.event.CraftEventFactory.callEntityRemoveEvent(this, cause); // CraftBukkit
          final boolean alreadyRemoved = this.removalReason != null; // Paper - Folia schedulers
@@ -29766,7 +30220,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
          if (this.removalReason == null) {
              this.removalReason = reason;
              this.removeEventCause = cause; // Paper
-@@ -5322,6 +6910,10 @@ public abstract class Entity
+@@ -5322,6 +7005,10 @@ public abstract class Entity
          // Paper end
      }
  
@@ -29777,7 +30231,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..3cd62710028b7d3b0112cac8dd2098fa
      // Paper start - Folia schedulers
      /**
       * Invoked only when the entity is truly removed from the server, never to be added to any world.
-@@ -5333,7 +6925,7 @@ public abstract class Entity
+@@ -5333,7 +7020,7 @@ public abstract class Entity
      // Paper end - Folia schedulers
      // Paper start - optimise Folia entity scheduler
      public final void registerScheduler() {
@@ -31928,10 +32382,10 @@ index 1d5449090d0649cb03cf87a0175aebedded20132..8761bdaf737c02a153fc5fafdd0c82a9
                          if (chicken instanceof Chicken realChicken) {
                              Optional.ofNullable(this.getItem().get(DataComponents.CHICKEN_VARIANT)).ifPresent(realChicken::setVariant);
 diff --git a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java b/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
-index 4abbb6a8029f6c77fdbeda9376d3d5cc5970896d..1dd0ffd15eec51f621c9c4f7b1632131cf2f7a51 100644
+index 4abbb6a8029f6c77fdbeda9376d3d5cc5970896d..d41ea6f4bda0617798e03e2d5a1579b47cc6c5f9 100644
 --- a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
 +++ b/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
-@@ -81,6 +81,83 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
+@@ -81,6 +81,84 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
          hitResult.getEntity().hurt(this.damageSources().thrown(this, this.getOwner()), 0.0F);
      }
  
@@ -31965,6 +32419,7 @@ index 4abbb6a8029f6c77fdbeda9376d3d5cc5970896d..1dd0ffd15eec51f621c9c4f7b1632131
 +                    // chunk could have been unloaded
 +                    Entity.TELEPORT_FLAG_TELEPORT_PASSENGERS | Entity.TELEPORT_FLAG_LOAD_CHUNK,
 +                    (Entity teleported) -> {
++                        if (teleported == null) return; // Canvas - region threading
 +                        // entity is now an invalid reference, do not use it, instead use teleported
 +                        if (teleported instanceof ServerPlayer player) {
 +                            // connection teleport is already done
@@ -32015,7 +32470,7 @@ index 4abbb6a8029f6c77fdbeda9376d3d5cc5970896d..1dd0ffd15eec51f621c9c4f7b1632131
      @Override
      protected void onHit(final HitResult hitResult) {
          super.onHit(hitResult);
-@@ -99,6 +176,22 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
+@@ -99,6 +177,22 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
          }
  
          if (this.level() instanceof ServerLevel level && !this.isRemoved()) {
@@ -32038,7 +32493,7 @@ index 4abbb6a8029f6c77fdbeda9376d3d5cc5970896d..1dd0ffd15eec51f621c9c4f7b1632131
              Entity owner = this.getOwner();
              if (owner != null && isAllowedToTeleportOwner(owner, level)) {
                  Vec3 teleportPos = this.oldPosition();
-@@ -177,7 +270,7 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
+@@ -177,7 +271,7 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
              int previousChunkZ = SectionPos.blockToSectionCoord(this.position().z());
              Entity owner = this.owner != null ? findOwnerIncludingDeadPlayer(serverLevel, this.owner.getUUID()) : null;
              if (owner instanceof ServerPlayer serverPlayer
@@ -32047,7 +32502,7 @@ index 4abbb6a8029f6c77fdbeda9376d3d5cc5970896d..1dd0ffd15eec51f621c9c4f7b1632131
                  && !serverPlayer.wonGame
                  && serverPlayer.level().getGameRules().get(GameRules.ENDER_PEARLS_VANISH_ON_DEATH)) {
                  this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.DESPAWN); // CraftBukkit - add Bukkit remove cause
-@@ -201,7 +294,15 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
+@@ -201,7 +295,15 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
          }
      }
  
@@ -34157,7 +34612,7 @@ index a1b0168077b83575f16dd377da2e1ba520d3bd19..a2e349bb5ab2860f67a7fda4e56f95ca
  
      @Override
 diff --git a/net/minecraft/world/level/block/entity/TheEndGatewayBlockEntity.java b/net/minecraft/world/level/block/entity/TheEndGatewayBlockEntity.java
-index 0eb38edc4cea67390f998eb5cff4c55146e811d6..726397ecd5b9418174f480356f71da8cca037257 100644
+index 0eb38edc4cea67390f998eb5cff4c55146e811d6..9265b32fd31f4e150f01c57cd403cb578bb7a1bc 100644
 --- a/net/minecraft/world/level/block/entity/TheEndGatewayBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/TheEndGatewayBlockEntity.java
 @@ -36,9 +36,14 @@ public class TheEndGatewayBlockEntity extends TheEndPortalBlockEntity {
@@ -34176,7 +34631,7 @@ index 0eb38edc4cea67390f998eb5cff4c55146e811d6..726397ecd5b9418174f480356f71da8c
      public TheEndGatewayBlockEntity(final BlockPos worldPosition, final BlockState blockState) {
          super(BlockEntityTypes.END_GATEWAY, worldPosition, blockState);
      }
-@@ -127,6 +132,105 @@ public class TheEndGatewayBlockEntity extends TheEndPortalBlockEntity {
+@@ -127,6 +132,107 @@ public class TheEndGatewayBlockEntity extends TheEndPortalBlockEntity {
          }
      }
  
@@ -34252,6 +34707,7 @@ index 0eb38edc4cea67390f998eb5cff4c55146e811d6..726397ecd5b9418174f480356f71da8c
 +            return toTeleport.teleportAsync(
 +                teleport, net.minecraft.world.entity.Entity.TELEPORT_FLAG_LOAD_CHUNK | net.minecraft.world.entity.Entity.TELEPORT_FLAG_TELEPORT_PASSENGERS,
 +                post == null ? null : (net.minecraft.world.entity.Entity teleportedEntity) -> {
++                    if (teleportedEntity == null) return; // Canvas - region threading
 +                    post.onTransition(teleportedEntity);
 +                }
 +            );
@@ -34265,6 +34721,7 @@ index 0eb38edc4cea67390f998eb5cff4c55146e811d6..726397ecd5b9418174f480356f71da8c
 +            return toTeleport.teleportAsync(
 +                teleport, net.minecraft.world.entity.Entity.TELEPORT_FLAG_LOAD_CHUNK | net.minecraft.world.entity.Entity.TELEPORT_FLAG_TELEPORT_PASSENGERS,
 +                (net.minecraft.world.entity.Entity teleportedEntity) -> {
++                    if (teleportedEntity == null) return; // Canvas - region threading
 +                    // adjust to the final exit position
 +                    Vec3 adjusted = Vec3.atCenterOf(TheEndGatewayBlockEntity.findExitPosition(portalWorld, teleportedEntity.blockPosition())); // Canvas - region threading
 +                    // teleportTo will adjust rider positions
@@ -34282,7 +34739,7 @@ index 0eb38edc4cea67390f998eb5cff4c55146e811d6..726397ecd5b9418174f480356f71da8c
      public @Nullable Vec3 getPortalPosition(final ServerLevel currentLevel, final BlockPos portalEntryPos) {
          if (this.exitPortal == null && currentLevel.getTypeKey() == net.minecraft.world.level.dimension.LevelStem.END) { // CraftBukkit - work in alternate worlds
              BlockPos exitPortalPos = findOrCreateValidTeleportPos(currentLevel, portalEntryPos);
-@@ -172,6 +276,126 @@ public class TheEndGatewayBlockEntity extends TheEndPortalBlockEntity {
+@@ -172,6 +278,126 @@ public class TheEndGatewayBlockEntity extends TheEndPortalBlockEntity {
          return findTallestBlock(level, exitPortalPos, 16, true);
      }
  
