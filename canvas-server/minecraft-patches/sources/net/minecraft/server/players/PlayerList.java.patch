@@ -39,7 +39,7 @@
          this.playersByName.put(player.getScoreboardName().toLowerCase(java.util.Locale.ROOT), player); // Spigot
          this.playersByUUID.put(player.getUUID(), player);
          // this.broadcastAll(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(player))); // CraftBukkit - replaced with loop below
-@@ -361,7 +_,11 @@
+@@ -353,7 +_,11 @@
          }
          // Paper start - Use single player info update packet on join
          if (!onlinePlayers.isEmpty()) {
@@ -52,7 +52,7 @@
          }
          // Paper end - Use single player info update packet on join
          player.sentListPacket = true;
-@@ -506,6 +_,7 @@
+@@ -503,6 +_,7 @@
          if (advancements != null) {
              advancements.save();
          }
@@ -60,7 +60,7 @@
      }
  
      public net.kyori.adventure.text.@Nullable Component remove(final ServerPlayer player) { // CraftBukkit - return string // Paper - return Component
-@@ -574,6 +_,7 @@
+@@ -571,6 +_,7 @@
          player.getBukkitEntity().packetProcessor.close(); // Folia - region threading
          player.getAdvancements().clearTriggers();
          this.players.remove(player);
@@ -68,7 +68,7 @@
          this.playersByName.remove(player.getScoreboardName().toLowerCase(java.util.Locale.ROOT)); // Spigot
          this.server.getCustomBossEvents().onPlayerDisconnect(player);
          UUID uuid = player.getUUID();
-@@ -601,6 +_,7 @@
+@@ -594,6 +_,7 @@
          // This removes the scoreboard (and player reference) for the specific player in the manager
          this.cserver.getScoreboardManager().removePlayer(player.getBukkitEntity());
          // CraftBukkit end
@@ -76,7 +76,7 @@
          return playerQuitEvent.quitMessage(); // Paper - Adventure
      }
  
-@@ -817,6 +_,20 @@
+@@ -810,6 +_,20 @@
      }
  
      public void tick() {
@@ -97,7 +97,7 @@
          if (++this.sendAllPlayerInfoIn > 600) {
              // CraftBukkit start
              // Folia start - region threading
-@@ -830,6 +_,62 @@
+@@ -823,6 +_,62 @@
              this.sendAllPlayerInfoIn = 0;
          }
      }
@@ -160,7 +160,7 @@
  
      // CraftBukkit start - add a world/entity limited version
      public void broadcastAll(Packet packet, net.minecraft.world.entity.player.Player entityhuman) {
-@@ -1028,16 +_,19 @@
+@@ -1021,16 +_,19 @@
          final Packet<?> packet
      ) {
          for (ServerPlayer player : this.players) { // Folia - region threading
@@ -185,7 +185,7 @@
                      player.connection.send(packet);
                  }
              }
-@@ -1055,9 +_,9 @@
+@@ -1048,9 +_,9 @@
              int numSaved = 0;
              final long now = System.nanoTime(); // Folia - region threading
              final long timeInterval = (long)interval * io.papermc.paper.threadedregions.TickRegionScheduler.getTimeBetweenTicks(); // Folia - region threading // Canvas - region threading
@@ -197,7 +197,7 @@
                  continue;
              }
              // Folia end - region threading
-@@ -1281,6 +_,7 @@
+@@ -1274,6 +_,7 @@
      }
  
      public boolean verifyChatTrusted(final PlayerChatMessage message) {
@@ -205,7 +205,7 @@
          return message.hasSignature() && !message.hasExpiredServer(Instant.now());
      }
  
-@@ -1341,7 +_,12 @@
+@@ -1334,7 +_,12 @@
          //this.broadcastAll(new ClientboundSetChunkCacheRadiusPacket(viewDistance)); // Paper - rewrite chunk system
  
          for (ServerLevel level : this.server.getAllLevels()) {
@@ -219,7 +219,7 @@
          }
      }
  
-@@ -1350,7 +_,12 @@
+@@ -1343,7 +_,12 @@
          //this.broadcastAll(new ClientboundSetSimulationDistancePacket(simulationDistance)); // Paper - rewrite chunk system
  
          for (ServerLevel level : this.server.getAllLevels()) {

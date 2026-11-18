@@ -144,7 +144,7 @@ index 6d11d9282b82a7f5ccbbec63ea0e21faf07d3564..4290bbfa1527ffcc5b108339fa37a5de
          private final LongOpenHashSet fakeChunks = new LongOpenHashSet();
          // Canvas end - extended view distance
 diff --git a/net/minecraft/server/level/ChunkMap.java b/net/minecraft/server/level/ChunkMap.java
-index 003e4264cec340dbca67ee1b2f91c3f286fee30c..b08413013c1872c6cb2753de57575fe59ffda5dd 100644
+index 19e677ccb7cf8a712b27b007b0918f4c8e130d29..37568d67fb6ad972502f6fef7e9c2d9e17bcb434 100644
 --- a/net/minecraft/server/level/ChunkMap.java
 +++ b/net/minecraft/server/level/ChunkMap.java
 @@ -1101,6 +1101,7 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP

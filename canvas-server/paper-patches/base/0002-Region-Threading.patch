@@ -3321,7 +3321,7 @@ index 000c5ea5d39d5ab6e5592012ab1cc7ee547505dc..ab2ee478c53923be85f5a6d4971bed5b
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
-index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..b2401c5bae7e5efdbad6935aae7286249543db2f 100644
+index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..ffbfe9db7f1d39290881aa2920ee1837b48c28e6 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 @@ -124,6 +124,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
@@ -3356,7 +3356,32 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..b2401c5bae7e5efdbad6935aae728624
          Entity entity = this.getHandle();
          if (!entity.isAlive() || !entity.valid) {
              return false;
-@@ -786,7 +797,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -758,20 +769,22 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+ 
+     @Override
+     public void setVisibleByDefault(boolean visible) {
++        org.spigotmc.AsyncCatcher.catchOp("set visible by default"); // Canvas - fix folia visibility api
+         if (this.getHandle().visibleByDefault != visible) {
++            this.getHandle().visibleByDefault = visible; // Canvas - fix folia visibility api
+             if (visible) {
+                 // Making visible by default, reset and show to all players
+                 for (Player player : this.server.getOnlinePlayers()) {
++                    if (this.getHandle().visibleByDefault != visible) break; // Canvas - fix folia visibility api
+                     ((CraftPlayer) player).resetAndShowEntity(this);
+                 }
+             } else {
+                 // Hiding by default, reset and hide from all players
+                 for (Player player : this.server.getOnlinePlayers()) {
++                    if (this.getHandle().visibleByDefault != visible) break; // Canvas - fix folia visibility api
+                     ((CraftPlayer) player).resetAndHideEntity(this);
+                 }
+             }
+-
+-            this.getHandle().visibleByDefault = visible;
+         }
+     }
+ 
+@@ -786,7 +799,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          ImmutableSet.Builder<Player> players = ImmutableSet.builder();
  
          ServerLevel world = ((CraftWorld) this.getWorld()).getHandle();
@@ -3365,7 +3390,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..b2401c5bae7e5efdbad6935aae728624
  
          if (entityTracker != null) {
              for (ServerPlayerConnection connection : entityTracker.seenBy) {
-@@ -803,7 +814,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -803,7 +816,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          Preconditions.checkArgument(player != null, "Player cannot be null");
  
          ServerLevel world = ((CraftWorld) this.getWorld()).getHandle();
@@ -3374,7 +3399,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..b2401c5bae7e5efdbad6935aae728624
          if (entityTracker == null) return false;
  
          return entityTracker.seenBy.contains(((CraftPlayer) player).getHandle().connection);
-@@ -1149,7 +1160,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1149,7 +1162,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          }
  
          ServerLevel world = ((CraftWorld) this.getWorld()).getHandle();
@@ -3383,7 +3408,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..b2401c5bae7e5efdbad6935aae728624
  
          if (entityTracker == null) {
              return;
-@@ -1166,7 +1177,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1166,7 +1179,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          }
  
          ServerLevel world = ((CraftWorld) this.getWorld()).getHandle();
@@ -3392,7 +3417,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..b2401c5bae7e5efdbad6935aae728624
  
          if (entityTracker == null) {
              return;
-@@ -1202,27 +1213,81 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1202,27 +1215,81 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          location.checkFinite();
          Location locationClone = location.clone(); // clone so we don't need to worry about mutations after this call.
  
@@ -3492,7 +3517,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..b2401c5bae7e5efdbad6935aae728624
      // Paper end - more teleport API / async chunk API
  
      private final org.bukkit.entity.Entity.Spigot spigot = new org.bukkit.entity.Entity.Spigot() {
-@@ -1294,8 +1359,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1294,8 +1361,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
  
      @Override
      public Set<org.bukkit.entity.Player> getTrackedPlayers() {
@@ -3502,7 +3527,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..b2401c5bae7e5efdbad6935aae728624
          if (tracker == null) {
              return java.util.Collections.emptySet();
          }
-@@ -1416,10 +1480,12 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1416,10 +1482,12 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
      }
  
      public boolean considersEntityAsAlly0(final @NotNull org.bukkit.entity.Entity entity) {
@@ -3515,7 +3540,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..b2401c5bae7e5efdbad6935aae728624
      }
  
      @Override
-@@ -1430,27 +1496,35 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1430,27 +1498,35 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
  
      @Override
      public @NotNull Map<Key, Predicate<org.bukkit.entity.Entity>> getAdditionalAlliedRules() {
@@ -4329,7 +4354,7 @@ index 5acf2cfcd939708bf7845dfbc9dc36ff80add8c1..457fe7bb5a43a3ae9e00270d06eee917
 -    private final Map<UUID, Set<WeakReference<Plugin>>> invertedVisibilityEntities = new HashMap<>();
 -    private final Set<UUID> unlistedEntities = new HashSet<>(); // Paper - Add Listing API for Player
 -    private static final WeakHashMap<Plugin, WeakReference<Plugin>> pluginWeakReferences = new WeakHashMap<>();
-+    private final Map<UUID, it.unimi.dsi.fastutil.objects.ObjectOpenHashSet<WeakReference<Plugin>>> invertedVisibilityEntities = new java.util.concurrent.ConcurrentHashMap<>(); // Canvas - fix folia visibility api
++    private final io.canvasmc.canvas.util.ViewerVisibility invertedVisibilityEntities = new io.canvasmc.canvas.util.ViewerVisibility(); // Canvas - fix folia visibility api
 +    private final Set<UUID> unlistedEntities = java.util.concurrent.ConcurrentHashMap.newKeySet(); // Paper - Add Listing API for Player // Canvas - fix folia visibility api
 +    private static final Map<Plugin, WeakReference<Plugin>> pluginWeakReferences = java.util.Collections.synchronizedMap(new WeakHashMap<>()); // Canvas - fix folia visibility api
      private int hash = 0;
@@ -4509,46 +4534,120 @@ index 5acf2cfcd939708bf7845dfbc9dc36ff80add8c1..457fe7bb5a43a3ae9e00270d06eee917
          return (plugin == null) ? null : CraftPlayer.pluginWeakReferences.computeIfAbsent(plugin, WeakReference::new);
      }
  
-@@ -1863,16 +1945,30 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -1850,33 +1932,95 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+         if (this.getHandle().connection == null) return;
+         if (this.equals(entity)) return;
+ 
+-        boolean shouldHide;
+-        if (entity.isVisibleByDefault()) {
+-            shouldHide = this.addInvertedVisibility(plugin, entity);
+-        } else {
+-            shouldHide = this.removeInvertedVisibility(plugin, entity);
+-        }
++        boolean shouldHide = this.changeVisibility(plugin, entity, false); // Canvas - fix folia visibility api
+ 
+         if (shouldHide) {
+             this.untrackAndHideEntity(entity);
+         }
      }
  
-     private boolean addInvertedVisibility(@Nullable Plugin plugin, org.bukkit.entity.Entity entity) {
+-    private boolean addInvertedVisibility(@Nullable Plugin plugin, org.bukkit.entity.Entity entity) {
 -        Set<WeakReference<Plugin>> invertedPlugins = this.invertedVisibilityEntities.get(entity.getUniqueId());
 -        if (invertedPlugins != null) {
 -            // Some plugins are already inverting the entity. Just mark that this
 -            // plugin wants the entity inverted too and end.
 -            invertedPlugins.add(CraftPlayer.getPluginWeakReference(plugin));
-+        // Canvas start - fix folia visibility api
-+        final UUID uuid = entity.getUniqueId();
+-            return false;
++    // Canvas start - fix folia visibility api
++    private boolean changeVisibility(@Nullable Plugin plugin, org.bukkit.entity.Entity entity, boolean visible) {
++        return this.invertedVisibilityEntities.change(entity.getUniqueId(), visible, entity::isVisibleByDefault, () -> CraftPlayer.getPluginWeakReference(plugin), shown -> this.sendInfo(entity, shown));
++    }
 +
-+        it.unimi.dsi.fastutil.objects.ObjectOpenHashSet<WeakReference<Plugin>> set =
-+            invertedVisibilityEntities.get(uuid);
++    private boolean resetVisibility(org.bukkit.entity.Entity entity, boolean visible) {
++        return this.invertedVisibilityEntities.reset(entity.getUniqueId(), visible, shown -> this.sendInfo(entity, shown));
++    }
 +
-+        if (set != null) {
-+            set.add(CraftPlayer.getPluginWeakReference(plugin));
-+            return false;
-+        }
-+
-+        it.unimi.dsi.fastutil.objects.ObjectOpenHashSet<WeakReference<Plugin>> newSet =
-+            new it.unimi.dsi.fastutil.objects.ObjectOpenHashSet<>();
-+
-+        newSet.add(CraftPlayer.getPluginWeakReference(plugin));
-+
-+        it.unimi.dsi.fastutil.objects.ObjectOpenHashSet<WeakReference<Plugin>> existing =
-+            invertedVisibilityEntities.putIfAbsent(uuid, newSet);
-+
-+        if (existing != null) {
-+            existing.add(CraftPlayer.getPluginWeakReference(plugin));
-             return false;
++    private void sendInfo(org.bukkit.entity.Entity entity, boolean visible) {
++        if (!(entity instanceof CraftPlayer player)) {
++            return;
          }
 -        invertedPlugins = new HashSet<>();
 -        invertedPlugins.add(CraftPlayer.getPluginWeakReference(plugin));
 -        this.invertedVisibilityEntities.put(entity.getUniqueId(), invertedPlugins);
-+        // Canvas end - fix folia visibility api
  
-         return true;
+-        return true;
++        final ServerPlayer other = player.getHandle();
++        if (visible) {
++            if (!other.hasDisconnected()) {
++                this.getHandle().connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(other), this.getHandle()));
++            }
++        } else {
++            this.getHandle().connection.send(new ClientboundPlayerInfoRemovePacket(List.of(other.getUUID())));
++        }
      }
-@@ -1888,8 +1984,8 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+ 
++    public void sendJoiningInfo(ServerPlayer joining, ClientboundPlayerInfoUpdatePacket packet) {
++        this.invertedVisibilityEntities.apply(joining.getUUID(), () -> joining.visibleByDefault, visible -> {
++            if (this.getHandle() == joining || visible) {
++                this.getHandle().connection.send(this.isListed(joining.getBukkitEntity()) ? packet : ClientboundPlayerInfoUpdatePacket.createSinglePlayerInitializing(joining, false));
++            }
++
++            return true;
++        });
++    }
++
++    public void recheckJoinInfo(ServerPlayer other, com.mojang.authlib.GameProfile profile) {
++        this.invertedVisibilityEntities.apply(other.getUUID(), () -> other.visibleByDefault, visible -> {
++            if (other.hasDisconnected() || !visible) {
++                this.getHandle().connection.send(new ClientboundPlayerInfoRemovePacket(List.of(other.getUUID())));
++            } else if (other.getGameProfile() != profile) {
++                this.sendProfile(other);
++            }
++
++            return true;
++        });
++    }
++
++    private boolean sendProfileInfo(ServerPlayer other, boolean add) {
++        final boolean self = this.getHandle() == other;
++        final boolean visible = this.invertedVisibilityEntities.apply(other.getUUID(), () -> other.visibleByDefault, shown -> {
++            if (self || shown) {
++                if (add) {
++                    this.sendProfile(other);
++                } else {
++                    this.getHandle().connection.send(new ClientboundPlayerInfoRemovePacket(List.of(other.getUUID())));
++                }
++            }
++
++            return true;
++        });
++
++        return self || visible;
++    }
++
++    private void sendProfile(ServerPlayer other) {
++        final ClientboundPlayerInfoUpdatePacket packet = ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(other), this.getHandle());
++        final ClientboundPlayerInfoUpdatePacket.Entry entry = packet.entries().getFirst();
++        final ClientboundPlayerInfoUpdatePacket profile = new ClientboundPlayerInfoUpdatePacket(packet.actions(), new ClientboundPlayerInfoUpdatePacket.Entry(entry.profile().id(), entry.profile(), entry.listed(), entry.latency(), entry.gameMode(), entry.displayName(), entry.showHat(), entry.listOrder(), entry.chatSession()));
++        this.getHandle().connection.send(new ClientboundPlayerInfoRemovePacket(List.of(other.getUUID())));
++        this.getHandle().connection.send(profile);
++    }
++
++    public void sendQuittingInfo(ServerPlayer quitting, ClientboundPlayerInfoRemovePacket packet) {
++        this.invertedVisibilityEntities.apply(quitting.getUUID(), () -> quitting.visibleByDefault, visible -> {
++            if (visible) {
++                this.getHandle().connection.send(packet);
++            }
++
++            return visible;
++        });
++    }
++    // Canvas end - fix folia visibility api
++
+     private void untrackAndHideEntity(org.bukkit.entity.Entity entity) {
+         // Remove this entity from the hidden player's EntityTrackerEntry
+         // Paper start
+@@ -1888,18 +2032,10 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
      private void unregisterEntity(Entity other) {
          // Paper end
          ChunkMap tracker = ((ServerLevel) this.getHandle().level()).getChunkSource().chunkMap;
@@ -4558,43 +4657,76 @@ index 5acf2cfcd939708bf7845dfbc9dc36ff80add8c1..457fe7bb5a43a3ae9e00270d06eee917
 +        if (entry != null && ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(other)) { // Canvas - fix folia visibility api
              entry.removePlayer(this.getHandle());
          }
- 
-@@ -1945,16 +2041,24 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+-
+-        // Remove the hidden entity from this player user list, if they're on it
+-        if (other instanceof ServerPlayer) {
+-            ServerPlayer otherPlayer = (ServerPlayer) other;
+-            if (this.getHandle().sentListPacket && otherPlayer.sentListPacket) {
+-                this.getHandle().connection.send(new ClientboundPlayerInfoRemovePacket(List.of(otherPlayer.getUUID())));
+-            }
+-        }
      }
  
-     private boolean removeInvertedVisibility(@Nullable Plugin plugin, org.bukkit.entity.Entity entity) {
+     void resetAndHideEntity(org.bukkit.entity.Entity entity) {
+@@ -1908,7 +2044,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+             return;
+         }
+ 
+-        if (this.invertedVisibilityEntities.remove(entity.getUniqueId()) == null) {
++        if (this.resetVisibility(entity, false)) { // Canvas - fix folia visibility api
+             this.untrackAndHideEntity(entity);
+         }
+     }
+@@ -1932,53 +2068,19 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+         if (this.getHandle().connection == null) return;
+         if (this.equals(entity)) return;
+ 
+-        boolean shouldShow;
+-        if (entity.isVisibleByDefault()) {
+-            shouldShow = this.removeInvertedVisibility(plugin, entity);
+-        } else {
+-            shouldShow = this.addInvertedVisibility(plugin, entity);
+-        }
++        boolean shouldShow = this.changeVisibility(plugin, entity, true); // Canvas - fix folia visibility api
+ 
+         if (shouldShow) {
+             this.trackAndShowEntity(entity);
+         }
+     }
+ 
+-    private boolean removeInvertedVisibility(@Nullable Plugin plugin, org.bukkit.entity.Entity entity) {
 -        Set<WeakReference<Plugin>> invertedPlugins = this.invertedVisibilityEntities.get(entity.getUniqueId());
 -        if (invertedPlugins == null) {
 -            return false; // Entity isn't inverted
-+        // Canvas start - fix folia visibility api
-+        final UUID uuid = entity.getUniqueId();
-+
-+        it.unimi.dsi.fastutil.objects.ObjectOpenHashSet<WeakReference<Plugin>> set =
-+            invertedVisibilityEntities.get(uuid);
-+
-+        if (set == null) {
-+            return false;
-         }
+-        }
 -        invertedPlugins.remove(CraftPlayer.getPluginWeakReference(plugin));
 -        if (!invertedPlugins.isEmpty()) {
 -            return false; // Some other plugins still want the entity inverted
-+
-+        set.remove(CraftPlayer.getPluginWeakReference(plugin));
-+
-+        if (!set.isEmpty()) {
-+            return false;
-         }
+-        }
 -        this.invertedVisibilityEntities.remove(entity.getUniqueId());
+-
+-        return true;
+-    }
+-
+     private void trackAndShowEntity(org.bukkit.entity.Entity entity) {
+-        this.trackAndShowEntity(entity, null);
+-    }
+-
+-    private void trackAndShowEntity(org.bukkit.entity.Entity entity, final @Nullable UUID uuidOverride) {
+         ChunkMap tracker = this.getHandle().level().getChunkSource().chunkMap;
+         Entity other = ((CraftEntity) entity).getHandle();
  
-+        invertedVisibilityEntities.remove(uuid, set);
-+        // Canvas end - fix folia visibility api
-         return true;
-     }
- 
-@@ -1977,8 +2081,8 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
-             if (original != null) otherPlayer.setUUID(original); // Paper - uuid override
-         }
- 
+-        if (other instanceof ServerPlayer) {
+-            ServerPlayer otherPlayer = (ServerPlayer) other;
+-            UUID original = null;
+-            if (uuidOverride != null) {
+-                original = otherPlayer.getUUID();
+-                otherPlayer.setUUID(uuidOverride);
+-            }
+-            this.getHandle().connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(otherPlayer), this.getHandle())); // Paper - Add Listing API for Player
+-            if (original != null) otherPlayer.setUUID(original); // Paper - uuid override
+-        }
+-
 -        ChunkMap.TrackedEntity entry = tracker.entityMap.get(other.getId());
 -        if (entry != null && !entry.seenBy.contains(this.getHandle().connection)) {
 +        ChunkMap.TrackedEntity entry = other.moonrise$getTrackedEntity(); // Folia - region threading
@@ -4602,21 +4734,102 @@ index 5acf2cfcd939708bf7845dfbc9dc36ff80add8c1..457fe7bb5a43a3ae9e00270d06eee917
              entry.updatePlayer(this.getHandle());
          }
  
-@@ -2061,6 +2165,13 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -1997,7 +2099,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+         // First unregister the player for all players with the OLD game profile
+         for (ServerPlayer player : players) {
+             CraftPlayer bukkitPlayer = player.getBukkitEntity();
+-            if (bukkitPlayer.canSee(this)) {
++            if (bukkitPlayer.sendProfileInfo(self, false)) { // Canvas - fix folia visibility api
+                 bukkitPlayer.unregisterEntity(self);
+             }
+         }
+@@ -2008,9 +2110,11 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+         // Re-register the game profile for all players
+         for (ServerPlayer player : players) {
+             CraftPlayer bukkitPlayer = player.getBukkitEntity();
+-            if (bukkitPlayer.canSee(this)) {
+-                bukkitPlayer.trackAndShowEntity(self.getBukkitEntity(), gameProfile.id());
++            // Canvas start - fix folia visibility api
++            if (bukkitPlayer.sendProfileInfo(self, true)) {
++                bukkitPlayer.trackAndShowEntity(self.getBukkitEntity());
+             }
++            // Canvas end - fix folia visibility api
+         }
+ 
+         // Refresh misc player things AFTER sending game profile
+@@ -2024,7 +2128,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+             return;
+         }
+ 
+-        if (this.invertedVisibilityEntities.remove(entity.getUniqueId()) == null) {
++        if (this.resetVisibility(entity, true)) { // Canvas - fix folia visibility api
+             this.trackAndShowEntity(entity);
+         }
+     }
+@@ -2061,6 +2165,12 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
          this.invertedVisibilityEntities.remove(entity.getUUID());
      }
  
 +    // Canvas start - region threading
 +    public boolean canSeeNMS(final Entity entity) {
-+        return entity.visibleByDefault ^ (!invertedVisibilityEntities.isEmpty() &&
-+            this.invertedVisibilityEntities.containsKey(entity.getUUID()));
++        return this.invertedVisibilityEntities.canSee(entity.getUUID(), entity.visibleByDefault);
 +    }
 +
 +    // Canvas end - region threading
      @Override
      public boolean canSee(Player player) {
          return this.canSee((org.bukkit.entity.Entity) player);
-@@ -2428,6 +2539,12 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -2089,12 +2199,18 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+         if (this.getHandle().connection == null) return false;
+         if (!this.canSee(other)) return false;
+ 
+-        if (unlistedEntities.add(other.getUniqueId())) {
+-            this.getHandle().connection.send(ClientboundPlayerInfoUpdatePacket.updateListed(other.getUniqueId(), false));
+-            return true;
+-        } else {
+-            return false;
+-        }
++        // Canvas start - fix folia visibility api
++        final UUID uuid = other.getUniqueId();
++        final boolean[] unlisted = new boolean[1];
++        this.invertedVisibilityEntities.run(uuid, () -> {
++            if (this.unlistedEntities.add(uuid)) {
++                this.getHandle().connection.send(ClientboundPlayerInfoUpdatePacket.updateListed(uuid, false));
++                unlisted[0] = true;
++            }
++        });
++
++        return unlisted[0];
++        // Canvas end - fix folia visibility api
+     }
+ 
+     @Override
+@@ -2103,12 +2219,18 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+         if (this.getHandle().connection == null) return false;
+         if (!this.canSee(other)) throw new IllegalStateException("Player cannot see other player");
+ 
+-        if (this.unlistedEntities.remove(other.getUniqueId())) {
+-            this.getHandle().connection.send(ClientboundPlayerInfoUpdatePacket.updateListed(other.getUniqueId(), true));
+-            return true;
+-        } else {
+-            return false;
+-        }
++        // Canvas start - fix folia visibility api
++        final UUID uuid = other.getUniqueId();
++        final boolean[] listed = new boolean[1];
++        this.invertedVisibilityEntities.run(uuid, () -> {
++            if (this.unlistedEntities.remove(uuid)) {
++                this.getHandle().connection.send(ClientboundPlayerInfoUpdatePacket.updateListed(uuid, true));
++                listed[0] = true;
++            }
++        });
++
++        return listed[0];
++        // Canvas end - fix folia visibility api
+     }
+     // Paper end - Add Listing API for Player
+ 
+@@ -2428,6 +2550,12 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
      public void disconnect() {
          this.conversationTracker.abandonAllConversations();
          this.perm.clearPermissions();
@@ -4629,7 +4842,7 @@ index 5acf2cfcd939708bf7845dfbc9dc36ff80add8c1..457fe7bb5a43a3ae9e00270d06eee917
      }
  
      @Override
-@@ -2548,6 +2665,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -2548,6 +2676,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
          if (!(scoreboard instanceof CraftScoreboard craftScoreboard)) {
              throw new IllegalArgumentException("Cannot set player scoreboard to an unregistered Scoreboard");
          }
@@ -4637,7 +4850,7 @@ index 5acf2cfcd939708bf7845dfbc9dc36ff80add8c1..457fe7bb5a43a3ae9e00270d06eee917
  
          this.server.getScoreboardManager().setPlayerBoard(this, craftScoreboard);
      }
-@@ -3057,7 +3175,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3057,7 +3186,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
          @Override
          public void respawn() {
              if (CraftPlayer.this.getHealth() <= 0 && CraftPlayer.this.isOnline()) {
@@ -4646,7 +4859,7 @@ index 5acf2cfcd939708bf7845dfbc9dc36ff80add8c1..457fe7bb5a43a3ae9e00270d06eee917
              }
          }
  
-@@ -3315,6 +3433,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3315,6 +3444,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public org.bukkit.entity.Entity releaseLeftShoulderEntity() {
@@ -4654,7 +4867,7 @@ index 5acf2cfcd939708bf7845dfbc9dc36ff80add8c1..457fe7bb5a43a3ae9e00270d06eee917
          if (!getHandle().getShoulderEntityLeft().isEmpty()) {
              Entity entity = getHandle().releaseLeftShoulderEntity();
              if (entity != null) {
-@@ -3327,6 +3446,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3327,6 +3457,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public org.bukkit.entity.Entity releaseRightShoulderEntity() {
@@ -4662,7 +4875,7 @@ index 5acf2cfcd939708bf7845dfbc9dc36ff80add8c1..457fe7bb5a43a3ae9e00270d06eee917
          if (!getHandle().getShoulderEntityRight().isEmpty()) {
              Entity entity = getHandle().releaseRightShoulderEntity();
              if (entity != null) {
-@@ -3339,13 +3459,23 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3339,13 +3470,23 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public org.bukkit.entity.Entity getShoulderEntityLeft() {
@@ -4687,7 +4900,7 @@ index 5acf2cfcd939708bf7845dfbc9dc36ff80add8c1..457fe7bb5a43a3ae9e00270d06eee917
              }
          }
  
-@@ -3354,7 +3484,9 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3354,7 +3495,9 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public void setShoulderEntityLeft(org.bukkit.entity.Entity entity) {
@@ -4697,7 +4910,7 @@ index 5acf2cfcd939708bf7845dfbc9dc36ff80add8c1..457fe7bb5a43a3ae9e00270d06eee917
              Preconditions.checkArgument(((CraftEntity) entity).getHandle().getType().canSerialize(), "Cannot set entity of type %s as a shoulder entity", entity.getType().getKey());
          }
          this.getHandle().setShoulderEntityLeft(entity == null ? new CompoundTag() : ((CraftEntity) entity).save());
-@@ -3365,13 +3497,23 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3365,13 +3508,23 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public org.bukkit.entity.Entity getShoulderEntityRight() {
@@ -4722,7 +4935,7 @@ index 5acf2cfcd939708bf7845dfbc9dc36ff80add8c1..457fe7bb5a43a3ae9e00270d06eee917
              }
          }
  
-@@ -3380,7 +3522,9 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -3380,7 +3533,9 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public void setShoulderEntityRight(org.bukkit.entity.Entity entity) {
