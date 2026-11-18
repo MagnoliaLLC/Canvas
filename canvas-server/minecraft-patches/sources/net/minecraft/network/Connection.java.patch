@@ -8,20 +8,26 @@
              this.flushQueue();
              // Paper end - Optimize network
          }
-@@ -574,10 +_,114 @@
+@@ -546,7 +_,7 @@
+         if (false && connected && this.pendingActions.isEmpty()) { // Folia - region threading - connection fixes
+             this.channel.eventLoop().execute(task);
+         } else {
+-            this.pendingActions.add(new WrappedConsumer(connection -> connection.channel.eventLoop().execute(task)));
++            this.pendingActions.add(new WrappedConsumer(connection -> connection.canvas$runOnEventLoop(task))); // Canvas - optimize packet sending
+             this.flushQueue();
+         }
+     }
+@@ -574,9 +_,119 @@
          if (this.channel.eventLoop().inEventLoop()) {
              this.doSendPacket(packet, listener, flush);
          } else {
-+            // Canvas start - optimize packet sending
-+            if (!flush && this.channel.eventLoop() instanceof io.netty.util.concurrent.SingleThreadEventExecutor eventLoop) {
-+                eventLoop.lazyExecute(() -> this.doSendPacket(packet, listener, false));
-+                return;
-+            }
-+            // Canvas end - optimize packet sending
-             this.channel.eventLoop().execute(() -> this.doSendPacket(packet, listener, flush));
-         }
-     }
- 
+-            this.channel.eventLoop().execute(() -> this.doSendPacket(packet, listener, flush));
+-        }
+-    }
++            this.canvas$post(() -> this.doSendPacket(packet, listener, flush), !flush); // Canvas - optimize packet sending
++        }
++    }
++
 +    // Canvas start - coalesce tracker sends
 +    private volatile io.papermc.paper.threadedregions.TickRegionScheduler.@Nullable TickThreadRunner canvas$heldBy;
 +
@@ -82,15 +88,17 @@
 +    // Canvas end - coalesce tracker sends
 +
 +    // Canvas start - optimize packet sending
++    private final io.canvasmc.canvas.util.PostedWrites canvas$postedWrites = new io.canvasmc.canvas.util.PostedWrites();
++
 +    private void sendPackets(final java.util.List<PacketSendAction> sends) {
-+        if (sends.size() == 1) {
++        if (sends.size() == 1 && !this.channel.eventLoop().inEventLoop()) {
 +            final PacketSendAction send = sends.getFirst();
 +            this.sendPacket(send.packet, send.listener, send.flush);
 +            return;
 +        }
 +
 +        this.sentPackets += sends.size();
-+        final Runnable drain = () -> { // Canvas - optimize packet sending
++        final Runnable drain = () -> {
 +            boolean flush = false;
 +            for (final PacketSendAction send : sends) {
 +                this.doSendPacket(send.packet, send.listener, false);
@@ -100,13 +108,24 @@
 +            if (flush) {
 +                this.channel.flush();
 +            }
-+        }; // Canvas - optimize packet sending
-+        // Canvas start - optimize packet sending
-+        if (this.channel.eventLoop() instanceof io.netty.util.concurrent.SingleThreadEventExecutor eventLoop && Connection.noneFlush(sends)) {
-+            eventLoop.lazyExecute(drain);
++        };
++        this.canvas$post(drain, Connection.noneFlush(sends));
++    }
++
++    private void canvas$post(final Runnable write, final boolean lazy) {
++        if (lazy && this.channel.eventLoop() instanceof io.netty.util.concurrent.SingleThreadEventExecutor eventLoop) {
++            this.canvas$postedWrites.post(eventLoop::lazyExecute, write);
 +            return;
 +        }
-+        this.channel.eventLoop().execute(drain);
++        this.canvas$postedWrites.post(this.channel.eventLoop(), write);
++    }
++
++    private void canvas$runOnEventLoop(final Runnable task) {
++        if (this.channel.eventLoop().inEventLoop()) {
++            task.run();
++            return;
++        }
++        this.canvas$post(task, false);
 +    }
 +
 +    private static boolean noneFlush(final java.util.List<PacketSendAction> sends) {
@@ -118,11 +137,9 @@
 +        return true;
 +    }
 +    // Canvas end - optimize packet sending
-+    // Canvas end - optimize packet sending
-+
+ 
      private void doSendPacket(final Packet<?> packet, final @Nullable ChannelFutureListener listener, final boolean flush) {
          // Paper start - Optimize network
-         final net.minecraft.server.level.ServerPlayer player = this.getPlayer();
 @@ -664,6 +_,10 @@
                      queue = (ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue<WrappedConsumer>)this.pendingActions;
  
@@ -134,12 +151,13 @@
                  for (;;) {
                      // synchronise so that queue clears appear atomic
                      synchronized (queue) {
-@@ -673,9 +_,30 @@
+@@ -673,9 +_,40 @@
                          break;
                      }
  
 +                    // Canvas start - optimize packet sending
-+                    if (!inEventLoop && holder instanceof PacketSendAction send) {
++                    final boolean inline = inEventLoop && sends == null && this.canvas$postedWrites.isEmpty();
++                    if (!inline && holder instanceof PacketSendAction send) {
 +                        if (sends == null) {
 +                            sends = new java.util.ArrayList<>();
 +                        }
@@ -150,6 +168,15 @@
 +                    if (sends != null) {
 +                        this.sendPackets(sends);
 +                        sends = null;
++                    }
++
++                    if (inEventLoop && !inline) {
++                        final WrappedConsumer consumer = holder;
++                        this.canvas$post(() -> {
++                            consumer.accept(this);
++                            this.processQueue();
++                        }, false);
++                        return true;
 +                    }
 +                    // Canvas end - optimize packet sending
 +
@@ -165,6 +192,27 @@
              } finally {
                  if (set) {
                      this.flushingQueue.set(false);
+@@ -783,7 +_,19 @@
+ 
+         if (this.isConnected()) {
+             this.disconnectionDetails = details; // Canvas - region threading
+-            this.channel.close(); // Canvas - region threading
++            // Canvas start - optimize packet sending
++            if (this.channel.eventLoop().inEventLoop() && !this.canvas$postedWrites.isEmpty()) {
++                this.setReadOnly();
++                this.stopReadingPackets = true;
++                try {
++                    this.canvas$post(this.channel::close, false);
++                } catch (final RejectedExecutionException ignored) {
++                    this.channel.close();
++                }
++            } else {
++                this.channel.close(); // Canvas - region threading
++            }
++            // Canvas end - optimize packet sending
+         }
+         this.becomeActive = true; // Folia - region threading
+     }
 @@ -1139,10 +_,18 @@
  
      private static final class PacketSendAction extends WrappedConsumer {
