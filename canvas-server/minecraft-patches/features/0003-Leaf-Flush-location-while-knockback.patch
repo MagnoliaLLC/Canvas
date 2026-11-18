@@ -8,7 +8,7 @@ As part of Leaf: https://github.com/Winds-Studio/Leaf/blob/58a4a9cb7994474e63ba4
 Licensed under: https://github.com/Winds-Studio/Leaf/blob/9e1b4ca7bc2e9154bc5620b7a9fef0eab3c7aae5/LICENSE.md
 
 diff --git a/net/minecraft/world/entity/player/Player.java b/net/minecraft/world/entity/player/Player.java
-index a380a1d066bedfbcc6de4be94628a93223209a81..598840eb477538e1470563f909c41962155c97d0 100644
+index ad66ece377f12c1e505477f0a51d0d63cb253f28..c036d5816321ea6638360f3ce1f814ec518eef54 100644
 --- a/net/minecraft/world/entity/player/Player.java
 +++ b/net/minecraft/world/entity/player/Player.java
 @@ -1117,6 +1117,12 @@ public abstract class Player extends Avatar implements ContainerUser {

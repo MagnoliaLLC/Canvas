@@ -5,10 +5,10 @@ Subject: [PATCH] Purpur Ender Chest 6 Rows Config
 
 
 diff --git a/net/minecraft/server/players/PlayerList.java b/net/minecraft/server/players/PlayerList.java
-index 4dbd07aa3fe1774dcd64b5da4fc325d4f593bd8c..8c1b2b04ab04077bacdb58e18145a42b382c8bd8 100644
+index 37617e6b97771a932060dd3ffcdb3e6a17407bfd..c793b06a9c28a1aaa0220dc51f23ac33e1380939 100644
 --- a/net/minecraft/server/players/PlayerList.java
 +++ b/net/minecraft/server/players/PlayerList.java
-@@ -1049,6 +1049,27 @@ public abstract class PlayerList {
+@@ -1042,6 +1042,27 @@ public abstract class PlayerList {
          player.getBukkitEntity().recalculatePermissions(); // CraftBukkit
          this.server.getCommands().sendCommands(player);
          } // Paper - Add sendOpLevel API
@@ -37,7 +37,7 @@ index 4dbd07aa3fe1774dcd64b5da4fc325d4f593bd8c..8c1b2b04ab04077bacdb58e18145a42b
  
      // Paper start - whitelist verify event / login event
 diff --git a/net/minecraft/world/entity/player/Player.java b/net/minecraft/world/entity/player/Player.java
-index 598840eb477538e1470563f909c41962155c97d0..62b9a5d6c1e25ca5ef6be4e632151ab8175da9e4 100644
+index c036d5816321ea6638360f3ce1f814ec518eef54..0daddec5e755cd9b25aa9b1ae1163daa7b8782ac 100644
 --- a/net/minecraft/world/entity/player/Player.java
 +++ b/net/minecraft/world/entity/player/Player.java
 @@ -180,6 +180,7 @@ public abstract class Player extends Avatar implements ContainerUser {

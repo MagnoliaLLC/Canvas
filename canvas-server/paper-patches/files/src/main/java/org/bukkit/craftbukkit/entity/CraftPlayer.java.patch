@@ -8,24 +8,18 @@
          this.invertedVisibilityEntities.remove(entity.getUUID());
      }
  
-@@ -2179,8 +_,20 @@
+@@ -2178,8 +_,14 @@
  
      @Override
      public boolean canSee(org.bukkit.entity.Entity entity) {
 -        return this.equals(entity) || entity.isVisibleByDefault() ^ this.invertedVisibilityEntities.containsKey(entity.getUniqueId()); // SPIGOT-7312: Can always see self
 -    }
-+        return this.equals(entity) || entity.isVisibleByDefault() ^ (!invertedVisibilityEntities.isEmpty() && this.invertedVisibilityEntities.containsKey(entity.getUniqueId())); // SPIGOT-7312: Can always see self // Leaf - optimize canSee checks
++        return this.equals(entity) || this.invertedVisibilityEntities.canSee(entity.getUniqueId(), entity.isVisibleByDefault()); // SPIGOT-7312: Can always see self // Leaf - optimize canSee checks // Canvas - fix folia visibility api
 +    }
 +    // Leaf start - optimize canSee checks
 +
-+    // Canvas start - optimize entity tracker
-+    public boolean canvas$canSeeChunkMapUpdate(final net.minecraft.world.entity.Entity entity) {
-+        return entity.visibleByDefault ^ (!this.invertedVisibilityEntities.isEmpty() && this.invertedVisibilityEntities.containsKey(entity.getUUID()));
-+    }
-+    // Canvas end - optimize entity tracker
-+
-+    public boolean canSeeChunkMapUpdatePlayer(org.bukkit.entity.Entity entity) {
-+        return entity.isVisibleByDefault() ^ (!invertedVisibilityEntities.isEmpty() && this.invertedVisibilityEntities.containsKey(entity.getUniqueId())); // SPIGOT-7312: Can always see self // SparklyPaper - optimize canSee checks
++    public boolean canSeeChunkMapUpdatePlayer(net.minecraft.world.entity.Entity entity) { // Canvas - optimize entity tracker
++        return this.invertedVisibilityEntities.canSee(entity.getUUID(), entity.visibleByDefault); // SPIGOT-7312: Can always see self // SparklyPaper - optimize canSee checks // Canvas - optimize entity tracker // Canvas - fix folia visibility api
 +    }
 +    // Leaf end - optimize canSee checks
  

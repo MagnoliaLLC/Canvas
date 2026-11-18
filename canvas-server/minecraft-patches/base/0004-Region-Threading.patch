@@ -26439,7 +26439,7 @@ index 6f18226ea5e01900d4d7683567e33d65a8baf384..46315f29c6415f949023d45947e38dac
              parsedDate = defaultValue;
          }
 diff --git a/net/minecraft/server/players/PlayerList.java b/net/minecraft/server/players/PlayerList.java
-index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b2486ba8c14 100644
+index b22b0110cc62b160b70ceeac9490b4b424639d66..433f50a19a8b4f5d755587683fabd17872eadeb1 100644
 --- a/net/minecraft/server/players/PlayerList.java
 +++ b/net/minecraft/server/players/PlayerList.java
 @@ -113,11 +113,13 @@ public abstract class PlayerList {
@@ -26570,17 +26570,51 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
          }
  
          final net.kyori.adventure.text.Component jm = playerJoinEvent.joinMessage();
-@@ -260,8 +339,7 @@ public abstract class PlayerList {
+@@ -260,26 +339,17 @@ public abstract class PlayerList {
          ClientboundPlayerInfoUpdatePacket packet = ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(player)); // Paper - Add Listing API for Player
  
          final List<ServerPlayer> onlinePlayers = Lists.newArrayListWithExpectedSize(this.players.size() - 1); // Paper - Use single player info update packet on join
 -        for (int i = 0; i < this.players.size(); ++i) {
 -            ServerPlayer entityplayer1 = (ServerPlayer) this.players.get(i);
+-
+-            if (entityplayer1.getBukkitEntity().canSee(bukkitPlayer)) {
+-                // Paper start - Add Listing API for Player
+-                if (entityplayer1.getBukkitEntity().isListed(bukkitPlayer)) {
+-                    // Paper end - Add Listing API for Player
+-                    entityplayer1.connection.send(packet);
+-                    // Paper start - Add Listing API for Player
+-                } else {
+-                    entityplayer1.connection.send(ClientboundPlayerInfoUpdatePacket.createSinglePlayerInitializing(player, false));
+-                }
+-                // Paper end - Add Listing API for Player
+-            }
++        final List<com.mojang.authlib.GameProfile> onlineProfiles = Lists.newArrayListWithExpectedSize(this.players.size() - 1); // Canvas - fix folia visibility api
 +        for (ServerPlayer entityplayer1 : this.players) { // Folia - region threading
++
++            entityplayer1.getBukkitEntity().sendJoiningInfo(player, packet); // Canvas - fix folia visibility api
  
-             if (entityplayer1.getBukkitEntity().canSee(bukkitPlayer)) {
-                 // Paper start - Add Listing API for Player
-@@ -312,7 +390,7 @@ public abstract class PlayerList {
+             if (entityplayer1 == player || !bukkitPlayer.canSee(entityplayer1.getBukkitEntity())) { // Paper - Use single player info update packet on join; Don't include joining player
+                 continue;
+             }
+ 
+             onlinePlayers.add(entityplayer1); // Paper - Use single player info update packet on join
++            onlineProfiles.add(entityplayer1.getGameProfile()); // Canvas - fix folia visibility api
+         }
+         // Paper start - Use single player info update packet on join
+         if (!onlinePlayers.isEmpty()) {
+@@ -287,6 +357,11 @@ public abstract class PlayerList {
+         }
+         // Paper end - Use single player info update packet on join
+         player.sentListPacket = true;
++        // Canvas start - fix folia visibility api
++        for (int i = 0, len = onlinePlayers.size(); i < len; ++i) {
++            bukkitPlayer.recheckJoinInfo(onlinePlayers.get(i), onlineProfiles.get(i));
++        }
++        // Canvas end - fix folia visibility api
+         player.suppressTrackerForLogin = false; // Paper - Fire PlayerJoinEvent when Player is actually ready
+         player.level().getChunkSource().addEntity(player); // Paper - Fire PlayerJoinEvent when Player is actually ready; track entity now
+         // CraftBukkit end
+@@ -312,7 +387,7 @@ public abstract class PlayerList {
          // Paper start - Configurable player collision; Add to collideRule team if needed
          final net.minecraft.world.scores.Scoreboard scoreboard = this.getServer().getLevel(Level.OVERWORLD).getScoreboard();
          final PlayerTeam collideRuleTeam = scoreboard.getPlayerTeam(this.collideRuleTeamName);
@@ -26589,7 +26623,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
              scoreboard.addPlayerToTeam(player.getScoreboardName(), collideRuleTeam);
          }
          // Paper end - Configurable player collision
-@@ -417,7 +495,7 @@ public abstract class PlayerList {
+@@ -417,7 +492,7 @@ public abstract class PlayerList {
  
      public void save(final ServerPlayer player) {
          if (!player.getBukkitEntity().isPersistent()) return; // CraftBukkit
@@ -26598,7 +26632,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
          this.playerIo.save(player);
          ServerStatsCounter stats = player.getStats(); // CraftBukkit
          if (stats != null) {
-@@ -451,7 +529,7 @@ public abstract class PlayerList {
+@@ -451,7 +526,7 @@ public abstract class PlayerList {
          // CraftBukkit end
  
          // Paper start - Configurable player collision; Remove from collideRule team if needed
@@ -26607,7 +26641,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
              final net.minecraft.world.scores.Scoreboard scoreBoard = this.server.getLevel(Level.OVERWORLD).getScoreboard();
              final PlayerTeam team = scoreBoard.getPlayersTeam(this.collideRuleTeamName);
              if (player.getTeam() == team && team != null) {
-@@ -489,16 +567,11 @@ public abstract class PlayerList {
+@@ -489,16 +564,11 @@ public abstract class PlayerList {
  
          player.unRide();
  
@@ -26626,7 +26660,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
          player.getAdvancements().clearTriggers();
          this.players.remove(player);
          this.playersByName.remove(player.getScoreboardName().toLowerCase(java.util.Locale.ROOT)); // Spigot
-@@ -517,8 +590,7 @@ public abstract class PlayerList {
+@@ -517,14 +587,9 @@ public abstract class PlayerList {
          // CraftBukkit start
          // this.broadcastAll(new ClientboundPlayerInfoRemovePacket(List.of(player.getUUID())));
          ClientboundPlayerInfoRemovePacket packet = new ClientboundPlayerInfoRemovePacket(List.of(player.getUUID()));
@@ -26634,9 +26668,16 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
 -            ServerPlayer otherPlayer = this.players.get(i);
 +        for (ServerPlayer otherPlayer : this.players) { // Folia - region threading
  
-             if (otherPlayer.getBukkitEntity().canSee(player.getBukkitEntity())) {
-                 otherPlayer.connection.send(packet);
-@@ -541,7 +613,7 @@ public abstract class PlayerList {
+-            if (otherPlayer.getBukkitEntity().canSee(player.getBukkitEntity())) {
+-                otherPlayer.connection.send(packet);
+-            } else {
+-                otherPlayer.getBukkitEntity().onEntityRemove(player);
+-            }
++            otherPlayer.getBukkitEntity().sendQuittingInfo(player, packet); // Canvas - fix folia visibility api
+         }
+         // This removes the scoreboard (and player reference) for the specific player in the manager
+         this.cserver.getScoreboardManager().removePlayer(player.getBukkitEntity());
+@@ -541,7 +606,7 @@ public abstract class PlayerList {
          }
      }
      // Paper end - PlayerLoginEvent
@@ -26645,7 +26686,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
          LoginResult whitelistEventResult; // Paper
          // Paper start - Fix MC-158900
          UserBanListEntry ban1;
-@@ -550,7 +622,7 @@ public abstract class PlayerList {
+@@ -550,7 +615,7 @@ public abstract class PlayerList {
              // Paper end - Fix MC-158900
              MutableComponent reason = Component.translatable("multiplayer.disconnect.banned.reason", ban.getReasonMessage());
              if (ban.getExpires() != null) {
@@ -26654,7 +26695,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
              }
  
              return new LoginResult(reason, org.bukkit.event.player.PlayerLoginEvent.Result.KICK_BANNED); // Paper - PlayerLoginEvent
-@@ -563,12 +635,12 @@ public abstract class PlayerList {
+@@ -563,12 +628,12 @@ public abstract class PlayerList {
                  IpBanListEntry ban = this.ipBans.get(address);
                  MutableComponent reason = Component.translatable("multiplayer.disconnect.banned_ip.reason", ban.getReasonMessage());
                  if (ban.getExpires() != null) {
@@ -26669,7 +26710,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
              }
          }
      }
-@@ -588,15 +660,18 @@ public abstract class PlayerList {
+@@ -588,15 +653,18 @@ public abstract class PlayerList {
              dupes.add(serverPlayer);
          }
  
@@ -26691,7 +26732,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
          ServerPlayer.RespawnResult result = serverPlayer.findRespawnPositionAndUseSpawnBlock0(!keepAllPlayerData, TeleportTransition.DO_NOTHING, respawnReason);
          if (result == null) { // disconnected player during the respawn event
              return serverPlayer;
-@@ -744,10 +819,12 @@ public abstract class PlayerList {
+@@ -744,10 +812,12 @@ public abstract class PlayerList {
      public void tick() {
          if (++this.sendAllPlayerInfoIn > 600) {
              // CraftBukkit start
@@ -26707,7 +26748,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
              }
              // CraftBukkit end
              this.sendAllPlayerInfoIn = 0;
-@@ -765,8 +842,8 @@ public abstract class PlayerList {
+@@ -765,8 +835,8 @@ public abstract class PlayerList {
      }
  
      public void broadcastAll(Packet packet, Level world) {
@@ -26718,7 +26759,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
          }
  
      }
-@@ -803,8 +880,7 @@ public abstract class PlayerList {
+@@ -803,8 +873,7 @@ public abstract class PlayerList {
          if (team == null) {
              this.broadcastSystemMessage(message, false);
          } else {
@@ -26728,7 +26769,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
                  if (targetPlayer.getTeam() != team) {
                      targetPlayer.sendSystemMessage(message);
                  }
-@@ -813,10 +889,13 @@ public abstract class PlayerList {
+@@ -813,10 +882,13 @@ public abstract class PlayerList {
      }
  
      public String[] getPlayerNamesArray() {
@@ -26745,7 +26786,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
          }
  
          return names;
-@@ -843,7 +922,11 @@ public abstract class PlayerList {
+@@ -843,7 +915,11 @@ public abstract class PlayerList {
              );
          ServerPlayer player = this.getPlayer(nameAndId.id());
          if (player != null) {
@@ -26758,7 +26799,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
          }
      }
  
-@@ -851,7 +934,11 @@ public abstract class PlayerList {
+@@ -851,7 +927,11 @@ public abstract class PlayerList {
          if (this.ops.remove(nameAndId)) {
              ServerPlayer player = this.getPlayer(nameAndId.id());
              if (player != null) {
@@ -26771,7 +26812,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
              }
          }
      }
-@@ -881,8 +968,11 @@ public abstract class PlayerList {
+@@ -881,8 +961,11 @@ public abstract class PlayerList {
      }
  
      // Paper start - whitelist verify event / login event
@@ -26785,7 +26826,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
          final io.papermc.paper.event.player.PlayerServerFullCheckEvent fullCheckEvent = new io.papermc.paper.event.player.PlayerServerFullCheckEvent(
              new com.destroystokyo.paper.profile.CraftPlayerProfile(nameAndId),
              io.papermc.paper.adventure.PaperAdventure.asAdventure(currentResult.message),
-@@ -937,8 +1027,7 @@ public abstract class PlayerList {
+@@ -937,8 +1020,7 @@ public abstract class PlayerList {
          final ResourceKey<Level> dimension,
          final Packet<?> packet
      ) {
@@ -26795,7 +26836,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
              // CraftBukkit start - Test if player receiving packet can see the source of the packet
              if (except != null && !player.getBukkitEntity().canSee(except.getBukkitEntity())) {
                 continue;
-@@ -961,20 +1050,36 @@ public abstract class PlayerList {
+@@ -961,20 +1043,36 @@ public abstract class PlayerList {
      }
      public void saveAll(final int interval) {
          // Paper end - Incremental chunk and player saving
@@ -26837,7 +26878,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
      }
  
      public UserWhiteList getWhiteList() {
-@@ -1019,7 +1124,7 @@ public abstract class PlayerList {
+@@ -1019,7 +1117,7 @@ public abstract class PlayerList {
          }
  
          player.connection.send(new ClientboundGameEventPacket(ClientboundGameEventPacket.LEVEL_CHUNKS_LOAD_START, 0.0F));
@@ -26846,7 +26887,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
      }
  
      public void sendAllPlayerInfo(final ServerPlayer player) {
-@@ -1083,6 +1188,20 @@ public abstract class PlayerList {
+@@ -1083,6 +1181,20 @@ public abstract class PlayerList {
      }
  
      public void removeAll(boolean isRestarting) {
@@ -26867,7 +26908,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
          // Paper end
          // CraftBukkit start - disconnect safely
          for (ServerPlayer player : this.players) {
-@@ -1092,7 +1211,7 @@ public abstract class PlayerList {
+@@ -1092,7 +1204,7 @@ public abstract class PlayerList {
          // CraftBukkit end
  
          // Paper start - Configurable player collision; Remove collideRule team if it exists
@@ -26876,7 +26917,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
              final net.minecraft.world.scores.Scoreboard scoreboard = this.getServer().getLevel(Level.OVERWORLD).getScoreboard();
              final PlayerTeam team = scoreboard.getPlayersTeam(this.collideRuleTeamName);
              if (team != null) scoreboard.removePlayerTeam(team);
-@@ -1274,8 +1393,17 @@ public abstract class PlayerList {
+@@ -1274,8 +1386,17 @@ public abstract class PlayerList {
          //     playerAdvancements.reload(this.server.getAdvancements());
          // }
          for (ServerPlayer player : this.players) {
@@ -26896,7 +26937,7 @@ index b22b0110cc62b160b70ceeac9490b4b424639d66..a88ee38d1fb7b7ed4b91b77576ef4b24
          }
          // CraftBukkit end
  
-@@ -1296,8 +1424,17 @@ public abstract class PlayerList {
+@@ -1296,8 +1417,17 @@ public abstract class PlayerList {
          );
  
          for (ServerPlayer player : this.players) {
@@ -32388,7 +32429,7 @@ index 625996a7e1c6ec51312d25d7a94a08caccba32de..21208994311a2fc3f5403a4d9dce6155
              return true;
          }
 diff --git a/net/minecraft/world/entity/player/Player.java b/net/minecraft/world/entity/player/Player.java
-index 4ba3fb85b0473b4e7aa237701034d25f84e955cd..04d8a510caecd96bd9b242632035cfc38a54458d 100644
+index 4ba3fb85b0473b4e7aa237701034d25f84e955cd..f6fb2eaf71dece97a1e5510c477867e6da312e7b 100644
 --- a/net/minecraft/world/entity/player/Player.java
 +++ b/net/minecraft/world/entity/player/Player.java
 @@ -150,6 +150,11 @@ public abstract class Player extends Avatar implements ContainerUser {
@@ -32403,6 +32444,15 @@ index 4ba3fb85b0473b4e7aa237701034d25f84e955cd..04d8a510caecd96bd9b242632035cfc3
      public final InventoryMenu inventoryMenu;
      public AbstractContainerMenu containerMenu;
      protected FoodData foodData = new FoodData();
+@@ -164,7 +169,7 @@ public abstract class Player extends Avatar implements ContainerUser {
+     public int enchantmentSeed = 0;
+     protected final float defaultFlySpeed = 0.02F;
+     private int lastLevelUpTime;
+-    public GameProfile gameProfile;
++    public volatile GameProfile gameProfile; // Canvas - region threading - volatile
+     private boolean reducedDebugInfo;
+     private ItemStack lastItemInMainHand = ItemStack.EMPTY;
+     private final ItemCooldowns cooldowns = this.createItemCooldowns();
 @@ -491,6 +496,7 @@ public abstract class Player extends Avatar implements ContainerUser {
          }
  
