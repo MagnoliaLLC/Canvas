@@ -9644,23 +9644,25 @@ index 0000000000000000000000000000000000000000..13f98a99f738fdb02e9aa496b7c911fd
 +}
 diff --git a/io/papermc/paper/threadedregions/ThreadedRegionizer.java b/io/papermc/paper/threadedregions/ThreadedRegionizer.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8afdb8090
+index 0000000000000000000000000000000000000000..2dc5c953ef2505d95fc8384d512b8fff9e72c5c1
 --- /dev/null
 +++ b/io/papermc/paper/threadedregions/ThreadedRegionizer.java
-@@ -0,0 +1,1508 @@
+@@ -0,0 +1,1680 @@
 +package io.papermc.paper.threadedregions;
 +
-+import ca.spottedleaf.concurrentutil.map.SWMRLong2ObjectHashTable;
++import ca.spottedleaf.concurrentutil.map.concurrent.longs.ConcurrentChainedLong2ReferenceHashTable;
 +import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
 +import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
 +import com.destroystokyo.paper.util.SneakyThrow;
 +import com.mojang.logging.LogUtils;
 +import io.canvasmc.canvas.region.RegionTickData;
 +import io.canvasmc.canvas.region.WorldRegionizer;
++import io.canvasmc.canvas.util.ReentrantKeyLock;
 +import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 +import it.unimi.dsi.fastutil.longs.LongArrayList;
 +import it.unimi.dsi.fastutil.longs.LongComparator;
 +import it.unimi.dsi.fastutil.longs.LongIterator;
++import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 +import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 +import java.lang.invoke.VarHandle;
 +import java.util.ArrayList;
@@ -9692,11 +9694,15 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +    public final double maxDeadRegionPercent;
 +    public final ServerLevel world;
 +
-+    private final SWMRLong2ObjectHashTable<ThreadedRegionSection<R, S>> sections = new SWMRLong2ObjectHashTable<>();
-+    private final SWMRLong2ObjectHashTable<ThreadedRegion<R, S>> regionsById = new SWMRLong2ObjectHashTable<>();
++    private final ConcurrentChainedLong2ReferenceHashTable<ThreadedRegionSection<R, S>> sections = new ConcurrentChainedLong2ReferenceHashTable<>(); // Canvas - region threading
++    private final ConcurrentChainedLong2ReferenceHashTable<ThreadedRegion<R, S>> regionsById = new ConcurrentChainedLong2ReferenceHashTable<>(); // Canvas - region threading
 +    private final RegionCallbacks<R, S> callbacks;
++    // Canvas start - region threading
++    // operations lock the sections around a chunk and each region they change, so regions that can't touch never wait
++    private final ReentrantKeyLock keyLock = new ReentrantKeyLock();
++    // operations creating or killing regions share it, so the regions are collected with none halfway
 +    private final StampedLock regionLock = new StampedLock();
-+    private Thread writeLockOwner;
++    // Canvas end - region threading
 +
 +    /*
 +    static final record Operation(String type, int chunkX, int chunkZ) {}
@@ -9787,27 +9793,115 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +    }
 +     */
 +
-+    public void acquireReadLock() {
-+        this.regionLock.readLock();
-+    }
-+
-+    public void releaseReadLock() {
-+        this.regionLock.tryUnlockRead();
-+    }
-+
-+    private void acquireWriteLock() {
-+        final Thread currentThread = Thread.currentThread();
-+        if (this.writeLockOwner == currentThread) {
++    // Canvas start - region threading
++    private ReentrantKeyLock.Node lockKeys(final KeyPlan plan) {
++        if (this.keyLock.isHeldByCurrentThread()) {
 +            throw new IllegalStateException("Cannot recursively operate in the regioniser");
 +        }
-+        this.regionLock.writeLock();
-+        this.writeLockOwner = currentThread;
++        LongOpenHashSet want = new LongOpenHashSet();
++        plan.plan(null, want);
++        for (;;) {
++            final LongOpenHashSet need = new LongOpenHashSet(want.size());
++            final ReentrantKeyLock.Node node = this.keyLock.lock(want);
++            boolean locked = false;
++            try {
++                locked = plan.plan(want, need) && want.containsAll(need);
++            } finally {
++                if (!locked) {
++                    this.keyLock.unlock(node);
++                }
++            }
++            if (locked) {
++                return node;
++            }
++            want = need;
++        }
 +    }
 +
-+    private void releaseWriteLock() {
-+        this.writeLockOwner = null;
-+        this.regionLock.tryUnlockWrite();
++    // never block while holding keys, as a holder may be waiting on ours: such a thread skips what it can't lock
++    private ReentrantKeyLock.Node lockToRead(final long key) {
++        return this.keyLock.isHeldByCurrentThread() ? this.keyLock.tryLock(key) : this.keyLock.lock(key);
 +    }
++
++    private ReentrantKeyLock.Node lockTickBoundary(final ThreadedRegion<R, S> region) {
++        if (this.keyLock.isHeldByCurrentThread()) {
++            throw new IllegalStateException("Cannot recursively operate in the regioniser");
++        }
++        return this.keyLock.lock(region.lockKey);
++    }
++
++    private boolean planRegion(final ThreadedRegion<R, S> region, final LongOpenHashSet held, final LongOpenHashSet keys) {
++        keys.add(region.lockKey);
++        return held != null && held.contains(region.lockKey);
++    }
++
++    private void planLinkedRegions(final ThreadedRegion<R, S> region, final LongOpenHashSet keys) {
++        for (final ThreadedRegion<R, S> linked : region.mergeIntoLater) {
++            keys.add(linked.lockKey);
++        }
++        for (final ThreadedRegion<R, S> linked : region.expectingMergeFrom) {
++            keys.add(linked.lockKey);
++        }
++    }
++
++    private boolean planArea(final int fromSectionX, final int fromSectionZ, final int toSectionX, final int toSectionZ,
++                             final boolean merges, final LongOpenHashSet held, final LongOpenHashSet keys) {
++        boolean settled = true;
++        final ReferenceOpenHashSet<ThreadedRegion<R, S>> regions = new ReferenceOpenHashSet<>();
++        for (int currX = fromSectionX; currX <= toSectionX; ++currX) {
++            for (int currZ = fromSectionZ; currZ <= toSectionZ; ++currZ) {
++                final long key = CoordinateUtils.getChunkKey(currX, currZ);
++                keys.add(key);
++                final ThreadedRegionSection<R, S> section = this.sections.get(key);
++                if (section == null) {
++                    continue;
++                }
++                final ThreadedRegion<R, S> region = section.getRegionAcquire();
++                if (region == null) {
++                    settled = false;
++                } else {
++                    regions.add(region);
++                }
++            }
++        }
++
++        for (final ThreadedRegion<R, S> region : regions) {
++            if (this.planRegion(region, held, keys) && merges) {
++                this.planLinkedRegions(region, keys);
++            }
++        }
++        return settled;
++    }
++
++    private boolean planRelease(final ThreadedRegion<R, S> region, final LongOpenHashSet held, final LongOpenHashSet keys) {
++        if (this.planRegion(region, held, keys)) {
++            for (final ThreadedRegion<R, S> merging : region.expectingMergeFrom) {
++                if (this.planRegion(merging, held, keys)) {
++                    this.planLinkedRegions(merging, keys);
++                }
++            }
++        }
++        return true;
++    }
++
++    private List<ThreadedRegion<R, S>> collectRegions() {
++        final long stamp = this.regionLock.writeLock();
++        try {
++            final List<ThreadedRegion<R, S>> ret = new ArrayList<>(this.regionsById.size() + 1);
++            for (final Iterator<ThreadedRegion<R, S>> iterator = this.regionsById.valueIterator(); iterator.hasNext();) {
++                ret.add(iterator.next());
++            }
++            return ret;
++        } finally {
++            this.regionLock.unlockWrite(stamp);
++        }
++    }
++
++    private boolean shouldRemoveDeadSections(final ThreadedRegion<R, S> region, final boolean hasExpectingMerges) {
++        return hasExpectingMerges || region.hasNoAliveSections()
++            || (region.sectionByKey.size() >= this.minSectionRecalcCount && region.getDeadSectionPercent() >= this.maxDeadRegionPercent);
++    }
++    // Canvas end - region threading
 +
 +    private void onRegionCreate(final ThreadedRegion<R, S> region) {
 +        final ThreadedRegion<R, S> conflict;
@@ -9840,18 +9934,40 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +        return CoordinateUtils.getChunkKey(pos.x() >> this.sectionChunkShift, pos.z() >> this.sectionChunkShift);
 +    }
 +
++    // Canvas start - region threading
 +    public void computeForAllRegions(final Consumer<? super ThreadedRegion<R, S>> consumer) {
-+        this.regionLock.readLock();
-+        try {
-+            this.regionsById.forEachValue(consumer);
-+        } finally {
-+            this.regionLock.tryUnlockRead();
-+        }
++        // a region dying before it is locked hands its sections on, so collect again until none died
++        final ReferenceOpenHashSet<ThreadedRegion<R, S>> visited = new ReferenceOpenHashSet<>();
++        boolean missed;
++        do {
++            missed = false;
++            for (final ThreadedRegion<R, S> region : this.collectRegions()) {
++                if (!visited.add(region)) {
++                    continue;
++                }
++                final ReentrantKeyLock.Node readLock = this.lockToRead(region.lockKey);
++                if (readLock == null) {
++                    continue;
++                }
++                try {
++                    if (region.isDead()) {
++                        missed = true;
++                        continue;
++                    }
++                    consumer.accept(region);
++                } finally {
++                    this.keyLock.unlock(readLock);
++                }
++            }
++        } while (missed);
 +    }
 +
 +    public void computeForAllRegionsUnsynchronised(final Consumer<? super ThreadedRegion<R, S>> consumer) {
-+        this.regionsById.forEachValue(consumer);
++        for (final Iterator<ThreadedRegion<R, S>> iterator = this.regionsById.valueIterator(); iterator.hasNext();) {
++            consumer.accept(iterator.next());
++        }
 +    }
++    // Canvas end - region threading
 +
 +    public int computeForRegions(final int fromChunkX, final int fromChunkZ, final int toChunkX, final int toChunkZ,
 +                                  final Consumer<Set<ThreadedRegion<R, S>>> consumer) {
@@ -9860,7 +9976,10 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +        final int fromSectionZ = fromChunkZ >> shift;
 +        final int toSectionX = toChunkX >> shift;
 +        final int toSectionZ = toChunkZ >> shift;
-+        this.acquireWriteLock();
++        // Canvas start - region threading
++        final ReentrantKeyLock.Node areaLock = this.lockKeys((final LongOpenHashSet held, final LongOpenHashSet keys) ->
++            this.planArea(fromSectionX, fromSectionZ, toSectionX, toSectionZ, false, held, keys));
++        // Canvas end - region threading
 +        try {
 +            final ReferenceOpenHashSet<ThreadedRegion<R, S>> set = new ReferenceOpenHashSet<>();
 +
@@ -9877,7 +9996,7 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +
 +            return set.size();
 +        } finally {
-+            this.releaseWriteLock();
++            this.keyLock.unlock(areaLock); // Canvas - region threading
 +        }
 +    }
 +
@@ -9896,26 +10015,32 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +        final int sectionZ = chunkZ >> this.sectionChunkShift;
 +        final long sectionKey = CoordinateUtils.getChunkKey(sectionX, sectionZ);
 +
-+        // try an optimistic read
-+        {
-+            final long readAttempt = this.regionLock.tryOptimisticRead();
-+            final ThreadedRegionSection<R, S> optimisticSection = this.sections.get(sectionKey);
-+            final ThreadedRegion<R, S> optimisticRet =
-+                optimisticSection == null ? null : optimisticSection.getRegionPlain();
-+            if (this.regionLock.validate(readAttempt)) {
-+                return optimisticRet;
++        // Canvas start - region threading
++        for (;;) {
++            final ThreadedRegionSection<R, S> section = this.sections.get(sectionKey);
++            final ThreadedRegion<R, S> region = section == null ? null : section.getRegionAcquire();
++            if (section != null && region == null) {
++                Thread.onSpinWait();
++                continue;
++            }
++            // a section is created under its own key, and removed or handed to another region under its region's
++            final ReentrantKeyLock.Node readLock = this.lockToRead(region == null ? sectionKey : region.lockKey);
++            if (readLock == null) {
++                if (region != null) {
++                    return region;
++                }
++                Thread.onSpinWait();
++                continue;
++            }
++            try {
++                if (this.sections.get(sectionKey) == section && (section == null || section.getRegionPlain() == region)) {
++                    return region;
++                }
++            } finally {
++                this.keyLock.unlock(readLock);
 +            }
 +        }
-+
-+        // failed, fall back to acquiring the lock
-+        this.regionLock.readLock();
-+        try {
-+            final ThreadedRegionSection<R, S> section = this.sections.get(sectionKey);
-+
-+            return section == null ? null : section.getRegionPlain();
-+        } finally {
-+            this.regionLock.tryUnlockRead();
-+        }
++        // Canvas end - region threading
 +    }
 +
 +    /**
@@ -9939,10 +10064,15 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +            if (existing != null && !existing.isEmpty()) {
 +                existing.addChunk(chunkX, chunkZ);
 +                return;
-+            } // else: just acquire the write lock
++            } // else: lock the sections // Canvas - region threading
 +        }
 +
-+        this.acquireWriteLock();
++        // Canvas start - region threading
++        final int lockRadius = this.emptySectionCreateRadius + this.regionSectionMergeRadius;
++        final ReentrantKeyLock.Node chunkLock = this.lockKeys((final LongOpenHashSet held, final LongOpenHashSet keys) ->
++            this.planArea(sectionX - lockRadius, sectionZ - lockRadius, sectionX + lockRadius, sectionZ + lockRadius, true, held, keys));
++        final long stamp = this.regionLock.readLock();
++        // Canvas end - region threading
 +        try {
 +            ThreadedRegionSection<R, S> section = this.sections.get(sectionKey);
 +
@@ -10011,6 +10141,7 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +            if (nearbyRegions == null) {
 +                // we can simply create a new region, don't have neighbours to worry about merging into
 +                regionOfInterest = new ThreadedRegion<>(this);
++                this.keyLock.add(chunkLock, regionOfInterest.lockKey); // Canvas - region threading
 +                regionOfInterestAlive = true;
 +
 +                for (final ThreadedRegionSection<R, S> newSection : newSections) {
@@ -10038,6 +10169,7 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +                    regionOfInterest = firstUnlockedRegion;
 +                } else {
 +                    regionOfInterest = new ThreadedRegion<>(this);
++                    this.keyLock.add(chunkLock, regionOfInterest.lockKey); // Canvas - region threading
 +                }
 +
 +                for (final ThreadedRegionSection<R, S> newSection : newSections) {
@@ -10098,7 +10230,8 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +            SneakyThrow.sneaky(thrown);
 +            return; // unreachable
 +        } finally {
-+            this.releaseWriteLock();
++            this.regionLock.unlockRead(stamp); // Canvas - region threading
++            this.keyLock.unlock(chunkLock); // Canvas - region threading
 +        }
 +    }
 +
@@ -10119,7 +10252,11 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +            return;
 +        }
 +
-+        this.acquireWriteLock();
++        // Canvas start - region threading
++        final int lockRadius = this.emptySectionCreateRadius;
++        final ReentrantKeyLock.Node chunkLock = this.lockKeys((final LongOpenHashSet held, final LongOpenHashSet keys) ->
++            this.planArea(sectionX - lockRadius, sectionZ - lockRadius, sectionX + lockRadius, sectionZ + lockRadius, false, held, keys));
++        // Canvas end - region threading
 +        try {
 +            section.removeChunk(chunkX, chunkZ);
 +
@@ -10145,12 +10282,12 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +            SneakyThrow.sneaky(thrown);
 +            return; // unreachable
 +        } finally {
-+            this.releaseWriteLock();
++            this.keyLock.unlock(chunkLock); // Canvas - region threading
 +        }
 +    }
 +
-+    // must hold regionLock
-+    private void onRegionRelease(final @NonNull ThreadedRegion<R, S> region) {
++    // must hold the region's key and those of the regions merging into it // Canvas - region threading
++    private void onRegionRelease(final @NonNull ThreadedRegion<R, S> region, final ReentrantKeyLock.Node releaseLock) { // Canvas - region threading
 +        if (!region.mergeIntoLater.isEmpty()) {
 +            throw new IllegalStateException("Region " + region + " should not have any regions to merge into!");
 +        }
@@ -10182,8 +10319,7 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +        }
 +
 +        // now check whether we need to recalculate regions
-+        final boolean removeDeadSections = hasExpectingMerges || region.hasNoAliveSections()
-+            || (region.sectionByKey.size() >= this.minSectionRecalcCount && region.getDeadSectionPercent() >= this.maxDeadRegionPercent);
++        final boolean removeDeadSections = this.shouldRemoveDeadSections(region, hasExpectingMerges); // Canvas - region threading
 +        final boolean removedDeadSections = removeDeadSections && !region.deadSections.isEmpty();
 +        if (removeDeadSections) {
 +            // kill dead sections
@@ -10284,7 +10420,11 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +
 +        final List<ThreadedRegion<R, S>> newRegionObjects = new ArrayList<>(newRegions.size());
 +        for (int i = 0, len = newRegions.size(); i < len; ++i) {
-+            newRegionObjects.add(new ThreadedRegion<>(this));
++            // Canvas start - region threading
++            final ThreadedRegion<R, S> newRegion = new ThreadedRegion<>(this);
++            this.keyLock.add(releaseLock, newRegion.lockKey);
++            newRegionObjects.add(newRegion);
++            // Canvas end - region threading
 +        }
 +
 +        this.callbacks.preSplit(region, newRegionObjects);
@@ -10366,22 +10506,7 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +
 +        @Override
 +        public long @NonNull [] getOwnedPackedChunkPositions() {
-+            final boolean lock = this.regioniser.writeLockOwner != Thread.currentThread();
-+            if (lock) {
-+                this.regioniser.regionLock.readLock();
-+            }
-+            try {
-+                final LongArrayList ret = new LongArrayList();
-+                for (final ThreadedRegionSection<R, S> section : this.sectionByKey.values()) {
-+                    ret.addAll(section.getChunks());
-+                }
-+
-+                return ret.elements();
-+            } finally {
-+                if (lock) {
-+                    this.regioniser.regionLock.tryUnlockRead();
-+                }
-+            }
++            return this.getOwnedChunks().toLongArray(); // Canvas - region threading
 +        }
 +
 +        @NonNull
@@ -10422,6 +10547,10 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +        private static final int STATE_DEAD          = 3;
 +
 +        public final long id;
++        // Canvas start - region threading
++        // a section key no world reaches, as its section z is Integer.MIN_VALUE
++        private final long lockKey;
++        // Canvas end - region threading
 +
 +        private int state;
 +
@@ -10438,25 +10567,26 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +        public ThreadedRegion(final @NonNull ThreadedRegionizer<R, S> regioniser) {
 +            this.regioniser = regioniser;
 +            this.id = REGION_ID_GENERATOR.getAndIncrement();
++            this.lockKey = Long.MIN_VALUE | this.id; // Canvas - region threading
 +            this.state = STATE_TRANSIENT;
 +            this.data = regioniser.callbacks.createNewData(this);
 +        }
 +
 +        @NonNull
 +        public LongArrayList getOwnedSections() {
-+            final boolean lock = this.regioniser.writeLockOwner != Thread.currentThread();
-+            if (lock) {
-+                this.regioniser.regionLock.readLock();
++            // Canvas start - region threading
++            final ReentrantKeyLock.Node readLock = this.regioniser.lockToRead(this.lockKey);
++            if (readLock == null) {
++                return new LongArrayList();
 +            }
++            // Canvas end - region threading
 +            try {
 +                final LongArrayList ret = new LongArrayList(this.sectionByKey.size());
 +                ret.addAll(this.sectionByKey.keySet());
 +
 +                return ret;
 +            } finally {
-+                if (lock) {
-+                    this.regioniser.regionLock.tryUnlockRead();
-+                }
++                this.regioniser.keyLock.unlock(readLock); // Canvas - region threading
 +            }
 +        }
 +
@@ -10471,22 +10601,26 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +
 +        @NonNull
 +        public LongArrayList getOwnedChunks() {
-+            final boolean lock = this.regioniser.writeLockOwner != Thread.currentThread();
-+            if (lock) {
-+                this.regioniser.regionLock.readLock();
++            // Canvas start - region threading
++            final ReentrantKeyLock.Node readLock = this.regioniser.lockToRead(this.lockKey);
++            if (readLock == null) {
++                return new LongArrayList();
 +            }
++            // the chunks are read after unlocking, so a big region's tick never waits for them
++            final List<ThreadedRegionSection<R, S>> sections;
 +            try {
-+                final LongArrayList ret = new LongArrayList();
-+                for (final ThreadedRegionSection<R, S> section : this.sectionByKey.values()) {
-+                    ret.addAll(section.getChunks());
-+                }
-+
-+                return ret;
++                sections = new ArrayList<>(this.sectionByKey.values());
 +            } finally {
-+                if (lock) {
-+                    this.regioniser.regionLock.tryUnlockRead();
-+                }
++                this.regioniser.keyLock.unlock(readLock);
 +            }
++
++            final LongArrayList ret = new LongArrayList();
++            for (final ThreadedRegionSection<R, S> section : sections) {
++                ret.addAll(section.getChunks());
++            }
++
++            return ret;
++            // Canvas end - region threading
 +        }
 +
 +        public Long getCenterSection() {
@@ -10701,7 +10835,7 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +        }
 +
 +        public boolean tryMarkTicking(final BooleanSupplier abort) {
-+            this.regioniser.acquireWriteLock();
++            final ReentrantKeyLock.Node boundaryLock = this.regioniser.lockTickBoundary(this); // Canvas - region threading
 +            try {
 +                if (this.state != STATE_READY || abort.getAsBoolean()) {
 +                    return false;
@@ -10714,18 +10848,41 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +                this.state = STATE_TICKING;
 +                return true;
 +            } finally {
-+                this.regioniser.releaseWriteLock();
++                this.regioniser.keyLock.unlock(boundaryLock); // Canvas - region threading
 +            }
 +        }
 +
 +        public boolean markNotTicking() {
-+            this.regioniser.acquireWriteLock();
++            // Canvas start - region threading
++            final ReentrantKeyLock.Node boundaryLock = this.regioniser.lockTickBoundary(this);
++            try {
++                if (this.state != STATE_TICKING) {
++                    throw new IllegalStateException("Attempting to release non-locked state");
++                }
++                if (!this.mergeIntoLater.isEmpty()) {
++                    throw new IllegalStateException("Region " + this + " should not have any regions to merge into!");
++                }
++
++                if (this.expectingMergeFrom.isEmpty() && (this.deadSections.isEmpty() || !this.regioniser.shouldRemoveDeadSections(this, false))) {
++                    this.state = STATE_READY;
++                    return true;
++                }
++            } catch (final Throwable thrown) {
++                LOGGER.error("Failed to release region {}", this, thrown);
++                SneakyThrow.sneaky(thrown);
++                return false; // unreachable
++            } finally {
++                this.regioniser.keyLock.unlock(boundaryLock);
++            }
++            final ReentrantKeyLock.Node releaseLock = this.regioniser.lockKeys((final LongOpenHashSet held, final LongOpenHashSet keys) ->
++                this.regioniser.planRelease(this, held, keys));
++            final long stamp = this.regioniser.regionLock.readLock();
 +            try {
 +                if (this.state != STATE_TICKING) {
 +                    throw new IllegalStateException("Attempting to release non-locked state");
 +                }
 +
-+                this.regioniser.onRegionRelease(this);
++                this.regioniser.onRegionRelease(this, releaseLock);
 +
 +                return this.state == STATE_READY;
 +            } catch (final Throwable thrown) {
@@ -10733,8 +10890,10 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +                SneakyThrow.sneaky(thrown);
 +                return false; // unreachable
 +            } finally {
-+                this.regioniser.releaseWriteLock();
++                this.regioniser.regionLock.unlockRead(stamp);
++                this.regioniser.keyLock.unlock(releaseLock);
 +            }
++            // Canvas end - region threading
 +        }
 +
 +        @Override
@@ -11155,6 +11314,19 @@ index 0000000000000000000000000000000000000000..08195949008ca315be761a4e84ba75a8
 +         */
 +        void preSplit(final ThreadedRegion<R, S> from, final List<ThreadedRegion<R, S>> into);
 +    }
++
++    // Canvas start - region threading
++    private interface KeyPlan {
++
++        /**
++         * Adds the keys an operation must lock to {@code keys}.
++         * @param held The keys already held, or {@code null} before any are.
++         * @param keys The set to add the keys to.
++         * @return {@code false} while a section is being handed to another region.
++         */
++        boolean plan(final LongOpenHashSet held, final LongOpenHashSet keys);
++    }
++    // Canvas end - region threading
 +}
 diff --git a/io/papermc/paper/threadedregions/TickRegionScheduler.java b/io/papermc/paper/threadedregions/TickRegionScheduler.java
 new file mode 100644
