@@ -1,0 +1,45 @@
+--- a/io/papermc/paper/entity/activation/ActivationRange.java
++++ b/io/papermc/paper/entity/activation/ActivationRange.java
+@@ -43,6 +_,8 @@
+ 
+ public final class ActivationRange {
+ 
++    private static final int CHECK_INTERVAL = 4; // Canvas - stagger activation checks
++
+     private ActivationRange() {
+     }
+ 
+@@ -146,8 +_,10 @@
+         maxRange = Math.max(maxRange, villagerActivationRange);
+         maxRange = Math.min((world.spigotConfig.simulationDistance << 4) - 8, maxRange);
+ 
++        final long currentTick = io.papermc.paper.threadedregions.RegionizedServer.getCurrentTick(); // Canvas - stagger activation checks
+         for (final Player player : world.getLocalPlayers()) { // Folia - region threading
+             player.activatedTick = io.papermc.paper.threadedregions.RegionizedServer.getCurrentTick(); // Folia - region threading
++            if ((player.getId() + currentTick) % CHECK_INTERVAL != 0) continue; // Canvas - stagger activation checks
+             if (world.spigotConfig.ignoreSpectatorActivation && player.isSpectator()) {
+                 continue;
+             }
+@@ -189,15 +_,19 @@
+      * @param entity
+      */
+     private static void activateEntity(final Entity entity, final AABB[] bbByType) { // Folia - region threading
+-        if (io.papermc.paper.threadedregions.RegionizedServer.getCurrentTick() > entity.activatedTick) { // Folia - region threading
++        // Canvas start - stagger activation checks
++        // keep the entity active until this player checks again
++        final long activeUntil = io.papermc.paper.threadedregions.RegionizedServer.getCurrentTick() + CHECK_INTERVAL - 1;
++        if (activeUntil > entity.activatedTick) {
+             if (entity.defaultActivationState) {
+-                entity.activatedTick = io.papermc.paper.threadedregions.RegionizedServer.getCurrentTick(); // Folia - region threading
++                entity.activatedTick = activeUntil;
+                 return;
+             }
+             if (bbByType[entity.activationType.ordinal()].intersects(entity.getBoundingBox())) { // Folia - region threading
+-                entity.activatedTick = io.papermc.paper.threadedregions.RegionizedServer.getCurrentTick(); // Folia - region threading
++                entity.activatedTick = activeUntil;
+             }
+         }
++        // Canvas end - stagger activation checks
+     }
+ 
+     /**
