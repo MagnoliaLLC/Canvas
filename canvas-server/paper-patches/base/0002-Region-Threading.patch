@@ -5700,6 +5700,65 @@ index eab5b82cd40e43b155da23a7ecd749abe8616cd7..3502b3a655b1113e496cb7caa1c73ea0
              if (event.getLockedMessage() != null) {
                  event.getPlayer().sendActionBar(event.getLockedMessage());
              }
+diff --git a/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventoryPlayer.java b/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventoryPlayer.java
+index e0fd81b297b1b9d8313edfdbc612adb85d6f5d2f..8286d330f685f081fd7f31e64e6b93882591953f 100644
+--- a/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventoryPlayer.java
++++ b/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventoryPlayer.java
+@@ -50,6 +50,7 @@ public class CraftInventoryPlayer extends CraftInventory implements org.bukkit.i
+ 
+     @Override
+     public void setItemInOffHand(ItemStack item) {
++        io.canvasmc.canvas.util.TickGuard.guard(this.getInventory().player, "Cannot modify player inventory async"); // Canvas - region guards
+         this.getInventory().equipment.set(net.minecraft.world.entity.EquipmentSlot.OFFHAND, CraftItemStack.asNMSCopy(item));
+     }
+ 
+@@ -75,6 +76,7 @@ public class CraftInventoryPlayer extends CraftInventory implements org.bukkit.i
+             throw new ArrayIndexOutOfBoundsException("Index must be between 0 and 42");
+         }
+         // Paper end - Validate setItem index
++        io.canvasmc.canvas.util.TickGuard.guard(this.getInventory().player, "Cannot modify player inventory async"); // Canvas - region guards
+         super.setItem(index, item);
+         if (this.getHolder() == null) return;
+ 
+@@ -128,9 +130,30 @@ public class CraftInventoryPlayer extends CraftInventory implements org.bukkit.i
+         player.connection.send(new ClientboundContainerSetSlotPacket(player.inventoryMenu.containerId, player.inventoryMenu.incrementStateId(), index, CraftItemStack.asNMSCopy(item)));
+     }
+ 
++    // Canvas start - region guards
++    @Override
++    public java.util.HashMap<Integer, ItemStack> addItem(ItemStack... items) {
++        io.canvasmc.canvas.util.TickGuard.guard(this.getInventory().player, "Cannot modify player inventory async");
++        return super.addItem(items);
++    }
++
++    @Override
++    public java.util.HashMap<Integer, ItemStack> removeItem(ItemStack... items) {
++        io.canvasmc.canvas.util.TickGuard.guard(this.getInventory().player, "Cannot modify player inventory async");
++        return super.removeItem(items);
++    }
++
++    @Override
++    public java.util.HashMap<Integer, ItemStack> removeItemAnySlot(ItemStack... items) {
++        io.canvasmc.canvas.util.TickGuard.guard(this.getInventory().player, "Cannot modify player inventory async");
++        return super.removeItemAnySlot(items);
++    }
++    // Canvas end - region guards
++
+     @Override
+     public void setItem(EquipmentSlot slot, ItemStack item) {
+         Preconditions.checkArgument(slot != null, "slot must not be null");
++        io.canvasmc.canvas.util.TickGuard.guard(this.getInventory().player, "Cannot modify player inventory async"); // Canvas - region guards
+ 
+         switch (slot) {
+             case HAND -> this.setItemInMainHand(item);
+@@ -162,6 +185,7 @@ public class CraftInventoryPlayer extends CraftInventory implements org.bukkit.i
+     @Override
+     public void setHeldItemSlot(int slot) {
+         Preconditions.checkArgument(slot >= 0 && slot < Inventory.getSelectionSize(), "Slot (%s) is not between 0 and %s inclusive", slot, Inventory.getSelectionSize() - 1);
++        io.canvasmc.canvas.util.TickGuard.guard(this.getInventory().player, "Cannot modify player inventory async"); // Canvas - region guards
+         this.getInventory().setSelectedSlot(slot);
+         ((CraftPlayer) this.getHolder()).getHandle().connection.send(new ClientboundSetHeldSlotPacket(slot));
+     }
 diff --git a/src/main/java/org/bukkit/craftbukkit/inventory/CraftItemFactory.java b/src/main/java/org/bukkit/craftbukkit/inventory/CraftItemFactory.java
 index 01271bd7484f75664ac14bc10ad7abc78fa88b8c..9a86743b5fd79365a261e8da8f13694f32533c7f 100644
 --- a/src/main/java/org/bukkit/craftbukkit/inventory/CraftItemFactory.java
