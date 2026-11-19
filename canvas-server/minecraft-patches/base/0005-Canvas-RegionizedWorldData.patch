@@ -6,10 +6,10 @@ Subject: [PATCH] Canvas RegionizedWorldData
 
 diff --git a/io/canvasmc/canvas/threadedregions/CanvasRegionizedWorldData.java b/io/canvasmc/canvas/threadedregions/CanvasRegionizedWorldData.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..dd06d415d7c6c8138be3cbf170f63d58ec581a1b
+index 0000000000000000000000000000000000000000..2c1f12be757afa074438e18002b389497dc1f1a8
 --- /dev/null
 +++ b/io/canvasmc/canvas/threadedregions/CanvasRegionizedWorldData.java
-@@ -0,0 +1,102 @@
+@@ -0,0 +1,97 @@
 +package io.canvasmc.canvas.threadedregions;
 +
 +import io.canvasmc.canvas.GlobalConfiguration;
@@ -61,7 +61,6 @@ index 0000000000000000000000000000000000000000..dd06d415d7c6c8138be3cbf170f63d58
 +
 +    private final TickRegions.TickRegionData regionData;
 +    private final ServerLevel level;
-+    private final RegionizedWorldData worldData;
 +
 +    // natural spawn chunk optimizations from Leaf
 +    public final NatureSpawnChunkMap natureSpawnChunkMap = new NatureSpawnChunkMap();
@@ -82,12 +81,8 @@ index 0000000000000000000000000000000000000000..dd06d415d7c6c8138be3cbf170f63d58
 +        this.regionData = regionData;
 +        this.level = level;
 +
-+        final RegionizedWorldData worldData = TickRegionScheduler.getCurrentRegionizedWorldData();
-+
 +        this.tpsbar = new RegionizedTpsBar();
 +        this.rambar = new RegionizedRamBar();
-+
-+        this.worldData = worldData;
 +    }
 +
 +    @Nullable
@@ -105,7 +100,7 @@ index 0000000000000000000000000000000000000000..dd06d415d7c6c8138be3cbf170f63d58
 +    }
 +
 +    public RegionizedWorldData getFoliaWorldData() {
-+        return worldData;
++        return regionData.getRegionizedData(level.worldRegionData);
 +    }
 +
 +    public TickRegions.TickRegionData getRegionData() {
