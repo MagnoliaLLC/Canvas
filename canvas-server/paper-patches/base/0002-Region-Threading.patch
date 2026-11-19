@@ -1251,9 +1251,18 @@ index f8254b3ec264f2ece70a2635823493b90fb45ad8..b53a9e693be27b167b9ba45ee80520e5
          net.minecraft.world.level.chunk.LevelChunk full = this.level.getChunkIfLoaded(this.x, this.z);
          if (full != null) {
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftOfflinePlayer.java b/src/main/java/org/bukkit/craftbukkit/CraftOfflinePlayer.java
-index 1aa8f1e0a3093a8b9e77213c56f987cd6ca7df86..3b13608c326ef1f85048018e96ac5cedb2cfef39 100644
+index 1aa8f1e0a3093a8b9e77213c56f987cd6ca7df86..466c6667ded7f96b906f0c74ac761a195af1ccf4 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftOfflinePlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftOfflinePlayer.java
+@@ -375,7 +375,7 @@ public class CraftOfflinePlayer implements OfflinePlayer, ConfigurationSerializa
+         final ServerLevel level = this.server.console.getLevel(respawnConfig.respawnData().dimension());
+         if (level == null) return null;
+ 
+-        if (!loadLocationAndValidate) {
++        if (!loadLocationAndValidate || true) { // Canvas - region threading - we cannot validate safely if the respawn pos is out of region
+             return CraftLocation.toBukkit(respawnConfig.respawnData().pos(), level, respawnConfig.respawnData().yaw(), respawnConfig.respawnData().pitch());
+         }
+ 
 @@ -383,6 +383,57 @@ public class CraftOfflinePlayer implements OfflinePlayer, ConfigurationSerializa
              .map(resolvedPos -> CraftLocation.toBukkit(resolvedPos.position(), level, resolvedPos.yaw(), resolvedPos.pitch()))
              .orElse(null);
