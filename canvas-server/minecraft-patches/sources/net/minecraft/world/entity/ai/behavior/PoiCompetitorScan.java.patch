@@ -1,9 +1,9 @@
 --- a/net/minecraft/world/entity/ai/behavior/PoiCompetitorScan.java
 +++ b/net/minecraft/world/entity/ai/behavior/PoiCompetitorScan.java
-@@ -24,6 +_,11 @@
-                             return true;
+@@ -25,6 +_,11 @@
                          }
                          // Folia end - region threading
+                         if (level.moonrise$getChunkTaskScheduler().chunkHolderManager.getPoiChunkIfLoaded(pos.pos().getX() >> 4, pos.pos().getZ() >> 4, true) == null) return true; // Canvas - region threading
 +                        // Canvas start - optimize job site lookup
 +                        if (!claimedByAnother(pos, body, i.get(nearestEntities))) {
 +                            return true;
@@ -12,7 +12,7 @@
                          level.getPoiManager()
                              .getType(pos.pos())
                              .ifPresent(
-@@ -83,4 +_,25 @@
+@@ -84,4 +_,25 @@
      private static boolean hasMatchingProfession(final Holder<PoiType> poiType, final Holder<VillagerProfession> profession) {
          return profession.value().heldJobSite().test(poiType);
      }
