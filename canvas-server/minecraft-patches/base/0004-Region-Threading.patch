@@ -31328,10 +31328,10 @@ index b40da004b5281a041ee896ae176bfb9c4660f353..d73bdce58b31f1b5aed7fecbdbf2d8cd
          Brain<?> brain = body.getBrain();
          if (this.reachedTarget(body, walkTarget)) {
 diff --git a/net/minecraft/world/entity/ai/behavior/PoiCompetitorScan.java b/net/minecraft/world/entity/ai/behavior/PoiCompetitorScan.java
-index c507cbb1b0d89f8fe5a00e67eea510f7516fe040..53131c1b8d5562f9a1b45dfab4fdbdd37b655139 100644
+index c507cbb1b0d89f8fe5a00e67eea510f7516fe040..423f94095b76de75b9d0550d5a98b40310414bfc 100644
 --- a/net/minecraft/world/entity/ai/behavior/PoiCompetitorScan.java
 +++ b/net/minecraft/world/entity/ai/behavior/PoiCompetitorScan.java
-@@ -19,6 +19,11 @@ public class PoiCompetitorScan {
+@@ -19,6 +19,12 @@ public class PoiCompetitorScan {
                      i,
                      (jobSite, nearestEntities) -> (level, body, timestamp) -> {
                          GlobalPos pos = i.get(jobSite);
@@ -31340,6 +31340,7 @@ index c507cbb1b0d89f8fe5a00e67eea510f7516fe040..53131c1b8d5562f9a1b45dfab4fdbdd3
 +                            return true;
 +                        }
 +                        // Folia end - region threading
++                        if (level.moonrise$getChunkTaskScheduler().chunkHolderManager.getPoiChunkIfLoaded(pos.pos().getX() >> 4, pos.pos().getZ() >> 4, true) == null) return true; // Canvas - region threading
                          level.getPoiManager()
                              .getType(pos.pos())
                              .ifPresent(
