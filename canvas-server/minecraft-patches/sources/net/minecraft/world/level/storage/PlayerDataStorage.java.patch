@@ -1,0 +1,86 @@
+--- a/net/minecraft/world/level/storage/PlayerDataStorage.java
++++ b/net/minecraft/world/level/storage/PlayerDataStorage.java
+@@ -23,6 +_,7 @@
+     private static final Logger LOGGER = LogUtils.getLogger();
+     private final File playerDir;
+     protected final DataFixer fixerUpper;
++    private final java.util.concurrent.ConcurrentHashMap<java.util.UUID, PendingSave> pendingSaves = new java.util.concurrent.ConcurrentHashMap<>(); // Canvas - async player data saves
+ 
+     public PlayerDataStorage(final LevelStorageSource.LevelStorageAccess levelAccess, final DataFixer fixerUpper) {
+         this.fixerUpper = fixerUpper;
+@@ -35,18 +_,55 @@
+         try (ProblemReporter.ScopedCollector reporter = new ProblemReporter.ScopedCollector(player.problemPath(), LOGGER)) {
+             TagValueOutput output = TagValueOutput.createWithContext(reporter, player.registryAccess());
+             player.saveWithoutId(output);
+-            Path playerDirPath = this.playerDir.toPath();
+-            Path tmpFile = Files.createTempFile(playerDirPath, player.getStringUUID() + "-", ".dat");
+-            CompoundTag dataToStore = output.buildResult();
+-            NbtIo.writeCompressed(dataToStore, tmpFile);
+-            Path realFile = playerDirPath.resolve(player.getStringUUID() + ".dat");
+-            Path oldFile = playerDirPath.resolve(player.getStringUUID() + ".dat_old");
+-            Util.safeReplaceFile(realFile, tmpFile, oldFile);
++            // Canvas start - async player data saves
++            // one writer per player at a time, which always writes the latest data handed to it
++            final java.util.UUID uuid = player.getUUID();
++            if (this.pendingSaves.put(uuid, new PendingSave(output.buildResult(), player.getPlainTextName())) == null) {
++                try {
++                    Util.ioPool().execute(() -> this.writePending(uuid));
++                } catch (final Throwable throwable) {
++                    this.writePending(uuid);
++                }
++            }
++            // Canvas end - async player data saves
+         } catch (Exception ignored) {
+             LOGGER.warn("Failed to save player data for {}", player.getPlainTextName(), ignored); // Paper - Print exception
+         }
+     }
+ 
++    // Canvas start - async player data saves
++    private void writePending(final java.util.UUID uuid) {
++        PendingSave pending;
++        while ((pending = this.pendingSaves.get(uuid)) != null) {
++            try {
++                Path playerDirPath = this.playerDir.toPath();
++                Path tmpFile = Files.createTempFile(playerDirPath, uuid + "-", ".dat");
++                NbtIo.writeCompressed(pending.data(), tmpFile);
++                Path realFile = playerDirPath.resolve(uuid + ".dat");
++                Path oldFile = playerDirPath.resolve(uuid + ".dat_old");
++                Util.safeReplaceFile(realFile, tmpFile, oldFile);
++            } catch (Throwable ignored) {
++                LOGGER.warn("Failed to save player data for {}", pending.name(), ignored);
++            }
++            // a save handed over while writing replaced the entry, so write again
++            if (this.pendingSaves.remove(uuid, pending)) {
++                return;
++            }
++        }
++    }
++
++    public void awaitPendingSaves() {
++        for (final java.util.UUID uuid : java.util.List.copyOf(this.pendingSaves.keySet())) {
++            while (this.pendingSaves.containsKey(uuid)) {
++                java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
++            }
++        }
++    }
++
++    private record PendingSave(CompoundTag data, String name) {
++    }
++    // Canvas end - async player data saves
++
+     private void backup(final NameAndId nameAndId, final String suffix) {
+         Path playerDirPath = this.playerDir.toPath();
+         String idString = nameAndId.id().toString();
+@@ -91,6 +_,12 @@
+     }
+ 
+     public Optional<CompoundTag> load(final NameAndId nameAndId) {
++        // Canvas start - async player data saves
++        final PendingSave pending = this.pendingSaves.get(nameAndId.id());
++        if (pending != null) {
++            return Optional.of(pending.data().copy());
++        }
++        // Canvas end - async player data saves
+         Optional<CompoundTag> optTag = this.load(nameAndId, ".dat");
+         if (optTag.isEmpty()) {
+             this.backup(nameAndId, ".dat");
