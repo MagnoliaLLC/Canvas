@@ -6,10 +6,10 @@ Subject: [PATCH] Canvas RegionizedWorldData
 
 diff --git a/io/canvasmc/canvas/threadedregions/CanvasRegionizedWorldData.java b/io/canvasmc/canvas/threadedregions/CanvasRegionizedWorldData.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..2c1f12be757afa074438e18002b389497dc1f1a8
+index 0000000000000000000000000000000000000000..eabe29b9c0fd7056145de4466819ddf264ef11d6
 --- /dev/null
 +++ b/io/canvasmc/canvas/threadedregions/CanvasRegionizedWorldData.java
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,101 @@
 +package io.canvasmc.canvas.threadedregions;
 +
 +import io.canvasmc.canvas.GlobalConfiguration;
@@ -92,7 +92,11 @@ index 0000000000000000000000000000000000000000..2c1f12be757afa074438e18002b38949
 +        if (region == null) {
 +            return null;
 +        }
-+        return region.getData().getOrCreateFromIRegionizedData(CANVAS_REGION_DATA);
++        return getWorldData(region.getData());
++    }
++
++    public static CanvasRegionizedWorldData getWorldData(final TickRegions.TickRegionData regionData) {
++        return regionData.getOrCreateFromIRegionizedData(CANVAS_REGION_DATA);
 +    }
 +
 +    public ServerLevel getLevel() {
@@ -108,7 +112,7 @@ index 0000000000000000000000000000000000000000..2c1f12be757afa074438e18002b38949
 +    }
 +}
 diff --git a/io/papermc/paper/threadedregions/RegionizedWorldData.java b/io/papermc/paper/threadedregions/RegionizedWorldData.java
-index 6993ad191ae05e45ed9a5eff940536e3b2099318..cc859d4540eaf7d62ccd41721cfd0add538139d6 100644
+index 6993ad191ae05e45ed9a5eff940536e3b2099318..fa82efa0e7c1cd7f6c6791a0f4b896a7097feba6 100644
 --- a/io/papermc/paper/threadedregions/RegionizedWorldData.java
 +++ b/io/papermc/paper/threadedregions/RegionizedWorldData.java
 @@ -364,6 +364,20 @@ public final class RegionizedWorldData {
@@ -124,7 +128,7 @@ index 6993ad191ae05e45ed9a5eff940536e3b2099318..cc859d4540eaf7d62ccd41721cfd0add
 +
 +    public io.canvasmc.canvas.threadedregions.CanvasRegionizedWorldData getCanvasWorldData() {
 +        if (this.canvasWorldData == null) {
-+            this.canvasWorldData = io.canvasmc.canvas.threadedregions.CanvasRegionizedWorldData.getCurrentWorldData();
++            this.canvasWorldData = io.canvasmc.canvas.threadedregions.CanvasRegionizedWorldData.getWorldData(this.regionData);
 +        }
 +        return canvasWorldData;
 +    }
