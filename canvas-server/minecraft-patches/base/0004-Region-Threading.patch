@@ -20642,7 +20642,7 @@ index 6a79944b040307acef3d1c66bd0dacaba514c708..7e7423f494f71903f9358d1005940090
                          )
                  )
 diff --git a/net/minecraft/server/commands/TeleportCommand.java b/net/minecraft/server/commands/TeleportCommand.java
-index 97acb0c6ff95a04405eeebc9835ddb84f818128d..ea8cb0ac55bb7c23de57d1989ffeaf68372ad40f 100644
+index 97acb0c6ff95a04405eeebc9835ddb84f818128d..c518eae51685bbbd8fce1e7a5138289a8807e3e0 100644
 --- a/net/minecraft/server/commands/TeleportCommand.java
 +++ b/net/minecraft/server/commands/TeleportCommand.java
 @@ -164,18 +164,7 @@ public class TeleportCommand {
@@ -20665,17 +20665,43 @@ index 97acb0c6ff95a04405eeebc9835ddb84f818128d..ea8cb0ac55bb7c23de57d1989ffeaf68
              tracker.track(entity);
          }
  
-@@ -243,6 +232,29 @@ public class TeleportCommand {
+@@ -197,9 +186,9 @@ public class TeleportCommand {
+         for (Entity entity : entities) {
+             Set<Relative> relatives = getRelatives(destination, rotation, entity.level().dimension() == level.dimension());
+             if (rot == null) {
+-                performTeleport(source, entity, level, pos.x, pos.y, pos.z, relatives, entity.getYRot(), entity.getXRot(), lookAt);
++                performTeleport(source, entity, level, pos.x, pos.y, pos.z, relatives, entity.getYRot(), entity.getXRot(), lookAt, true); // Canvas - region threading
+             } else {
+-                performTeleport(source, entity, level, pos.x, pos.y, pos.z, relatives, rot.y, rot.x, lookAt);
++                performTeleport(source, entity, level, pos.x, pos.y, pos.z, relatives, rot.y, rot.x, lookAt, false); // Canvas - region threading
+             }
+ 
+             tracker.track(entity);
+@@ -229,7 +218,8 @@ public class TeleportCommand {
+         final Set<Relative> relatives,
+         final float yRot,
+         final float xRot,
+-        final @Nullable LookAt lookAt
++        final @Nullable LookAt lookAt,
++        final boolean keepRotation // Canvas - region threading
+     ) throws CommandSyntaxException {
+         BlockPos blockPos = BlockPos.containing(x, y, z);
+         if (!Level.isInSpawnableBounds(blockPos)) {
+@@ -243,6 +233,33 @@ public class TeleportCommand {
          float relativeOrAbsoluteXRot = relatives.contains(Relative.X_ROT) ? xRot - victim.getXRot() : xRot;
          float newYRot = Mth.wrapDegrees(relativeOrAbsoluteYRot);
          float newXRot = Mth.wrapDegrees(relativeOrAbsoluteXRot);
 +        // Folia start - region threading
 +        if (true) {
 +            Vec3 posFinal = new Vec3(x, y, z);
-+            Float yawFinal = Float.valueOf(newYRot);
-+            Float pitchFinal = Float.valueOf(newXRot);
 +            victim.getBukkitEntity().taskScheduler.scheduleOrExecute((Entity nmsEntity) -> { // Canvas - region threading
 +                nmsEntity.stopRiding(true);
++                // Canvas start - region threading
++                final float offsetYRot = relatives.contains(Relative.Y_ROT) ? nmsEntity.getYRot() : 0.0F;
++                final float offsetXRot = relatives.contains(Relative.X_ROT) ? nmsEntity.getXRot() : 0.0F;
++                final Float yawFinal = keepRotation ? null : Float.valueOf(offsetYRot + Mth.wrapDegrees(yRot - offsetYRot));
++                final Float pitchFinal = keepRotation ? null : Float.valueOf(Mth.clamp(offsetXRot + Mth.wrapDegrees(xRot - offsetXRot), -90.0F, 90.0F));
++                // Canvas end - region threading
 +                nmsEntity.teleportAsync(
 +                        level, posFinal, yawFinal, pitchFinal, Vec3.ZERO,
 +                        org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.COMMAND,
