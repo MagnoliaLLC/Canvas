@@ -1238,6 +1238,18 @@ index 2d41914a6a1f61b1c100b27bc0ea230332f8f243..ecded94d13f50b61d93adda9c2bc8997
              if (reason != null) {
                  MinecraftServer.LOGGER.warn("Asynchronous " + reason + "! Blocking thread until it returns ", new IllegalStateException());
              }
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftChunk.java b/src/main/java/org/bukkit/craftbukkit/CraftChunk.java
+index f8254b3ec264f2ece70a2635823493b90fb45ad8..b53a9e693be27b167b9ba45ee80520e52318fdc0 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftChunk.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftChunk.java
+@@ -72,6 +72,7 @@ public class CraftChunk implements Chunk {
+     }
+ 
+     public ChunkAccess getHandle(ChunkStatus chunkStatus) {
++        io.canvasmc.canvas.util.TickGuard.guard(this.x, this.z, this.level, "Cannot access chunk async"); // Canvas - region guards
+         // Paper start - chunk system
+         net.minecraft.world.level.chunk.LevelChunk full = this.level.getChunkIfLoaded(this.x, this.z);
+         if (full != null) {
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftOfflinePlayer.java b/src/main/java/org/bukkit/craftbukkit/CraftOfflinePlayer.java
 index 1aa8f1e0a3093a8b9e77213c56f987cd6ca7df86..3b13608c326ef1f85048018e96ac5cedb2cfef39 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftOfflinePlayer.java

@@ -13,7 +13,7 @@
  
      public CraftChunk(net.minecraft.world.level.chunk.LevelChunk chunk) {
          this.level = (ServerLevel) chunk.getLevel();
-@@ -134,10 +_,13 @@
+@@ -135,10 +_,13 @@
          int index = 0;
          ChunkAccess chunk = this.getHandle(ChunkStatus.FULL);
  
@@ -30,7 +30,7 @@
  
          return states;
      }
-@@ -152,8 +_,11 @@
+@@ -153,8 +_,11 @@
          ChunkAccess chunk = this.getHandle(ChunkStatus.FULL);
  
          List<BlockState> states = new ArrayList<>();
@@ -44,7 +44,7 @@
              if (blockPredicate.test(block)) {
                  states.add(block.getState(useSnapshot));
              }
-@@ -271,12 +_,15 @@
+@@ -272,12 +_,15 @@
  
          LevelChunkSection[] cs = chunk.getSections();
          PalettedContainer[] sectionBlockIDs = new PalettedContainer[cs.length];
@@ -63,7 +63,7 @@
  
              // Paper start - Fix ChunkSnapshot#isSectionEmpty(int); and remove codec usage
              sectionEmpty[i] = cs[i].hasOnlyAir(); // fix sectionEmpty array not being filled
-@@ -288,22 +_,19 @@
+@@ -289,22 +_,19 @@
              // Paper end - Fix ChunkSnapshot#isSectionEmpty(int)
  
              if (includeLightData) {
@@ -96,7 +96,7 @@
              }
  
              if (biome != null) {
-@@ -377,8 +_,10 @@
+@@ -378,8 +_,10 @@
          /* Fill with empty data */
          int hSection = actual.getSectionsCount();
          PalettedContainer[] blockIDs = new PalettedContainer[hSection];
@@ -109,7 +109,7 @@
          boolean[] empty = new boolean[hSection];
          PalettedContainer<Holder<net.minecraft.world.level.biome.Biome>>[] biome = (includeBiome || includeBiomeTempRain) ? new PalettedContainer[hSection] : null;
          Codec<PalettedContainerRO<Holder<net.minecraft.world.level.biome.Biome>>> biomeCodec = world.getHandle().palettedContainerFactory().biomeContainerCodec();
-@@ -401,9 +_,5 @@
+@@ -402,9 +_,5 @@
          Preconditions.checkArgument(0 <= x && x <= 15, "x out of range (expected 0-15, got %s)", x);
          Preconditions.checkArgument(minY <= y && y <= maxY, "y out of range (expected %s-%s, got %s)", minY, maxY, y);
          Preconditions.checkArgument(0 <= z && z <= 15, "z out of range (expected 0-15, got %s)", z);
