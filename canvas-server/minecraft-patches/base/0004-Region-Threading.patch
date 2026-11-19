@@ -24540,16 +24540,16 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
 +                // Canvas start - region threading
 +                consumeAnchorCharge = () -> level.canvas$loadOrRunAtChunksAsync(pos, 1, ca.spottedleaf.concurrentutil.util.Priority.NORMAL, () -> {
 +                    final BlockState respawnBlock = level.getBlockState(pos);
-+                    if (respawnBlock.getBlock() instanceof RespawnAnchorBlock && blockState.getValue(RespawnAnchorBlock.CHARGE) > 0) {
++                    if (respawnBlock.getBlock() instanceof RespawnAnchorBlock && respawnBlock.getValue(RespawnAnchorBlock.CHARGE) > 0) {
 +                        // respawn block still valid, update
-+                        level.setBlockAndUpdate(pos, blockState.setValue(RespawnAnchorBlock.CHARGE, blockState.getValue(RespawnAnchorBlock.CHARGE) - 1)); // Paper - Fix SPIGOT-5989 (don't use charge until after respawn event)
++                        level.setBlockAndUpdate(pos, respawnBlock.setValue(RespawnAnchorBlock.CHARGE, respawnBlock.getValue(RespawnAnchorBlock.CHARGE) - 1)); // Paper - Fix SPIGOT-5989 (don't use charge until after respawn event)
 +                    }
 +                });
 +                // Canvas end - region threading
              }
              final Runnable finalConsumeAnchorCharge = consumeAnchorCharge; // Paper - Fix SPIGOT-5989
  
-@@ -1529,8 +1786,510 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1529,8 +1786,507 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
          }
      }
  
@@ -24667,7 +24667,7 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
 +                passengerTree, // note: we expect this to just be the player, no passengers
 +                (_) -> {
 +
-+                    // now the player is in the world, and can receive sound and can decrement the anchor charge
++                    // now the player is in the world, and can receive sound
 +                    if (respawnArgs.usedRespawnAnchor) { // Canvas - region threading
 +                        ServerPlayer.this.connection.send(
 +                            new net.minecraft.network.protocol.game.ClientboundSoundPacket(
@@ -24676,13 +24676,6 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
 +                                1.0F, 1.0F, ServerPlayer.this.level().getRandom().nextLong()
 +                            )
 +                        );
-+                        // Canvas start - region threading
-+                        // we fix the anchor charge to be thread-safe, so this should be fine
-+                        if (
-+                            respawnArgs.respawnPosAngle != null &&
-+                            respawnArgs.respawnPosAngle.consumeAnchorCharge != null
-+                        ) respawnArgs.respawnPosAngle.consumeAnchorCharge.run();
-+                        // Canvas end - region threading
 +                    }
 +
 +                    ServerPlayer.this.connection.restartClientLoadTimerAfterRespawn();
@@ -24710,6 +24703,10 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
 +            final org.bukkit.Location eventRespawnLocation = respawnEvent.getRespawnLocation();
 +            // set the atomic, then compare locations
 +            spawnLocAtomic.set(eventRespawnLocation);
++            // still on the anchor's region, in the call that found it charged, so a second respawn finds the charge spent
++            if (respawnArgs.respawnPosAngle != null && respawnArgs.respawnPosAngle.consumeAnchorCharge() != null && spawnLoc.equals(eventRespawnLocation)) {
++                respawnArgs.respawnPosAngle.consumeAnchorCharge().run();
++            }
 +            if (spawnLoc != eventRespawnLocation) {
 +                // event changed the location, load async and then call finalizer
 +                // use all the events location for this, they may have changed the world
@@ -24810,7 +24807,7 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
 +            final int radiusBlocks = 16;
 +            respawnWorld.moonrise$loadChunksAsync(respawnConfig.respawnData.pos(), radiusBlocks,
 +                ca.spottedleaf.concurrentutil.util.Priority.HIGHER,
-+                (_) -> {
++                (_) -> respawnWorld.canvas$loadOrRunAtChunksAsync(respawnConfig.respawnData.pos(), 2, ca.spottedleaf.concurrentutil.util.Priority.HIGHER, () -> { // Canvas - region threading - the last chunk may load on another region
 +                    ServerPlayer.RespawnPosAngle spawnPos = ServerPlayer.findRespawnAndUseSpawnBlock(
 +                        respawnWorld, respawnConfig, !alive
 +                    ).orElse(null);
@@ -24841,7 +24838,7 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
 +                        io.papermc.paper.util.MCUtil.toLocation(respawnWorld, spawnPos.position(), spawnPos.yaw(), 0.0f)
 +                    );
 +                    return;
-+                }
++                })
 +            );
 +        }
 +    }
@@ -25060,7 +25057,7 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
          if (this.isSleeping()) return null; // CraftBukkit - SPIGOT-3154
          if (this.isRemoved()) {
              return null;
-@@ -1626,7 +2385,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1626,7 +2382,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
          this.connection.send(new ClientboundPlayerRotationPacket(yRot, relativeY, xRot, relativeX));
      }
  
@@ -25069,7 +25066,7 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
          ResourceKey<Level> oldKey = oldLevel.dimension();
          ResourceKey<Level> newKey = this.level().dimension();
          // CraftBukkit start
-@@ -1645,7 +2404,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1645,7 +2401,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
  
          if (oldMainDimensionKey == Level.NETHER && newMainDimensionKey == Level.OVERWORLD && this.enteredNetherPosition != null) {
              // CraftBukkit end
@@ -25078,7 +25075,7 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
          }
  
          if (newMainDimensionKey != Level.NETHER) { // CraftBukkit
-@@ -1654,6 +2413,12 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1654,6 +2410,12 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
          this.gameMode.hasDelayedDestroy = false; // Paper
      }
  
@@ -25091,7 +25088,7 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
      @Override
      public boolean broadcastToPlayer(final ServerPlayer player) {
          return player.isSpectator() ? this.getCamera() == this : !this.isSpectator() && super.broadcastToPlayer(player);
-@@ -1837,7 +2602,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1837,7 +2599,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
  
      @Override
      protected void pushEntities() {
@@ -25100,7 +25097,7 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
              super.pushEntities();
          }
      }
-@@ -1860,6 +2625,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1860,6 +2622,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
  
      @Override
      public OptionalInt openMenu(final @Nullable MenuProvider provider) {
@@ -25108,7 +25105,7 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
          if (provider == null) {
              return OptionalInt.empty();
          }
-@@ -1999,6 +2765,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -1999,6 +2762,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
      }
      @Override
      public void closeContainer(org.bukkit.event.inventory.InventoryCloseEvent.Reason reason) {
@@ -25116,7 +25113,7 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
          org.bukkit.craftbukkit.event.CraftEventFactory.handleInventoryCloseEvent(this, reason); // CraftBukkit
          // Paper end - Inventory close reason
          this.connection.send(new ClientboundContainerClosePacket(this.containerMenu.containerId));
-@@ -2588,7 +3355,30 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -2588,7 +3352,30 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
          return this.camera == null ? this : this.camera;
      }
  
@@ -25147,7 +25144,7 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
          Entity oldCamera = this.getCamera();
          this.camera = newCamera == null ? this : newCamera;
          if (oldCamera != this.camera) {
-@@ -2607,16 +3397,21 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -2607,16 +3394,21 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
                  }
              }
              // Paper end - Add PlayerStartSpectatingEntityEvent and PlayerStopSpectatingEntity
@@ -25176,7 +25173,7 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
          }
      }
  
-@@ -2735,21 +3530,13 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -2735,21 +3527,13 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
      @Override
      public @Nullable ItemEntity drop(final ItemStack itemStack, final boolean thrownFromHand, final Prediction prediction, final boolean callEvent, final java.util.function.@Nullable Consumer<org.bukkit.entity.Item> entityOperation) { // Paper - Extend dropItem API
          ItemEntity entity = super.drop(itemStack, thrownFromHand, prediction, callEvent, entityOperation); // Paper - Extend dropItem API
@@ -25199,7 +25196,7 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
          return entity;
      }
  
-@@ -3165,7 +3952,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+@@ -3165,7 +3949,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
          this.experienceLevel = this.newLevel;
          this.totalExperience = this.newTotalExp;
          this.experienceProgress = 0;
