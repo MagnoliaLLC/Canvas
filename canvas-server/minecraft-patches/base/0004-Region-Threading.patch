@@ -4077,12 +4077,13 @@ index 0000000000000000000000000000000000000000..55f3559a9bdab6a32a8b03189b85ff27
 +}
 diff --git a/io/canvasmc/canvas/threadedregions/scheduler/callback/AffinitySchedulerCallbacks.java b/io/canvasmc/canvas/threadedregions/scheduler/callback/AffinitySchedulerCallbacks.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..c5e93a1ec59796901ed808e5a14759a42df2c5ff
+index 0000000000000000000000000000000000000000..901ca5283de3ed22e850a5ddb9bcd83d75c7d21d
 --- /dev/null
 +++ b/io/canvasmc/canvas/threadedregions/scheduler/callback/AffinitySchedulerCallbacks.java
-@@ -0,0 +1,132 @@
+@@ -0,0 +1,135 @@
 +package io.canvasmc.canvas.threadedregions.scheduler.callback;
 +
++import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
 +import io.canvasmc.canvas.threadedregions.profiler.RegionProfiler;
 +import io.canvasmc.canvas.threadedregions.profiler.RegionScheduleHandlePinner;
 +import io.canvasmc.canvas.threadedregions.scheduler.AffinitySchedulerThreadPool;
@@ -4185,7 +4186,9 @@ index 0000000000000000000000000000000000000000..c5e93a1ec59796901ed808e5a14759a4
 +
 +        // casting to region pinner is safe because the global tick can't split
 +        final ChunkPos center = ((RegionScheduleHandlePinner.RegionPinner) state.handlePinner()).getCenter();
-+        tryTransferPinningState(from.tickHandle, into.get(center.longKey()).getData().tickHandle);
++        // note: the profiler's hold tickets keep the center chunk loaded, so its section is in into
++        final int shift = level.regioniser.sectionChunkShift;
++        tryTransferPinningState(from.tickHandle, into.get(CoordinateUtils.getChunkKey(center.x() >> shift, center.z() >> shift)).getData().tickHandle);
 +    }
 +
 +    @Override
