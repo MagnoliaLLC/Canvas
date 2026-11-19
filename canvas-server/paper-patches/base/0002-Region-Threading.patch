@@ -4891,6 +4891,29 @@ index 5acf2cfcd939708bf7845dfbc9dc36ff80add8c1..457fe7bb5a43a3ae9e00270d06eee917
              }
          }
  
+@@ -3188,19 +3317,19 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+     // Paper start - Add chunk view API
+     @Override
+     public Set<java.lang.Long> getSentChunkKeys() {
+-        org.spigotmc.AsyncCatcher.catchOp("accessing sent chunks");
++        io.canvasmc.canvas.util.TickGuard.guard(this.getHandle(), "Cannot access sent chunks async"); // Canvas - region guards
+         return FeatureHooks.getSentChunkKeys(this.getHandle());
+     }
+ 
+     @Override
+     public Set<org.bukkit.Chunk> getSentChunks() {
+-        org.spigotmc.AsyncCatcher.catchOp("accessing sent chunks");
++        io.canvasmc.canvas.util.TickGuard.guard(this.getHandle(), "Cannot access sent chunks async"); // Canvas - region guards
+         return FeatureHooks.getSentChunks(this.getHandle());
+     }
+ 
+     @Override
+     public boolean isChunkSent(final long chunkKey) {
+-        org.spigotmc.AsyncCatcher.catchOp("accessing sent chunks");
++        io.canvasmc.canvas.util.TickGuard.guard(this.getHandle(), "Cannot access sent chunks async"); // Canvas - region guards
+         return FeatureHooks.isChunkSent(this.getHandle(), chunkKey);
+     }
+     // Paper end
 @@ -3315,6 +3444,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
