@@ -1,0 +1,11 @@
+--- a/net/minecraft/server/network/config/PrepareSpawnTask.java
++++ b/net/minecraft/server/network/config/PrepareSpawnTask.java
+@@ -364,7 +_,7 @@
+                         org.bukkit.craftbukkit.entity.CraftPlayer craftPlayer = player.getBukkitEntity();
+                         // Only update first played if it is older than the one we have
+                         long modified = new java.io.File(PrepareSpawnTask.this.server.getPlayerList().playerIo.getPlayerDir(), player.getStringUUID() + ".dat").lastModified();
+-                        if (modified < craftPlayer.getFirstPlayed()) {
++                        if (modified != 0L && modified < craftPlayer.getFirstPlayed()) { // Canvas - async player data saves - the first save may not be on disk yet
+                             craftPlayer.setFirstPlayed(modified);
+                         }
+                         return tag;

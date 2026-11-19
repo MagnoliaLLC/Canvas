@@ -1,0 +1,19 @@
+--- a/net/minecraft/server/commands/SaveAllCommand.java
++++ b/net/minecraft/server/commands/SaveAllCommand.java
+@@ -85,6 +_,16 @@
+                             server.sendLowDiskSpaceWarning();
+                         }
+ 
++                        // Canvas start - async player data saves
++                        if (flush) {
++                            // never park a tick thread on player data writes
++                            net.minecraft.util.Util.ioPool().execute(() -> {
++                                server.getPlayerList().playerIo.awaitPendingSaves();
++                                regionizedServer.scheduleToOrExecute(() -> source.sendSuccess(() -> Component.translatable("commands.save.success"), true));
++                            });
++                            return;
++                        }
++                        // Canvas end - async player data saves
+                         // now we have warned, so we can send success
+                         source.sendSuccess(() -> Component.translatable("commands.save.success"), true);
+                     }

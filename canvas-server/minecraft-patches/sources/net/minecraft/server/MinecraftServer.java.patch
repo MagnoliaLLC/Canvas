@@ -1,5 +1,13 @@
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
+@@ -1091,6 +_,7 @@
+     // Folia end - region threading
+         this.savedDataStorage.close();
+         this.resources.close();
++        this.playerDataStorage.awaitPendingSaves(); // Canvas - async player data saves
+ 
+         try {
+             this.storageSource.close();
 @@ -1308,11 +_,7 @@
                  LOGGER.info("*************************************************************************************");
              }
