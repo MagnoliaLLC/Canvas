@@ -25775,7 +25775,7 @@ index 42408dede2808447281b49f4006c1d8b03c10bf4..82238881ce06874af8a9c1e4a0581be5
              }
              // Spigot end
 diff --git a/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 548c7aa12dfc6526d01ad11bb3af82fc469485e8..5e28933d26ca58fe450cb80cbd81ebbbcdfd2cf5 100644
+index 548c7aa12dfc6526d01ad11bb3af82fc469485e8..31a2f878242a16d54e37b3793f179ccd4fb9e9c5 100644
 --- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 @@ -305,10 +305,14 @@ public class ServerGamePacketListenerImpl
@@ -26270,15 +26270,16 @@ index 548c7aa12dfc6526d01ad11bb3af82fc469485e8..5e28933d26ca58fe450cb80cbd81ebbb
              } else {
                  chatHandler.run();
              }
-@@ -2674,6 +2842,7 @@ public class ServerGamePacketListenerImpl
-         if (rawMessage.isEmpty()) {
+@@ -2675,7 +2843,7 @@ public class ServerGamePacketListenerImpl
              LOGGER.warn("{} tried to send an empty message", this.player.getScoreboardName());
          } else if (this.getCraftPlayer().isConversing()) {
-+            if (true) throw new UnsupportedOperationException("Unsupported in region threading"); // Folia - region threading
              final String conversationInput = rawMessage;
-             this.server.processQueue.add(() -> ServerGamePacketListenerImpl.this.getCraftPlayer().acceptConversationInput(conversationInput));
+-            this.server.processQueue.add(() -> ServerGamePacketListenerImpl.this.getCraftPlayer().acceptConversationInput(conversationInput));
++            this.player.getBukkitEntity().taskScheduler.scheduleOrExecute((_) -> this.getCraftPlayer().acceptConversationInput(conversationInput)); // Canvas - region threading
          } else if (this.player.getChatVisibility() == ChatVisiblity.SYSTEM) { // Re-add "Command Only" flag check
-@@ -2881,8 +3050,26 @@ public class ServerGamePacketListenerImpl
+             this.send(new ClientboundSystemChatPacket(Component.translatable("chat.cannotSend").withStyle(ChatFormatting.RED), false));
+         } else {
+@@ -2881,8 +3049,26 @@ public class ServerGamePacketListenerImpl
      // Spigot end
  
      public void switchToConfig() {
@@ -26306,7 +26307,7 @@ index 548c7aa12dfc6526d01ad11bb3af82fc469485e8..5e28933d26ca58fe450cb80cbd81ebbb
          this.send(ClientboundStartConfigurationPacket.INSTANCE);
          this.connection.setupOutboundProtocol(ConfigurationProtocols.CLIENTBOUND);
      }
-@@ -2906,7 +3093,7 @@ public class ServerGamePacketListenerImpl
+@@ -2906,7 +3092,7 @@ public class ServerGamePacketListenerImpl
              }
              // Spigot end
              this.player.resetLastActionTime();
@@ -26315,7 +26316,7 @@ index 548c7aa12dfc6526d01ad11bb3af82fc469485e8..5e28933d26ca58fe450cb80cbd81ebbb
                  AABB targetBounds = target.getBoundingBox();
                  ItemStack mainHandItem = this.player.getMainHandItem();
                  if (this.player.isWithinAttackRange(mainHandItem, targetBounds, io.papermc.paper.configuration.GlobalConfiguration.get().misc.clientInteractionLeniencyDistance.or(3.0))) { // Paper - configurable lenience
-@@ -2949,7 +3136,7 @@ public class ServerGamePacketListenerImpl
+@@ -2949,7 +3135,7 @@ public class ServerGamePacketListenerImpl
              // Spigot end
              this.player.resetLastActionTime();
              this.player.setShiftKeyDown(packet.usingSecondaryAction());
@@ -26324,7 +26325,7 @@ index 548c7aa12dfc6526d01ad11bb3af82fc469485e8..5e28933d26ca58fe450cb80cbd81ebbb
                  AABB targetBounds = target.getBoundingBox();
                  if (this.player.isWithinEntityInteractionRange(targetBounds, io.papermc.paper.configuration.GlobalConfiguration.get().misc.clientInteractionLeniencyDistance.or(3.0))) { // Paper - configurable lenience value for interact range
                      InteractionHand hand = packet.hand();
-@@ -3054,6 +3241,13 @@ public class ServerGamePacketListenerImpl
+@@ -3054,6 +3240,13 @@ public class ServerGamePacketListenerImpl
          switch (action) {
              case PERFORM_RESPAWN:
                  if (this.player.wonGame) {
@@ -26338,7 +26339,7 @@ index 548c7aa12dfc6526d01ad11bb3af82fc469485e8..5e28933d26ca58fe450cb80cbd81ebbb
                      this.player.wonGame = false;
                      this.player = this.server.getPlayerList().respawn(this.player, true, Entity.RemovalReason.CHANGED_DIMENSION, RespawnReason.END_PORTAL); // CraftBukkit
                      this.resetPosition();
-@@ -3064,6 +3258,17 @@ public class ServerGamePacketListenerImpl
+@@ -3064,6 +3257,17 @@ public class ServerGamePacketListenerImpl
                          return;
                      }
  
@@ -26356,7 +26357,7 @@ index 548c7aa12dfc6526d01ad11bb3af82fc469485e8..5e28933d26ca58fe450cb80cbd81ebbb
                      this.player = this.server.getPlayerList().respawn(this.player, false, Entity.RemovalReason.KILLED, RespawnReason.DEATH); // CraftBukkit
                      this.resetPosition();
                      this.restartClientLoadTimerAfterRespawn();
-@@ -3612,7 +3817,13 @@ public class ServerGamePacketListenerImpl
+@@ -3612,7 +3816,13 @@ public class ServerGamePacketListenerImpl
          };
          List<String> lines = packet.lines().stream().map(lineLimiter).map(ChatFormatting::stripFormatting).collect(Collectors.toList());
          // Paper end - limit client sign length
@@ -26371,7 +26372,7 @@ index 548c7aa12dfc6526d01ad11bb3af82fc469485e8..5e28933d26ca58fe450cb80cbd81ebbb
      }
  
      private void updateSignText(final ServerboundSignUpdatePacket packet, final List<FilteredText> lines) {
-@@ -3631,7 +3842,7 @@ public class ServerGamePacketListenerImpl
+@@ -3631,7 +3841,7 @@ public class ServerGamePacketListenerImpl
                  return;
              }
              // Paper end - Add API for client-side signs
@@ -26380,7 +26381,7 @@ index 548c7aa12dfc6526d01ad11bb3af82fc469485e8..5e28933d26ca58fe450cb80cbd81ebbb
                  return;
              }
  
-@@ -3769,7 +3980,7 @@ public class ServerGamePacketListenerImpl
+@@ -3769,7 +3979,7 @@ public class ServerGamePacketListenerImpl
          this.chatMessageChain
              .append(
                  () -> {
@@ -26389,7 +26390,7 @@ index 548c7aa12dfc6526d01ad11bb3af82fc469485e8..5e28933d26ca58fe450cb80cbd81ebbb
                      this.player.setChatSession(chatSession);
                      this.server
                          .getPlayerList()
-@@ -3876,19 +4087,7 @@ public class ServerGamePacketListenerImpl
+@@ -3876,19 +4086,7 @@ public class ServerGamePacketListenerImpl
  
      @Override
      public void disconnectAsync(final net.minecraft.network.DisconnectionDetails disconnectionInfo) {
