@@ -87,9 +87,7 @@ public class RegionTickSubCommand implements SubCommand {
             .then(literal("walk")
                 .then(argument("handle", StringArgumentType.greedyString()).suggests(new HandleSuggestionProvider()).executes(context -> {
                     postActionTo(context.getArgument("handle", String.class), context.getSource().getPlayer(), (scheduleHandle) -> {
-                        if (scheduleHandle.getTickManager().isSprinting()) {
-                            scheduleHandle.getTickManager().postAction(new ScheduledHandleTickState.Action.StopSprinting());
-                        }
+                        scheduleHandle.getTickManager().postAction(new ScheduledHandleTickState.Action.StopSprinting());
                     });
                     context.getSource().sendSuccess(() -> Component.literal("Posted to marked schedule handles to stop sprinting"), true);
                     return Command.SINGLE_SUCCESS;
