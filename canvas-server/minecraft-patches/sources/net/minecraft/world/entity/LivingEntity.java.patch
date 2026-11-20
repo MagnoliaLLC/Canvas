@@ -173,7 +173,7 @@
      }
  
      // Paper start - Check for NaN
-@@ -2237,7 +_,7 @@
+@@ -2238,7 +_,7 @@
  
      @Override
      public boolean isAlive() {
@@ -182,7 +182,7 @@
      }
  
      public boolean isLookingAtMe(
-@@ -2778,7 +_,7 @@
+@@ -2779,7 +_,7 @@
                  this.swapHandItems();
                  break;
              case 60:
@@ -191,7 +191,7 @@
                  break;
              case 65:
                  this.breakItem(this.getItemBySlot(EquipmentSlot.BODY));
-@@ -3185,7 +_,7 @@
+@@ -3186,7 +_,7 @@
              waterWalker *= 0.5F;
          }
  
@@ -200,7 +200,7 @@
              slowDown += (0.54600006F - slowDown) * waterWalker;
              speed += (this.getSpeed() - speed) * waterWalker;
          }
-@@ -3595,6 +_,11 @@
+@@ -3596,6 +_,11 @@
      }
  
      public void detectEquipmentUpdates() {
@@ -212,7 +212,7 @@
          Map<EquipmentSlot, ItemStack> changedItems = this.collectEquipmentChanges(this.lastEquipmentItems);
          if (changedItems != null) {
              this.handleHandSwap(changedItems);
-@@ -3717,6 +_,105 @@
+@@ -3718,6 +_,105 @@
          return 50.0F;
      }
  
@@ -318,7 +318,7 @@
      public void aiStep() {
          if (this.noJumpDelay > 0) {
              this.noJumpDelay--;
-@@ -3806,7 +_,18 @@
+@@ -3807,7 +_,18 @@
          if (this.getControllingPassenger() instanceof Player controller && this.isAlive()) {
              this.travelRidden(controller, input);
          } else if (this.canSimulateMovement() && this.isEffectiveAi()) {
@@ -338,7 +338,7 @@
          }
  
          if (!this.level().isClientSide() || this.isLocalInstanceAuthoritative()) {
-@@ -3819,7 +_,7 @@
+@@ -3820,7 +_,7 @@
  
          if (this.level() instanceof ServerLevel serverLevel) {
              if ((!this.isInPowderSnow || !this.canFreeze()) && !this.freezeLocked) { // Paper - Freeze Tick Lock API
@@ -347,7 +347,7 @@
              }
  
              this.removeFrost();
-@@ -3834,7 +_,7 @@
+@@ -3835,7 +_,7 @@
              this.checkAutoSpinAttack(beforeTravelBox, this.getBoundingBox());
          }
  
@@ -356,7 +356,7 @@
          // Paper start - Add EntityMoveEvent
          if (((ServerLevel) this.level()).getCurrentWorldData().hasEntityMoveEvent && !(this instanceof Player)) { // Folia - region threading
              if (this.xo != this.getX() || this.yo != this.getY() || this.zo != this.getZ() || this.yRotO != this.getYRot() || this.xRotO != this.getXRot()) {
-@@ -3870,6 +_,7 @@
+@@ -3871,6 +_,7 @@
      protected void updateFallFlying() {
          this.checkFallDistanceAccumulation();
          if (!this.level().isClientSide()) {
@@ -364,7 +364,7 @@
              if (!this.canGlide()) {
                  if (this.getSharedFlag(Entity.FLAG_FALL_FLYING) && !CraftEventFactory.callToggleGlideEvent(this, false).isCancelled()) // CraftBukkit
                  this.setSharedFlag(Entity.FLAG_FALL_FLYING, false);
-@@ -3908,6 +_,12 @@
+@@ -3909,6 +_,12 @@
      }
  
      protected void pushEntities() {
@@ -377,7 +377,7 @@
          // Paper start - don't run getEntities if we're not going to use its result
          if (!this.isPushable()) {
              return;
-@@ -3923,7 +_,11 @@
+@@ -3924,7 +_,11 @@
              return;
          }
          // Paper end - don't run getEntities if we're not going to use its result
@@ -390,7 +390,7 @@
          if (!pushableEntities.isEmpty()) {
              if (this.level() instanceof ServerLevel serverLevel) {
                  // Paper - don't run getEntities if we're not going to use its result; moved up
-@@ -4110,6 +_,7 @@
+@@ -4111,6 +_,7 @@
  
      @Override
      public boolean isCollidable(boolean ignoreClimbing) {
@@ -398,7 +398,7 @@
          // Paper end - Climbing should not bypass cramming gamerule
          return (this.isAlwaysTicking() || !(this.level() instanceof ServerLevel level && !level.isPositionEntityTicking(this.blockPosition())))
              && this.isAlive()
-@@ -4232,6 +_,18 @@
+@@ -4233,6 +_,18 @@
              );
          }
  
@@ -417,7 +417,7 @@
          return entity;
      }
  
-@@ -4296,6 +_,11 @@
+@@ -4297,6 +_,11 @@
      @Override
      public void onSyncedDataUpdated(final EntityDataAccessor<?> accessor) {
          super.onSyncedDataUpdated(accessor);
@@ -429,3 +429,16 @@
          if (SLEEPING_POS_ID.equals(accessor)) {
              if (this.level().isClientSide()) {
                  this.getSleepingPos().ifPresent(this::setPosToBed);
+@@ -4432,6 +_,12 @@
+     }
+ 
+     public void stopUsingItem() {
++        // Canvas start - implement sword blocking
++        if (this instanceof net.minecraft.world.entity.player.Player player && player.canvas$isTemporarilyBlocking) {
++            player.canvas$isTemporarilyBlocking = false;
++            if (this.useItem.getItem() instanceof io.canvasmc.canvas.world.item.SwordItem) this.useItem.remove(net.minecraft.core.component.DataComponents.BLOCKS_ATTACKS);
++        }
++        // Canvas end - implement sword blocking
+         if (!this.level().isClientSide()) {
+             boolean wasUsingItem = this.isUsingItem();
+             this.recentKineticEnemies = null;
