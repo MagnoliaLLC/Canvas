@@ -45,7 +45,7 @@ public class SwordItem extends Item {
         }
 
         final BlocksAttacks blocksAttacks = itemInHand.get(DataComponents.BLOCKS_ATTACKS);
-        if (blocksAttacks != null) {
+        if (blocksAttacks != null && !BLOCKS_ATTACKS.equals(blocksAttacks)) {
             player.startUsingItem(hand);
             return InteractionResult.CONSUME;
         }
@@ -60,6 +60,7 @@ public class SwordItem extends Item {
             return InteractionResult.CONSUME;
         }
 
+        if (blocksAttacks != null) itemInHand.remove(DataComponents.BLOCKS_ATTACKS);
         return InteractionResult.PASS;
     }
 

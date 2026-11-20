@@ -429,3 +429,16 @@
          if (SLEEPING_POS_ID.equals(accessor)) {
              if (this.level().isClientSide()) {
                  this.getSleepingPos().ifPresent(this::setPosToBed);
+@@ -4431,6 +_,12 @@
+     }
+ 
+     public void stopUsingItem() {
++        // Canvas start - implement sword blocking
++        if (this instanceof net.minecraft.world.entity.player.Player player && player.canvas$isTemporarilyBlocking) {
++            player.canvas$isTemporarilyBlocking = false;
++            if (this.useItem.getItem() instanceof io.canvasmc.canvas.world.item.SwordItem) this.useItem.remove(net.minecraft.core.component.DataComponents.BLOCKS_ATTACKS);
++        }
++        // Canvas end - implement sword blocking
+         if (!this.level().isClientSide()) {
+             boolean wasUsingItem = this.isUsingItem();
+             this.recentKineticEnemies = null;
