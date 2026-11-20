@@ -31860,18 +31860,19 @@ index ba49cc3497e8f9aeaf767af80c48d8f65379c3df..686a75f92d7f757de6911fe6317ce51a
          }
      }
 diff --git a/net/minecraft/world/entity/ai/village/poi/PoiManager.java b/net/minecraft/world/entity/ai/village/poi/PoiManager.java
-index 3b07e731e8d16c2b71cb55b85163029cf56fd02e..24a2995c1d66694a12700624b3447b22ae336a4d 100644
+index 3b07e731e8d16c2b71cb55b85163029cf56fd02e..0f46289c58ba31774331ece4a3075ea29c74c445 100644
 --- a/net/minecraft/world/entity/ai/village/poi/PoiManager.java
 +++ b/net/minecraft/world/entity/ai/village/poi/PoiManager.java
-@@ -52,6 +52,7 @@ public class PoiManager extends SectionStorage<PoiSection, PoiSection.Packed> im
+@@ -52,6 +52,8 @@ public class PoiManager extends SectionStorage<PoiSection, PoiSection.Packed> im
      // the vanilla tracker needs to be replaced because it does not support level removes, and we need level removes
      // to support poi unloading
      private final ca.spottedleaf.moonrise.common.misc.Delayed26WayDistancePropagator3D villageDistanceTracker = new ca.spottedleaf.moonrise.common.misc.Delayed26WayDistancePropagator3D();
 +    private final java.util.concurrent.atomic.AtomicBoolean hasVillageUpdates = new java.util.concurrent.atomic.AtomicBoolean(); // Canvas - region threading
++    private final java.util.concurrent.locks.StampedLock villageLevelLock = new java.util.concurrent.locks.StampedLock(); // Canvas - region threading
  
      private static final int POI_DATA_SOURCE = 7;
  
-@@ -60,11 +61,14 @@ public class PoiManager extends SectionStorage<PoiSection, PoiSection.Packed> im
+@@ -60,11 +62,14 @@ public class PoiManager extends SectionStorage<PoiSection, PoiSection.Packed> im
      }
  
      private void updateDistanceTracking(long section) {
@@ -31886,30 +31887,51 @@ index 3b07e731e8d16c2b71cb55b85163029cf56fd02e..24a2995c1d66694a12700624b3447b22
      }
  
      @Override
-@@ -420,10 +424,12 @@ public class PoiManager extends SectionStorage<PoiSection, PoiSection.Packed> im
-     }
+@@ -421,8 +426,17 @@ public class PoiManager extends SectionStorage<PoiSection, PoiSection.Packed> im
  
      public int sectionsToVillage(final SectionPos sectionPos) {
-+        synchronized (this.villageDistanceTracker) { // Folia - region threading
          // Paper start - rewrite chunk system
-         this.villageDistanceTracker.propagateUpdates();
+-        this.villageDistanceTracker.propagateUpdates();
++        // Canvas start - region threading
++        this.propagateVillageUpdates();
++        final long stamp = this.villageLevelLock.readLock();
++        try {
++        // Canvas end - region threading
          return convertBetweenLevels(this.villageDistanceTracker.getLevel(ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkSectionKey(sectionPos)));
++        // Canvas start - region threading
++        } finally {
++            this.villageLevelLock.unlockRead(stamp);
++        }
++        // Canvas end - region threading
          // Paper end - rewrite chunk system
-+        } // Folia - region threading
      }
  
-     private boolean isVillageCenter(final long sectionPos) {
-@@ -434,7 +440,10 @@ public class PoiManager extends SectionStorage<PoiSection, PoiSection.Packed> im
+@@ -434,8 +448,24 @@ public class PoiManager extends SectionStorage<PoiSection, PoiSection.Packed> im
  
      @Override
      public void tick(final BooleanSupplier haveTime) {
-+        if (!this.hasVillageUpdates.compareAndSet(true, false)) return; // Canvas - region threading
-+        synchronized (this.villageDistanceTracker) { // Folia - region threading
-         this.villageDistanceTracker.propagateUpdates(); // Paper - rewrite chunk system
-+        } // Folia - region threading
+-        this.villageDistanceTracker.propagateUpdates(); // Paper - rewrite chunk system
++        this.propagateVillageUpdates(); // Paper - rewrite chunk system // Canvas - region threading
++    }
++
++    // Canvas start - region threading
++    private void propagateVillageUpdates() {
++        if (!this.hasVillageUpdates.get()) return;
++        synchronized (this.villageDistanceTracker) {
++            if (!this.hasVillageUpdates.get()) return;
++            final long stamp = this.villageLevelLock.writeLock();
++            try {
++                this.hasVillageUpdates.set(false);
++                this.villageDistanceTracker.propagateUpdates();
++            } finally {
++                this.villageLevelLock.unlockWrite(stamp);
++            }
++        }
      }
++    // Canvas end - region threading
  
      @Override
+     public void setDirty(final long sectionPos) { // Paper - public
 diff --git a/net/minecraft/world/entity/animal/Animal.java b/net/minecraft/world/entity/animal/Animal.java
 index 0814912f7b9e6ab1f8037006a2224b57e1ef241b..9f3c2d2c4ae0660bf09d318807be1a781239c8a0 100644
 --- a/net/minecraft/world/entity/animal/Animal.java
