@@ -35068,6 +35068,26 @@ index ad7303e83a3a33b263d182097c082887b3afce2f..197d3afb7d7b3918b688a46fe9017c0b
              checkSpawn(level, pos, placedSkull);
          }
      }
+diff --git a/net/minecraft/world/level/block/entity/BarrelBlockEntity.java b/net/minecraft/world/level/block/entity/BarrelBlockEntity.java
+index 5ddfc7c9df08e9abedcb0fbaa0f614a804ee4059..4ed9d3412a4be4d11fb31daed544a317a149a3c7 100644
+--- a/net/minecraft/world/level/block/entity/BarrelBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/BarrelBlockEntity.java
+@@ -142,6 +142,7 @@ public class BarrelBlockEntity extends RandomizableContainerBlockEntity {
+ 
+     @Override
+     public void startOpen(final ContainerUser containerUser) {
++        if (!this.real) return; // Canvas - region threading
+         if (!this.remove && !containerUser.getLivingEntity().isSpectator()) {
+             this.openersCounter
+                 .incrementOpeners(
+@@ -152,6 +153,7 @@ public class BarrelBlockEntity extends RandomizableContainerBlockEntity {
+ 
+     @Override
+     public void stopOpen(final ContainerUser containerUser) {
++        if (!this.real) return; // Canvas - region threading
+         if (!this.remove && !containerUser.getLivingEntity().isSpectator()) {
+             this.openersCounter.decrementOpeners(containerUser.getLivingEntity(), this.getLevel(), this.getBlockPos(), this.getBlockState());
+         }
 diff --git a/net/minecraft/world/level/block/entity/BeaconBlockEntity.java b/net/minecraft/world/level/block/entity/BeaconBlockEntity.java
 index 43baa8b632d01ab1ceb6cc6967aaa0b8f95450ac..a3b95d765706f8780e25bfbd460c2ab0450ddaee 100644
 --- a/net/minecraft/world/level/block/entity/BeaconBlockEntity.java
