@@ -8,7 +8,7 @@
      public Set<UUID> collidableExemptions = new java.util.HashSet<>();
      public boolean bukkitPickUpLoot;
      public boolean silentDeath = true; // Paper - mark entity as dying silently for cancellable death event
-@@ -334,6 +_,8 @@
+@@ -335,6 +_,8 @@
      }
      // Folia end - region threading
  
@@ -17,7 +17,7 @@
      protected LivingEntity(final EntityType<? extends LivingEntity> type, final Level level) {
          super(type, level);
          this.attributes = new AttributeMap(DefaultAttributes.getSupplier(type));
-@@ -421,7 +_,7 @@
+@@ -422,7 +_,7 @@
          if (this.level() instanceof ServerLevel level && onGround && this.fallDistance > 0.0) {
              this.onChangedBlock(level, pos);
              double power = Math.max(0, Mth.floor(this.calculateFallPower(this.fallDistance)));
@@ -26,7 +26,7 @@
                  double x = this.getX();
                  double y = this.getY();
                  double z = this.getZ();
-@@ -437,11 +_,13 @@
+@@ -438,11 +_,13 @@
                  double scale = Math.min(0.2F + power / 15.0, 2.5);
                  int particles = (int)(150.0 * scale);
                  // CraftBukkit start - visibility API
@@ -40,7 +40,7 @@
                  // CraftBukkit end - visibility API
              }
          }
-@@ -475,14 +_,14 @@
+@@ -476,14 +_,14 @@
              });
          }
  
@@ -57,7 +57,7 @@
                  this.hurtServer(level, this.damageSources().inWall(), 1.0F);
              } else if (isPlayer && !level.getWorldBorder().isWithinBounds(this.getBoundingBox())) {
                  double dist = level.getWorldBorder().getDistanceToBorder(this) + level.getWorldBorder().getSafeZone();
-@@ -559,6 +_,19 @@
+@@ -560,6 +_,19 @@
          this.yHeadRotO = this.yHeadRot;
          this.yBodyRotO = this.yBodyRot;
      }
@@ -77,7 +77,7 @@
  
      protected boolean shouldTakeDrowningDamage() {
          return this.getAirSupply() <= -20;
-@@ -587,9 +_,9 @@
+@@ -588,9 +_,9 @@
      }
  
      protected void tryAddFrost() {
@@ -89,7 +89,7 @@
                  AttributeInstance speed = this.getAttribute(Attributes.MOVEMENT_SPEED);
                  if (speed == null) {
                      return;
-@@ -629,6 +_,7 @@
+@@ -630,6 +_,7 @@
      public boolean broadcastedDeath = false; // Folia - region threading
      protected void tickDeath() {
          this.deathTime++;
@@ -97,7 +97,7 @@
          if (this.deathTime >= 20 && !this.level().isClientSide() && !this.isRemoved()) {
              this.level().broadcastEntityEvent(this, EntityEvent.POOF); this.broadcastedDeath = true; // Folia - region threading - death has been broadcasted
              if (!(this instanceof ServerPlayer)) this.remove(Entity.RemovalReason.KILLED, org.bukkit.event.entity.EntityRemoveEvent.Cause.DEATH); // CraftBukkit - add Bukkit remove cause // Folia - region threading - don't remove, we want the tick scheduler to be running
-@@ -846,6 +_,7 @@
+@@ -847,6 +_,7 @@
          if (this.locatorBarIcon.hasData()) {
              output.store("locator_bar_icon", Waypoint.Icon.CODEC, this.locatorBarIcon);
          }
@@ -105,7 +105,7 @@
      }
  
      // Paper start - Extend dropItem API
-@@ -958,6 +_,7 @@
+@@ -959,6 +_,7 @@
          this.locatorBarIcon = input.read("locator_bar_icon", Waypoint.Icon.CODEC).orElseGet(Waypoint.Icon::new);
          this.currentImpulseContextResetGraceTime = input.getIntOr("current_impulse_context_reset_grace_time", 0);
          this.currentImpulseImpactPos = input.read("current_explosion_impact_pos", Vec3.CODEC).orElse(null);
@@ -113,7 +113,7 @@
      }
  
      @Override
-@@ -971,6 +_,7 @@
+@@ -972,6 +_,7 @@
  
      protected void tickEffects() {
          if (this.level() instanceof ServerLevel serverLevel) {
@@ -121,7 +121,7 @@
              Iterator<Holder<MobEffect>> iterator = this.activeEffects.keySet().iterator();
  
              this.tickingEffects = true; // CraftBukkit
-@@ -993,6 +_,7 @@
+@@ -994,6 +_,7 @@
                  }
              } catch (ConcurrentModificationException var6) {
              }
@@ -129,7 +129,7 @@
              // CraftBukkit start
              this.tickingEffects = false;
              Runnable task;
-@@ -1006,7 +_,7 @@
+@@ -1007,7 +_,7 @@
              }
  
              List<ParticleOptions> particles = this.entityData.get(DATA_EFFECT_PARTICLES);
@@ -138,7 +138,7 @@
                  boolean isAmbient = this.entityData.get(DATA_EFFECT_AMBIENCE_ID);
                  int bound = this.isInvisible() ? 15 : 4;
                  int ambientFactor = isAmbient ? 5 : 1;
-@@ -1037,14 +_,18 @@
+@@ -1038,14 +_,18 @@
      }
  
      private void updateSynchronizedMobEffectParticles() {
@@ -164,7 +164,7 @@
      }
  
      private void updateGlowingStatus() {
-@@ -1424,7 +_,7 @@
+@@ -1425,7 +_,7 @@
              return (float) player.getBukkitEntity().getHealth();
          }
          // CraftBukkit end
@@ -173,7 +173,7 @@
      }
  
      // Paper start - Check for NaN
-@@ -2236,7 +_,7 @@
+@@ -2237,7 +_,7 @@
  
      @Override
      public boolean isAlive() {
@@ -182,7 +182,7 @@
      }
  
      public boolean isLookingAtMe(
-@@ -2777,7 +_,7 @@
+@@ -2778,7 +_,7 @@
                  this.swapHandItems();
                  break;
              case 60:
@@ -191,7 +191,7 @@
                  break;
              case 65:
                  this.breakItem(this.getItemBySlot(EquipmentSlot.BODY));
-@@ -3184,7 +_,7 @@
+@@ -3185,7 +_,7 @@
              waterWalker *= 0.5F;
          }
  
@@ -200,7 +200,7 @@
              slowDown += (0.54600006F - slowDown) * waterWalker;
              speed += (this.getSpeed() - speed) * waterWalker;
          }
-@@ -3594,6 +_,11 @@
+@@ -3595,6 +_,11 @@
      }
  
      public void detectEquipmentUpdates() {
@@ -212,7 +212,7 @@
          Map<EquipmentSlot, ItemStack> changedItems = this.collectEquipmentChanges(this.lastEquipmentItems);
          if (changedItems != null) {
              this.handleHandSwap(changedItems);
-@@ -3716,6 +_,105 @@
+@@ -3717,6 +_,105 @@
          return 50.0F;
      }
  
@@ -318,7 +318,7 @@
      public void aiStep() {
          if (this.noJumpDelay > 0) {
              this.noJumpDelay--;
-@@ -3805,7 +_,18 @@
+@@ -3806,7 +_,18 @@
          if (this.getControllingPassenger() instanceof Player controller && this.isAlive()) {
              this.travelRidden(controller, input);
          } else if (this.canSimulateMovement() && this.isEffectiveAi()) {
@@ -338,7 +338,7 @@
          }
  
          if (!this.level().isClientSide() || this.isLocalInstanceAuthoritative()) {
-@@ -3818,7 +_,7 @@
+@@ -3819,7 +_,7 @@
  
          if (this.level() instanceof ServerLevel serverLevel) {
              if ((!this.isInPowderSnow || !this.canFreeze()) && !this.freezeLocked) { // Paper - Freeze Tick Lock API
@@ -347,7 +347,7 @@
              }
  
              this.removeFrost();
-@@ -3833,7 +_,7 @@
+@@ -3834,7 +_,7 @@
              this.checkAutoSpinAttack(beforeTravelBox, this.getBoundingBox());
          }
  
@@ -356,7 +356,7 @@
          // Paper start - Add EntityMoveEvent
          if (((ServerLevel) this.level()).getCurrentWorldData().hasEntityMoveEvent && !(this instanceof Player)) { // Folia - region threading
              if (this.xo != this.getX() || this.yo != this.getY() || this.zo != this.getZ() || this.yRotO != this.getYRot() || this.xRotO != this.getXRot()) {
-@@ -3869,6 +_,7 @@
+@@ -3870,6 +_,7 @@
      protected void updateFallFlying() {
          this.checkFallDistanceAccumulation();
          if (!this.level().isClientSide()) {
@@ -364,7 +364,7 @@
              if (!this.canGlide()) {
                  if (this.getSharedFlag(Entity.FLAG_FALL_FLYING) && !CraftEventFactory.callToggleGlideEvent(this, false).isCancelled()) // CraftBukkit
                  this.setSharedFlag(Entity.FLAG_FALL_FLYING, false);
-@@ -3907,6 +_,12 @@
+@@ -3908,6 +_,12 @@
      }
  
      protected void pushEntities() {
@@ -377,7 +377,7 @@
          // Paper start - don't run getEntities if we're not going to use its result
          if (!this.isPushable()) {
              return;
-@@ -3922,7 +_,11 @@
+@@ -3923,7 +_,11 @@
              return;
          }
          // Paper end - don't run getEntities if we're not going to use its result
@@ -390,7 +390,7 @@
          if (!pushableEntities.isEmpty()) {
              if (this.level() instanceof ServerLevel serverLevel) {
                  // Paper - don't run getEntities if we're not going to use its result; moved up
-@@ -4109,6 +_,7 @@
+@@ -4110,6 +_,7 @@
  
      @Override
      public boolean isCollidable(boolean ignoreClimbing) {
@@ -398,7 +398,7 @@
          // Paper end - Climbing should not bypass cramming gamerule
          return (this.isAlwaysTicking() || !(this.level() instanceof ServerLevel level && !level.isPositionEntityTicking(this.blockPosition())))
              && this.isAlive()
-@@ -4231,6 +_,18 @@
+@@ -4232,6 +_,18 @@
              );
          }
  
@@ -417,7 +417,7 @@
          return entity;
      }
  
-@@ -4295,6 +_,11 @@
+@@ -4296,6 +_,11 @@
      @Override
      public void onSyncedDataUpdated(final EntityDataAccessor<?> accessor) {
          super.onSyncedDataUpdated(accessor);
