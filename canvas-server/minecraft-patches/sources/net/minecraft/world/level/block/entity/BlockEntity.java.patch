@@ -1,23 +1,5 @@
 --- a/net/minecraft/world/level/block/entity/BlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/BlockEntity.java
-@@ -51,7 +_,9 @@
-     protected final BlockPos worldPosition;
-     protected boolean remove;
-     private BlockState blockState;
-+    public @Nullable BlockState canvas$worldState; // Canvas - optimize block entities
-     private DataComponentMap components = DataComponentMap.EMPTY;
-+    public boolean canvas$isValid; // Canvas - optimize block entities
-     public boolean real = true; // Paper - mark block entities that aren't actually in the level
- 
-     // Folia start - region threading
-@@ -66,6 +_,7 @@
-         this.validateBlockState(blockState);
-         this.blockState = blockState;
-         this.persistentDataContainer = new org.bukkit.craftbukkit.persistence.CraftPersistentDataContainer(DATA_TYPE_REGISTRY); // Paper - always init
-+        this.canvas$isValid = type.isValid(blockState); // Canvas - optimize block entities
-     }
- 
-     private void validateBlockState(final BlockState blockState) {
 @@ -220,6 +_,11 @@
              if (IGNORE_TILE_UPDATES.get().booleanValue()) return; // Paper - Perf: Optimize Hoppers // Folia - region threading
              setChanged(this.level, this.worldPosition, this.blockState);
@@ -30,14 +12,6 @@
      }
  
      protected static void setChanged(final Level level, final BlockPos worldPosition, final BlockState blockState) {
-@@ -295,6 +_,7 @@
-     public void setBlockState(final BlockState blockState) {
-         this.validateBlockState(blockState);
-         this.blockState = blockState;
-+        this.canvas$isValid = this.type.isValid(blockState); // Canvas - optimize block entities
-     }
- 
-     protected void applyImplicitComponents(final DataComponentGetter components) {
 @@ -372,7 +_,7 @@
  
      // CraftBukkit start - add method
