@@ -3362,7 +3362,7 @@ index 000c5ea5d39d5ab6e5592012ab1cc7ee547505dc..ab2ee478c53923be85f5a6d4971bed5b
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
-index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..d27e4d51ef88a72a567abf9e0bf574cb7b71a2ef 100644
+index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..87aac8a6e4d95ac2065c8801eac8ecc40d4a2c4d 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 @@ -124,6 +124,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
@@ -3458,7 +3458,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..d27e4d51ef88a72a567abf9e0bf574cb
  
          if (entityTracker == null) {
              return;
-@@ -1202,27 +1215,81 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1202,27 +1215,90 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          location.checkFinite();
          Location locationClone = location.clone(); // clone so we don't need to worry about mutations after this call.
  
@@ -3482,11 +3482,20 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..d27e4d51ef88a72a567abf9e0bf574cb
 -            });
 +        // Folia start - region threading
 +        final java.util.concurrent.CompletableFuture<Boolean> ret = new java.util.concurrent.CompletableFuture<>();
++        // Canvas start - region threading
++        final Set<net.minecraft.world.entity.Relative> relativeFlags = EnumSet.noneOf(net.minecraft.world.entity.Relative.class);
++        for (final TeleportFlag flag : teleportFlags) {
++            if (flag instanceof TeleportFlag.Relative relativeFlag) {
++                relativeFlags.add(deltaRelativeToNMS(relativeFlag));
++            }
++        }
++        // Canvas end - region threading
 +        final java.util.function.Consumer<Entity> run = (Entity nmsEntity) -> {
++            final net.minecraft.world.phys.Vec3 velocity = net.minecraft.world.entity.PositionMoveRotation.calculateAbsolute(net.minecraft.world.entity.PositionMoveRotation.of(nmsEntity), new net.minecraft.world.entity.PositionMoveRotation(net.minecraft.world.phys.Vec3.ZERO, net.minecraft.world.phys.Vec3.ZERO, locationClone.getYaw(), locationClone.getPitch()), relativeFlags).deltaMovement(); // Canvas - region threading
 +            boolean success = nmsEntity.teleportAsync(
 +                ((CraftWorld)locationClone.getWorld()).getHandle(),
 +                new net.minecraft.world.phys.Vec3(locationClone.getX(), locationClone.getY(), locationClone.getZ()),
-+                locationClone.getYaw(), locationClone.getPitch(), net.minecraft.world.phys.Vec3.ZERO,
++                locationClone.getYaw(), locationClone.getPitch(), velocity, // Canvas - region threading
 +                cause == null ? TeleportCause.UNKNOWN : cause,
 +                Entity.TELEPORT_FLAG_LOAD_CHUNK | Entity.TELEPORT_FLAG_TELEPORT_PASSENGERS, // preserve behavior with old API: dismount the entity so it can teleport
 +                (teleported) -> ret.complete(teleported != null ? Boolean.TRUE : Boolean.FALSE) // Canvas - region threading
@@ -3558,7 +3567,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..d27e4d51ef88a72a567abf9e0bf574cb
      // Paper end - more teleport API / async chunk API
  
      private final org.bukkit.entity.Entity.Spigot spigot = new org.bukkit.entity.Entity.Spigot() {
-@@ -1294,8 +1361,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1294,8 +1370,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
  
      @Override
      public Set<org.bukkit.entity.Player> getTrackedPlayers() {
@@ -3568,7 +3577,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..d27e4d51ef88a72a567abf9e0bf574cb
          if (tracker == null) {
              return java.util.Collections.emptySet();
          }
-@@ -1416,10 +1482,12 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1416,10 +1491,12 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
      }
  
      public boolean considersEntityAsAlly0(final @NotNull org.bukkit.entity.Entity entity) {
@@ -3581,7 +3590,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..d27e4d51ef88a72a567abf9e0bf574cb
      }
  
      @Override
-@@ -1430,27 +1498,35 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1430,27 +1507,35 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
  
      @Override
      public @NotNull Map<Key, Predicate<org.bukkit.entity.Entity>> getAdditionalAlliedRules() {
