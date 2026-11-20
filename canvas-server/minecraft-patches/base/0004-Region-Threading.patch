@@ -4353,10 +4353,10 @@ index 0000000000000000000000000000000000000000..9ad8dfa3dba691b702575ea3330c5af6
 +import org.jspecify.annotations.NullMarked;
 diff --git a/io/canvasmc/canvas/threadedregions/ticket/SaveAllTicket.java b/io/canvasmc/canvas/threadedregions/ticket/SaveAllTicket.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a463e62263c8eebfa447e4abf7019811080609b1
+index 0000000000000000000000000000000000000000..882aeb6a5418387886b262a919d64259c6b6292f
 --- /dev/null
 +++ b/io/canvasmc/canvas/threadedregions/ticket/SaveAllTicket.java
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,44 @@
 +package io.canvasmc.canvas.threadedregions.ticket;
 +
 +import java.util.function.Consumer;
@@ -4377,16 +4377,40 @@ index 0000000000000000000000000000000000000000..a463e62263c8eebfa447e4abf7019811
 + * @author dueris
 + */
 +public record SaveAllTicket(Runnable callback, Consumer<Throwable> exceptionPropagator, boolean flush) {
++    /**
++     * Combines this ticket with another into one that runs both
++     *
++     * @param other
++     *     the other ticket
++     *
++     * @return the combined ticket
++     */
++    public SaveAllTicket and(final SaveAllTicket other) {
++        return new SaveAllTicket(() -> {
++            try {
++                this.callback.run();
++            } finally {
++                other.callback.run();
++            }
++        }, (thrown) -> {
++            try {
++                this.exceptionPropagator.accept(thrown);
++            } finally {
++                other.exceptionPropagator.accept(thrown);
++            }
++        }, this.flush || other.flush);
++    }
 +}
 diff --git a/io/canvasmc/canvas/threadedregions/ticket/TicketHolder.java b/io/canvasmc/canvas/threadedregions/ticket/TicketHolder.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..668c9433f7cbc57e1f0de49b0fa5a0dba9fdc3a7
+index 0000000000000000000000000000000000000000..2720145ffe4e61c804d5092941f3b6630d2610ec
 --- /dev/null
 +++ b/io/canvasmc/canvas/threadedregions/ticket/TicketHolder.java
-@@ -0,0 +1,108 @@
+@@ -0,0 +1,143 @@
 +package io.canvasmc.canvas.threadedregions.ticket;
 +
 +import java.util.Objects;
++import java.util.function.BinaryOperator;
 +import java.util.function.Consumer;
 +import org.jspecify.annotations.Nullable;
 +
@@ -4401,6 +4425,7 @@ index 0000000000000000000000000000000000000000..668c9433f7cbc57e1f0de49b0fa5a0db
 +public class TicketHolder<T extends Record> {
 +    @Nullable
 +    private volatile T ticket;
++    private boolean closed;
 +
 +    /**
 +     * Fetches the current ticket
@@ -4419,11 +4444,11 @@ index 0000000000000000000000000000000000000000..668c9433f7cbc57e1f0de49b0fa5a0db
 +     */
 +    @Nullable
 +    public T pop() {
-+        final T ticket = this.ticket;
 +        synchronized (this) {
++            final T ticket = this.ticket;
 +            this.ticket = null;
++            return ticket;
 +        }
-+        return ticket;
 +    }
 +
 +    /**
@@ -4477,6 +4502,39 @@ index 0000000000000000000000000000000000000000..668c9433f7cbc57e1f0de49b0fa5a0db
 +                throw new IllegalStateException("Ticket already propagated");
 +            }
 +            this.ticket = ticket;
++        }
++    }
++
++    /**
++     * Pushes a ticket object to the holder, combining it with the ticket already present
++     *
++     * @param ticket
++     *     the new ticket
++     * @param combine
++     *     merges the present ticket with the new one
++     *
++     * @return false when the holder is closed and did not take the ticket
++     */
++    public boolean propagate(final T ticket, final BinaryOperator<T> combine) {
++        synchronized (this) {
++            if (this.closed) return false;
++            this.ticket = this.ticket == null ? ticket : combine.apply(this.ticket, ticket);
++            return true;
++        }
++    }
++
++    /**
++     * Fetches and clears the current ticket, and refuses every ticket pushed after
++     *
++     * @return the active ticket
++     */
++    @Nullable
++    public T close() {
++        synchronized (this) {
++            this.closed = true;
++            final T ticket = this.ticket;
++            this.ticket = null;
++            return ticket;
 +        }
 +    }
 +
@@ -12054,7 +12112,7 @@ diff --git a/io/papermc/paper/threadedregions/TickRegions.java b/io/papermc/pape
 index 8424cf9d4617b4732d44cc460d25b04481068989..27882279f248cd8b3bf4cc243fa5386b0d9d9ef8 100644
 --- a/io/papermc/paper/threadedregions/TickRegions.java
 +++ b/io/papermc/paper/threadedregions/TickRegions.java
-@@ -1,10 +1,756 @@
+@@ -1,10 +1,773 @@
  package io.papermc.paper.threadedregions;
  
 -// placeholder class for Folia
@@ -12191,7 +12249,8 @@ index 8424cf9d4617b4732d44cc460d25b04481068989..27882279f248cd8b3bf4cc243fa5386b
 +        // nothing for now
 +        TickRegions.getScheduler().getSchedulerCallbacks().onRegionDestroy(region); // Canvas - region profiler
 +        // Canvas start - region threading
-+        region.getData().canvas$saveAllTicket.consumeIfPresent((ticket) -> {
++        final SaveAllTicket ticket = region.getData().canvas$saveAllTicket.close();
++        if (ticket != null) {
 +
 +            // if a region is destroyed when they have a ticket present, this could
 +            // make the callback for the save-all command and such never actually
@@ -12201,7 +12260,7 @@ index 8424cf9d4617b4732d44cc460d25b04481068989..27882279f248cd8b3bf4cc243fa5386b
 +            // of which WILL save the combined data, or being split
 +
 +            ticket.callback().run();
-+        });
++        }
 +        // Canvas end - region threading
 +    }
 +
@@ -12227,13 +12286,27 @@ index 8424cf9d4617b4732d44cc460d25b04481068989..27882279f248cd8b3bf4cc243fa5386b
 +    @Override
 +    public void preMerge(final ThreadedRegionizer.ThreadedRegion<TickRegionData, TickRegionSectionData> from,
 +                         final ThreadedRegionizer.ThreadedRegion<TickRegionData, TickRegionSectionData> into) {
-+
++        // Canvas start - region threading
++        final SaveAllTicket ticket = from.getData().canvas$saveAllTicket.close();
++        if (ticket != null) into.getData().canvas$saveAllTicket.propagate(ticket, SaveAllTicket::and);
++        // Canvas end - region threading
 +    }
 +
 +    @Override
 +    public void preSplit(final ThreadedRegionizer.ThreadedRegion<TickRegionData, TickRegionSectionData> from,
 +                         final java.util.List<ThreadedRegionizer.ThreadedRegion<TickRegionData, TickRegionSectionData>> into) {
-+
++        // Canvas start - region threading
++        final SaveAllTicket ticket = from.getData().canvas$saveAllTicket.close();
++        if (ticket != null) {
++            final AtomicInteger left = new AtomicInteger(into.size());
++            final SaveAllTicket share = new SaveAllTicket(() -> {
++                if (left.decrementAndGet() == 0) ticket.callback().run();
++            }, ticket.exceptionPropagator(), ticket.flush());
++            for (final ThreadedRegionizer.ThreadedRegion<TickRegionData, TickRegionSectionData> region : into) {
++                region.getData().canvas$saveAllTicket.propagate(share, SaveAllTicket::and);
++            }
++        }
++        // Canvas end - region threading
 +    }
 +
 +    public static final class TickRegionSectionData implements ThreadedRegionizer.ThreadedRegionSectionData {}
@@ -12336,12 +12409,14 @@ index 8424cf9d4617b4732d44cc460d25b04481068989..27882279f248cd8b3bf4cc243fa5386b
 +        @Override
 +        public CompletableFuture<Void> propagateSaveAllTicket(final boolean flush) {
 +            final CompletableFuture<Void> future = new CompletableFuture<>();
-+            this.canvas$saveAllTicket.propagate(new SaveAllTicket(
++            if (!this.canvas$saveAllTicket.propagate(new SaveAllTicket(
 +                () -> {
 +                    future.complete(null);
 +                },
 +                future::completeExceptionally, flush
-+            ));
++            ), SaveAllTicket::and)) {
++                future.completeExceptionally(new IllegalStateException("Region is no longer alive"));
++            }
 +            return future;
 +        }
 +
@@ -19263,10 +19338,10 @@ index 8bacd793822528f2b96387b2264dbf42fab5d8f7..1081ea65a23c1a4ecf53c84a078a3df7
      }
  }
 diff --git a/net/minecraft/server/commands/SaveAllCommand.java b/net/minecraft/server/commands/SaveAllCommand.java
-index 299991905c24a7018f8ac60d0c16e56fa43cd710..e30bc561597914df25f55907085fb21d3f79f1ac 100644
+index 299991905c24a7018f8ac60d0c16e56fa43cd710..3c3456df7bf9569e18c81ae06de1c722ff91ed80 100644
 --- a/net/minecraft/server/commands/SaveAllCommand.java
 +++ b/net/minecraft/server/commands/SaveAllCommand.java
-@@ -24,12 +24,109 @@ public class SaveAllCommand {
+@@ -24,12 +24,111 @@ public class SaveAllCommand {
      private static int saveAll(final CommandSourceStack source, final boolean flush) throws CommandSyntaxException {
          source.sendSuccess(() -> Component.translatable("commands.save.saving"), false);
          MinecraftServer server = source.getServer();
@@ -19343,6 +19418,8 @@ index 299991905c24a7018f8ac60d0c16e56fa43cd710..e30bc561597914df25f55907085fb21d
 +                }
 +            };
 +
++            // held until every region has its ticket, so one saving early can't finish the count
++            count.incrementAndGet();
 +            for (final net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
 +                level.regioniser.computeForAllRegions((region) -> {
 +
@@ -19366,18 +19443,18 @@ index 299991905c24a7018f8ac60d0c16e56fa43cd710..e30bc561597914df25f55907085fb21d
 +                        new io.canvasmc.canvas.threadedregions.ticket.SaveAllTicket(callback, (Throwable thrown) -> {
 +                            source.sendFailure(Component.literal(ERROR_FAILED.create().getMessage()));
 +                            MinecraftServer.LOGGER.error(ERROR_FAILED.create().getMessage(), thrown);
-+                        }, flush)
++                        }, flush), io.canvasmc.canvas.threadedregions.ticket.SaveAllTicket::and
 +                    );
 +                });
 +            }
 +
 +            if (total.get() == 0) {
 +                source.sendSuccess(() -> Component.literal("No regions to save"), true);
-+                callback.run();
 +            }
 +            else {
 +                source.sendSuccess(() -> Component.literal("Saving " + total.get() + " regions"), true);
 +            }
++            callback.run();
 +        });
 +    }
 +    // Canvas end - region threading

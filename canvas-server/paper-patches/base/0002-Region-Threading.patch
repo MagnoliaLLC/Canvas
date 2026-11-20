@@ -2041,7 +2041,7 @@ index c61612e5fd6cb37c8d7816e98065d405b2e74353..99442f7adb64362ee86ce4cb74997241
      public static SoundGroup getSoundGroup(SoundType soundEffectType) {
          return CraftSoundGroup.SOUND_GROUPS.computeIfAbsent(soundEffectType, CraftSoundGroup::new);
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-index 6ae2d2344bb98417a110e814f4bea834cb5ee5e6..0601e992acdfa7ec3fc212e2a012dc1852cf1c24 100644
+index 6ae2d2344bb98417a110e814f4bea834cb5ee5e6..c4b70643825d4aa17c0a7ad716ced61baf19152f 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 @@ -241,7 +241,7 @@ public class CraftWorld extends CraftRegionAccessor implements World {
@@ -2254,9 +2254,9 @@ index 6ae2d2344bb98417a110e814f4bea834cb5ee5e6..0601e992acdfa7ec3fc212e2a012dc18
 -
 -        this.world.noSave = oldSave;
 +        // Canvas start - region threading
-+        this.world.regioniser.computeForAllRegionsUnsynchronised((region) -> {
++        this.world.regioniser.computeForAllRegions((region) -> {
 +            region.getData().canvas$saveAllTicket.propagate(
-+                new io.canvasmc.canvas.threadedregions.ticket.SaveAllTicket(() -> {}, (thrown) -> net.minecraft.server.MinecraftServer.LOGGER.error("Failed to save region", thrown), flush)
++                new io.canvasmc.canvas.threadedregions.ticket.SaveAllTicket(() -> {}, (thrown) -> net.minecraft.server.MinecraftServer.LOGGER.error("Failed to save region", thrown), flush), io.canvasmc.canvas.threadedregions.ticket.SaveAllTicket::and
 +            );
 +        });
 +        // Canvas end - region threading
