@@ -11396,11 +11396,11 @@ index 0000000000000000000000000000000000000000..4f7fcf24563293faa7dea0eeeca64dda
 +    }
 +
 +    // Canvas start - region threading
-+    private static final float DEFAULT_TICK_RATE = GlobalConfiguration.getInstance().regionScheduler.defaultTickRate;
-+    private static final long DEFAULT_TICK_TIME_NANOS = (long) (1_000_000_000 / DEFAULT_TICK_RATE);
-+
 +    public static final float MIN_TR = 0.01F;
 +    public static final float MAX_TR = 10_000.0F;
++
++    private static final float DEFAULT_TICK_RATE = Math.clamp(GlobalConfiguration.getInstance().regionScheduler.defaultTickRate, MIN_TR, MAX_TR);
++    private static final long DEFAULT_TICK_TIME_NANOS = tickTimeNanosFromRate(DEFAULT_TICK_RATE);
 +
 +    private static volatile float CURRENT_TICK_RATE = DEFAULT_TICK_RATE;
 +    private static volatile long CURRENT_TIME_BETWEEN_TICKS = DEFAULT_TICK_TIME_NANOS;
@@ -11408,7 +11408,7 @@ index 0000000000000000000000000000000000000000..4f7fcf24563293faa7dea0eeeca64dda
 +    // note: used for setting new tick time nanos, not really for anything else, utility method
 +    //       this is fine for decimal rates, as we round it so if anything, we are like 1 nanosecond off... which isn't bad
 +    private static long tickTimeNanosFromRate(float rate) {
-+        return Math.round(1_000_000_000 / rate);
++        return Math.round(1_000_000_000.0D / rate);
 +    }
 +
 +    public static void setTickRate(final float newRate) {
