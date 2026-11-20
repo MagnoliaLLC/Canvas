@@ -24,7 +24,7 @@
      @Override
      public boolean matches(final CraftingInput input, final Level level) {
 +        // Pufferfish start
-+        if (!this.isBukkit) {
++        if (!this.isBukkit && input.ingredientCount() == this.ingredients.size()) { // Canvas - fix shapeless recipe matching
 +            java.util.List<Ingredient> ingredients = com.google.common.collect.Lists.newArrayList(this.ingredients.toArray(new Ingredient[0]));
 +
 +            inventory: for (int index = 0; index < input.size(); index++) {
@@ -37,11 +37,11 @@
 +                            continue inventory;
 +                        }
 +                    }
-+                    return false;
++                    break inventory; // Canvas - fix shapeless recipe matching
 +                }
 +            }
 +
-+            return ingredients.isEmpty();
++            if (ingredients.isEmpty()) return true; // Canvas - fix shapeless recipe matching
 +        }
 +        // Pufferfish end
          // Paper start - Improve exact choice recipe ingredients & unwrap ternary
