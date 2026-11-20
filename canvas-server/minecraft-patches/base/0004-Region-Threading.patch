@@ -30780,7 +30780,7 @@ index c756d28b396520264336832f17527981248556f3..21b73fdced0fb9a9989512bda721b59e
                  }
              }
 diff --git a/net/minecraft/world/entity/LivingEntity.java b/net/minecraft/world/entity/LivingEntity.java
-index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a5048d9c23cc 100644
+index 2650afb179868fdf8ddb60b3266245df937bbc61..f532608dc58f56de944e7299b1453d15e5d10136 100644
 --- a/net/minecraft/world/entity/LivingEntity.java
 +++ b/net/minecraft/world/entity/LivingEntity.java
 @@ -277,7 +277,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
@@ -30792,13 +30792,14 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
      protected int autoSpinAttackTicks;
      protected float autoSpinAttackDmg;
      protected @Nullable ItemStack autoSpinAttackItemStack;
-@@ -303,6 +303,36 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -303,6 +303,37 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
      public net.kyori.adventure.util.TriState frictionState = net.kyori.adventure.util.TriState.NOT_SET; // Paper - Friction API
      public int invulnerableDuration = LivingEntity.DAMAGE_COOLDOWN_DURATION; // Paper - configurable invulnerable duration
      // CraftBukkit end
 +    // Folia start - region threading
 +    // Canvas start - region threading
 +    public volatile double waypointTransmitRangeCached = Attributes.WAYPOINT_TRANSMIT_RANGE.value().getDefaultValue();
++    public int canvas$witherSkullHitTick = -1;
 +
 +    public void updateWaypointCache() {
 +        ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(this, "Cannot update waypoint cache async");
@@ -30829,7 +30830,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
  
      protected LivingEntity(final EntityType<? extends LivingEntity> type, final Level level) {
          super(type, level);
-@@ -504,7 +534,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -504,7 +535,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
  
          if (this.isDeadOrDying() && this.level().shouldTickDeath(this)) {
              this.tickDeath();
@@ -30838,7 +30839,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
  
          if (this.lastHurtByPlayerMemoryTime > 0) {
              this.lastHurtByPlayerMemoryTime--;
-@@ -596,11 +626,13 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -596,11 +627,13 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
          return true;
      }
  
@@ -30854,7 +30855,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
          }
      }
  
-@@ -906,7 +938,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -906,7 +939,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
          // CraftBukkit end
          this.setHealth(input.getFloatOr("Health", this.getMaxHealth()), false); // Paper - Fix MC-17876
          this.hurtTime = input.getShortOr("HurtTime", (short)0);
@@ -30863,7 +30864,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
          this.setSharedFlag(Entity.FLAG_FALL_FLYING, input.getBooleanOr("FallFlying", false));
          input.read("sleeping_pos", BlockPos.CODEC).ifPresentOrElse(sleepingPos -> {
              if (this.position().distanceToSqr(sleepingPos.getX(), sleepingPos.getY(), sleepingPos.getZ()) < Mth.square(16)) { // Paper - The sleeping pos will always also set the actual pos, so a desync suggests something is wrong
-@@ -1054,6 +1086,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -1054,6 +1087,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
      }
  
      public boolean canAttack(final LivingEntity target) {
@@ -30871,7 +30872,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
          return (!(target instanceof Player) || this.level().getDifficulty() != Difficulty.PEACEFUL) && target.canBeSeenAsEnemy();
      }
  
-@@ -1153,6 +1186,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -1153,6 +1187,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
  
      public boolean addEffect(final MobEffectInstance newEffect, final @Nullable Entity source, final EntityPotionEffectEvent.Cause cause, final boolean fireEvent) {
          // Paper end - Don't fire sync event during generation
@@ -30879,7 +30880,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
          if (this.tickingEffects) {
              this.deferredEffectUpdates.offer(() -> this.addEffect(newEffect, source, cause, fireEvent));
              return true;
-@@ -1346,7 +1380,10 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -1346,7 +1381,10 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
              this.refreshDimensions();
          } else if (attribute.is(Attributes.WAYPOINT_TRANSMIT_RANGE) && this.level() instanceof ServerLevel serverLevel) {
              ServerWaypointManager waypointManager = serverLevel.getWaypointManager();
@@ -30891,7 +30892,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
                  waypointManager.trackWaypoint(this);
              } else {
                  waypointManager.untrackWaypoint(this);
-@@ -1550,7 +1587,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -1550,7 +1588,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
          boolean success = !blocked; // CraftBukkit - Ensure to return false if damage is blocked
          if (success) {
              this.lastDamageSource = source;
@@ -30900,7 +30901,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
  
              for (MobEffectInstance effect : this.getActiveEffects()) {
                  effect.onMobHurt(level, this, source, damage);
-@@ -1564,7 +1601,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -1564,7 +1602,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
              }
          }
  
@@ -30909,7 +30910,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
              CriteriaTriggers.PLAYER_HURT_ENTITY.trigger(sourcePlayer, this, source, originalDamage, damage, blocked);
          }
  
-@@ -1812,7 +1849,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -1812,7 +1850,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
      }
  
      public @Nullable DamageSource getLastDamageSource(final int damageSourceTimeout) {
@@ -30918,7 +30919,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
      }
  
      protected void playHurtSound(final DamageSource source) {
-@@ -1842,6 +1879,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -1842,6 +1880,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
      public List<Runnable> postDeathEventTasks = new java.util.ArrayList<>(); // Paper - after death event and death (no revive as converted entity in killedEntity)
  
      public void die(final DamageSource source) {
@@ -30926,7 +30927,16 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
          if (!this.isRemoved() && !this.dead) {
              Entity sourceEntity = source.getEntity();
              LivingEntity killer = this.getKillCredit();
-@@ -1997,7 +2035,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -1901,7 +1940,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+     protected void createWitherRose(final @Nullable LivingEntity killer) {
+         if (this.level() instanceof ServerLevel serverLevel) {
+             boolean var6 = false;
+-            if (killer instanceof WitherBoss) {
++            if (killer instanceof WitherBoss || (killer == null && this.canvas$witherSkullHitTick >= 0 && this.tickCount - this.canvas$witherSkullHitTick <= 100)) { // Canvas - region threading
+                 if (serverLevel.getGameRules().get(GameRules.MOB_GRIEFING)) {
+                     BlockPos pos = this.blockPosition();
+                     BlockState state = Blocks.WITHER_ROSE.defaultBlockState();
+@@ -1998,7 +2037,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
              .withOptionalParameter(LootContextParams.ATTACKING_ENTITY, source.getEntity())
              .withOptionalParameter(LootContextParams.DIRECT_ATTACKING_ENTITY, source.getDirectEntity());
          Player killerPlayer = this.getLastHurtByPlayer();
@@ -30935,7 +30945,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
              builder = builder.withParameter(LootContextParams.LAST_DAMAGE_PLAYER, killerPlayer).withLuck(killerPlayer.getLuck());
          }
  
-@@ -2574,7 +2612,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -2575,7 +2614,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
                          }
                      }
  
@@ -30944,7 +30954,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
                          CriteriaTriggers.PLAYER_HURT_ENTITY.trigger(sourcePlayer, this, source, originalDamage, dmg, true); // Paper - fix taken/dealt param order
                      }
  
-@@ -2594,10 +2632,10 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -2594,10 +2633,10 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
      }
  
      public @Nullable LivingEntity getKillCredit() {
@@ -30957,7 +30967,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
          }
      }
  
-@@ -2681,7 +2719,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -2681,7 +2720,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
          }
  
          this.lastDamageSource = source;
@@ -30966,7 +30976,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
      }
  
      @Override
-@@ -3798,7 +3836,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -3798,7 +3837,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
  
          this.pushEntities();
          // Paper start - Add EntityMoveEvent
@@ -30975,7 +30985,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
              if (this.xo != this.getX() || this.yo != this.getY() || this.zo != this.getZ() || this.yRotO != this.getYRot() || this.xRotO != this.getXRot()) {
                  Location from = new Location(this.level().getWorld(), this.xo, this.yo, this.zo, this.yRotO, this.xRotO);
                  Location to = new Location(this.level().getWorld(), this.getX(), this.getY(), this.getZ(), this.getYRot(), this.getXRot());
-@@ -4001,7 +4039,16 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -4001,7 +4040,16 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
  
      public void onItemPickup(final ItemEntity entity) {
          if (EntityReference.getEntity(entity.thrower, this.level()::getGlobalPlayerByUUID, Entity.class) instanceof ServerPlayer serverPlayer) { // Paper - check global player list where appropriate
@@ -30993,7 +31003,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
          }
      }
  
-@@ -4520,10 +4567,13 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -4520,10 +4568,13 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
          WorldBorder worldBorder = level.getWorldBorder();
          Vec3 clamped = worldBorder.clampVec3ToBound(xx, y, zz);
          BlockPos.MutableBlockPos pos = BlockPos.containing(clamped).mutable();
@@ -31009,7 +31019,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
                  if (state.is(BlockTags.ENTITIES_CAN_TELEPORT_TO)) {
                      return this.checkPositionAndTeleport(clamped.x, y, clamped.z, showParticles, isInvalidPosition, state, level, cause); // Paper - teleport cause API
                  }
-@@ -4550,30 +4600,26 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -4550,30 +4601,26 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
          }
  
          AABB aabb = this.makeBoundingBox(new Vec3(xx, y, zz));
@@ -31054,7 +31064,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
                  if (showParticles) {
                      level.broadcastEntityEvent(this, EntityEvent.TELEPORT);
                  }
-@@ -4655,6 +4701,11 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -4655,6 +4702,11 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
      }
  
      public boolean startSleeping(final BlockPos bedPosition) {
@@ -31066,7 +31076,7 @@ index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a504
          BlockState blockState = this.level().getBlockState(bedPosition);
          if (blockState.getBlock() instanceof AbstractBedBlock bedBlock) {
              OptionalDouble sleepHeight = bedBlock.getSleepHeight(blockState, this.level(), bedPosition);
-@@ -4723,6 +4774,11 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -4723,6 +4775,11 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
                  this.setXRot(0.0F);
              }
          });
@@ -33013,6 +33023,18 @@ index a2aab8db9826e0b4607f54914af43918a7e35512..ea2ed37063a5f62ad2ade39e9f39f2c2
              this.isIncendiary = (level instanceof ServerLevel serverLevel) && serverLevel.getGameRules().get(GameRules.MOB_GRIEFING);
          }
          // CraftBukkit end
+diff --git a/net/minecraft/world/entity/projectile/hurtingprojectile/WitherSkull.java b/net/minecraft/world/entity/projectile/hurtingprojectile/WitherSkull.java
+index 2ca5fefa798af814e7e3d59def71df921b2afd54..1e55603af162dba19f64ddc2339d5a95640ad884 100644
+--- a/net/minecraft/world/entity/projectile/hurtingprojectile/WitherSkull.java
++++ b/net/minecraft/world/entity/projectile/hurtingprojectile/WitherSkull.java
+@@ -73,6 +73,7 @@ public class WitherSkull extends AbstractHurtingProjectile {
+                 }
+             } else {
+                 wasHurt = var8.hurtServer(serverLevel, this.damageSources().magic().eventEntityDamager(this), 5.0F); // Paper - Fire EntityDamageByEntityEvent for unowned wither skulls // Paper - fix DamageSource API
++                if (wasHurt && var8 instanceof LivingEntity hurt && this.getOwnerRaw() instanceof WitherBoss) hurt.canvas$witherSkullHitTick = hurt.tickCount; // Canvas - region threading
+             }
+ 
+             if (wasHurt && var8 instanceof LivingEntity livingEntity) {
 diff --git a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEgg.java b/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEgg.java
 index 1d5449090d0649cb03cf87a0175aebedded20132..8761bdaf737c02a153fc5fafdd0c82a93bf49f5f 100644
 --- a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEgg.java
