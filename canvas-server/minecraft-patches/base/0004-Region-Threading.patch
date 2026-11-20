@@ -21989,20 +21989,22 @@ index 37c9f983ae89c497f44a1b7967d741abf909e0a0..258296543a5225091d1f65e26e5b6a29
 +    // Canvas end - region threading
  }
 diff --git a/net/minecraft/server/jsonrpc/internalapi/MinecraftExecutorServiceImpl.java b/net/minecraft/server/jsonrpc/internalapi/MinecraftExecutorServiceImpl.java
-index 81d21b23932fb7b4887cfcc16381d348385a3bf8..5baf9488a1ae78081dfe2c5494abe6bb28fc5557 100644
+index 81d21b23932fb7b4887cfcc16381d348385a3bf8..5211b93b561b638c682b79ee8a3b3e008be13cb3 100644
 --- a/net/minecraft/server/jsonrpc/internalapi/MinecraftExecutorServiceImpl.java
 +++ b/net/minecraft/server/jsonrpc/internalapi/MinecraftExecutorServiceImpl.java
-@@ -19,11 +19,11 @@ public class MinecraftExecutorServiceImpl implements MinecraftExecutorService {
+@@ -19,11 +19,13 @@ public class MinecraftExecutorServiceImpl implements MinecraftExecutorService {
  
      @Override
      public <V> CompletableFuture<V> submit(final Supplier<V> supplier) {
 -        return this.server().submit(supplier);
++        if (!this.server().isRunning()) return CompletableFuture.failedFuture(new io.papermc.paper.util.ServerStopRejectedExecutionException("Server already shutting down")); // Canvas - region threading
 +        return CompletableFuture.supplyAsync(supplier, io.papermc.paper.threadedregions.RegionizedServer.getInstance()::scheduleToOrExecute); // Canvas - region threading
      }
  
      @Override
      public CompletableFuture<Void> submit(final Runnable runnable) {
 -        return this.server().submit(runnable);
++        if (!this.server().isRunning()) return CompletableFuture.failedFuture(new io.papermc.paper.util.ServerStopRejectedExecutionException("Server already shutting down")); // Canvas - region threading
 +        return CompletableFuture.runAsync(runnable, io.papermc.paper.threadedregions.RegionizedServer.getInstance()::scheduleToOrExecute); // Canvas - region threading
      }
  }
