@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/LevelChunk.java
 +++ b/net/minecraft/world/level/chunk/LevelChunk.java
-@@ -89,12 +_,19 @@
+@@ -89,12 +_,20 @@
              return "<null>";
          }
      };
@@ -12,6 +12,7 @@
 +    public @Nullable FullChunkStatus canvas$fullStatus; // Canvas - optimize chunk status
 +    // Canvas start - optimize random tick
 +    private final io.canvasmc.canvas.world.chunk.RandomTickSchedule canvas$randomTickSchedule = new io.canvasmc.canvas.world.chunk.RandomTickSchedule(this.sections.length);
++    private final LevelChunkSection[] canvas$scheduledSections = this.sections.clone();
 +    // Canvas end - optimize random tick
      private LevelChunk.@Nullable PostLoadProcessor postLoad;
 -    private final Int2ObjectMap<GameEventListenerRegistry> gameEventListenerRegistrySections;
@@ -53,7 +54,7 @@
  
          for (Heightmap.Types type : Heightmap.Types.values()) {
              if (ChunkStatus.FULL.heightmapsAfter().contains(type)) {
-@@ -181,7 +_,19 @@
+@@ -181,7 +_,27 @@
          this.debug = !empty && this.level.isDebug();
          this.defaultBlockState = empty ? VOID_AIR_BLOCKSTATE : AIR_BLOCKSTATE;
          // Paper end - get block chunk optimisation
@@ -68,6 +69,14 @@
 +
 +    // Canvas start - optimize random tick
 +    public io.canvasmc.canvas.world.chunk.RandomTickSchedule canvas$getRandomTickSchedule() {
++        // a section swapped in after the chunk was built, as world editors do, is attached here
++        for (int i = 0; i < this.sections.length; ++i) {
++            final LevelChunkSection section = this.sections[i];
++            if (section != this.canvas$scheduledSections[i]) {
++                this.canvas$scheduledSections[i] = section;
++                section.canvas$attachRandomTickSchedule(this.canvas$randomTickSchedule, i);
++            }
++        }
 +        return this.canvas$randomTickSchedule;
 +    }
 +    // Canvas end - optimize random tick
