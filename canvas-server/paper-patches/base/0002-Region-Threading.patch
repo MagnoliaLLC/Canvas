@@ -3858,7 +3858,7 @@ index 3ad11debbabf863de265c571720f71ae9d3d8e06..030ab40d2727b4d808ccc5a900315202
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java
-index b461beae03e0228f7a6de2f133b548deb925bd02..fb2f18f96fb5ed7b24ed4856bbc3d239104e0471 100644
+index b461beae03e0228f7a6de2f133b548deb925bd02..bdaa67916894332f7be249b2606a28495f8c28d7 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java
 @@ -96,6 +96,7 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
@@ -3869,7 +3869,15 @@ index b461beae03e0228f7a6de2f133b548deb925bd02..fb2f18f96fb5ed7b24ed4856bbc3d239
          return (Player) this.entity;
      }
  
-@@ -511,6 +512,8 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
+@@ -355,6 +356,7 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
+             if (menuProvider instanceof final BlockEntity blockEntity) {
+                 if (!blockEntity.hasLevel()) {
+                     blockEntity.setLevel(this.getHandle().level());
++                    blockEntity.real = false; // Canvas - region threading
+                 }
+             }
+         }
+@@ -511,6 +513,8 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
      @Override
      public InventoryView openMerchant(Merchant merchant, boolean force) {
          Preconditions.checkNotNull(merchant, "merchant cannot be null");
@@ -3878,7 +3886,7 @@ index b461beae03e0228f7a6de2f133b548deb925bd02..fb2f18f96fb5ed7b24ed4856bbc3d239
  
          if (!force && merchant.isTrading()) {
              return null;
-@@ -573,7 +576,7 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
+@@ -573,7 +577,7 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
      }
  
      private InventoryView openInventory(Location location, boolean force, Material material) {

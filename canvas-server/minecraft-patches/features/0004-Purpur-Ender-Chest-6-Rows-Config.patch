@@ -186,7 +186,7 @@ index 34e6bb7d246f065698def3b1f7a0d237f304f2aa..df70fb3519613596a7422ce6e3d67c3e
      public BlockEntity newBlockEntity(final BlockPos worldPosition, final BlockState blockState) {
          return new EnderChestBlockEntity(worldPosition, blockState);
 diff --git a/net/minecraft/world/level/block/entity/BarrelBlockEntity.java b/net/minecraft/world/level/block/entity/BarrelBlockEntity.java
-index 1b00920dc72330caceda5a5340ac8785945d5988..d8f1e9030f9301b1bfae1f70873772006462b4f9 100644
+index 5611a12ca14e5f7bec4d6858fd7a5fa1c6761e04..c4a9920cb6fe6dc8bf1d8b5e963b92d7c7ea8075 100644
 --- a/net/minecraft/world/level/block/entity/BarrelBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/BarrelBlockEntity.java
 @@ -58,7 +58,16 @@ public class BarrelBlockEntity extends RandomizableContainerBlockEntity {

@@ -5,7 +5,7 @@ Subject: [PATCH] Permission Resolver
 
 
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java
-index fb2f18f96fb5ed7b24ed4856bbc3d239104e0471..abc5803550b35da2eb6e5174c7b32356c9fadff3 100644
+index bdaa67916894332f7be249b2606a28495f8c28d7..7da811d9ef9a1af2582ae300701be95f26467326 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftHumanEntity.java
 @@ -258,24 +258,64 @@ public class CraftHumanEntity extends CraftLivingEntity implements HumanEntity {
