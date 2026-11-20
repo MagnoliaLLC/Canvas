@@ -25317,6 +25317,23 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
          org.bukkit.craftbukkit.event.CraftEventFactory.handleInventoryCloseEvent(this, reason); // CraftBukkit
          // Paper end - Inventory close reason
          this.connection.send(new ClientboundContainerClosePacket(this.containerMenu.containerId));
+@@ -2266,14 +3030,14 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+             this.levitationStartPos = this.position();
+         }
+ 
+-        CriteriaTriggers.EFFECTS_CHANGED.trigger(this, source);
++        CriteriaTriggers.EFFECTS_CHANGED.trigger(this, source != null && ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(source) ? source : null); // Canvas - region threading
+     }
+ 
+     @Override
+     protected void onEffectUpdated(final MobEffectInstance effect, final boolean doRefreshAttributes, final @Nullable Entity source) {
+         super.onEffectUpdated(effect, doRefreshAttributes, source);
+         this.connection.send(new ClientboundUpdateMobEffectPacket(this.getId(), effect, false));
+-        CriteriaTriggers.EFFECTS_CHANGED.trigger(this, source);
++        CriteriaTriggers.EFFECTS_CHANGED.trigger(this, source != null && ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(source) ? source : null); // Canvas - region threading
+     }
+ 
+     @Override
 @@ -2588,7 +3352,30 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
          return this.camera == null ? this : this.camera;
      }
@@ -25400,6 +25417,15 @@ index 2f464dd9b47cbb7f6abf99411bc4beb6b347d70a..f150998c43632184350b690fe5e59001
          return entity;
      }
  
+@@ -2840,7 +3624,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
+     public void onItemPickup(final ItemEntity entity) {
+         super.onItemPickup(entity);
+         Entity thrower = entity.getOwner();
+-        if (thrower != null) {
++        if (thrower != null && ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(thrower)) { // Canvas - region threading
+             CriteriaTriggers.THROWN_ITEM_PICKED_UP_BY_PLAYER.trigger(this, entity.getItem(), thrower);
+         }
+     }
 @@ -3165,7 +3949,7 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
          this.experienceLevel = this.newLevel;
          this.totalExperience = this.newTotalExp;
@@ -30724,7 +30750,7 @@ index 98034a4c96bf2972316078d3b3a49140921aab50..b3dd66d3e55193e1ff6e0247806c13ee
                  return;
              }
 diff --git a/net/minecraft/world/entity/LightningBolt.java b/net/minecraft/world/entity/LightningBolt.java
-index c756d28b396520264336832f17527981248556f3..4e150f4807c83e8f673b53e5e8b9e1da0bbe8675 100644
+index c756d28b396520264336832f17527981248556f3..21b73fdced0fb9a9989512bda721b59efa2451d9 100644
 --- a/net/minecraft/world/entity/LightningBolt.java
 +++ b/net/minecraft/world/entity/LightningBolt.java
 @@ -128,7 +128,7 @@ public class LightningBolt extends Entity {
@@ -30736,6 +30762,15 @@ index c756d28b396520264336832f17527981248556f3..4e150f4807c83e8f673b53e5e8b9e1da
                          CriteriaTriggers.LIGHTNING_STRIKE.trigger(player, this, viewers);
                      }
                  }
+@@ -158,7 +158,7 @@ public class LightningBolt extends Entity {
+                 }
+ 
+                 this.hitEntities.addAll(entities);
+-                if (this.cause != null) {
++                if (this.cause != null && ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(this.cause)) { // Canvas - region threading
+                     CriteriaTriggers.CHANNELED_LIGHTNING.trigger(this.cause, entities);
+                 }
+             }
 diff --git a/net/minecraft/world/entity/LivingEntity.java b/net/minecraft/world/entity/LivingEntity.java
 index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a5048d9c23cc 100644
 --- a/net/minecraft/world/entity/LivingEntity.java
@@ -31860,7 +31895,7 @@ index 0814912f7b9e6ab1f8037006a2224b57e1ef241b..9f3c2d2c4ae0660bf09d318807be1a78
              player.awardStat(Stats.ANIMALS_BRED);
              CriteriaTriggers.BRED_ANIMALS.trigger(player, this, partner, offspring);
 diff --git a/net/minecraft/world/entity/animal/allay/AllayAi.java b/net/minecraft/world/entity/animal/allay/AllayAi.java
-index 76e33f716b858707484952187b72ecda7ba4e469..5f4395b363563639180c80928e9a9f97e54b32dc 100644
+index 76e33f716b858707484952187b72ecda7ba4e469..674c05d4da163119a8db8c5088ddf1c27b9ceb9d 100644
 --- a/net/minecraft/world/entity/animal/allay/AllayAi.java
 +++ b/net/minecraft/world/entity/animal/allay/AllayAi.java
 @@ -141,6 +141,7 @@ public class AllayAi {
@@ -31871,6 +31906,14 @@ index 76e33f716b858707484952187b72ecda7ba4e469..5f4395b363563639180c80928e9a9f97
              && level.getBlockState(likedNoteblockPos.pos()).is(Blocks.NOTE_BLOCK)
              && likedNoteblockCooldown.isPresent();
      }
+@@ -155,6 +156,7 @@ public class AllayAi {
+             Optional<UUID> likedPlayer = allay.getBrain().getMemory(MemoryModuleType.LIKED_PLAYER);
+             if (likedPlayer.isPresent()) {
+                 if (serverLevel.getEntity(likedPlayer.get()) instanceof ServerPlayer serverPlayer
++                    && ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(serverPlayer) // Canvas - region threading
+                     && (serverPlayer.gameMode.isSurvival() || serverPlayer.gameMode.isCreative())
+                     && serverPlayer.closerThan(allay, 64.0)) {
+                     return Optional.of(serverPlayer);
 diff --git a/net/minecraft/world/entity/animal/armadillo/ArmadilloAi.java b/net/minecraft/world/entity/animal/armadillo/ArmadilloAi.java
 index e4f2d4da439e8d9ce8f1d6d49cecd4e3ac1c8b65..05f9316b140270a7042992b5455fd87c21c0997e 100644
 --- a/net/minecraft/world/entity/animal/armadillo/ArmadilloAi.java
