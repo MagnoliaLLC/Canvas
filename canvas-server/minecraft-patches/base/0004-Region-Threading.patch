@@ -1021,10 +1021,10 @@ index 11d4f2d5caba52b492b8e130faa4701f3980b0f1..82b442ba290dedcd2c76ef5830ed0f8a
                  if (chunk == null) {
 diff --git a/io/canvasmc/canvas/threadedregions/ScheduledHandleTickState.java b/io/canvasmc/canvas/threadedregions/ScheduledHandleTickState.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..999f985053020769c71c558c256fd9198487fbe9
+index 0000000000000000000000000000000000000000..35b301feb0f47573ed87bb945fd8c38b8c9d9a94
 --- /dev/null
 +++ b/io/canvasmc/canvas/threadedregions/ScheduledHandleTickState.java
-@@ -0,0 +1,201 @@
+@@ -0,0 +1,244 @@
 +package io.canvasmc.canvas.threadedregions;
 +
 +import io.canvasmc.canvas.GlobalConfiguration;
@@ -1032,8 +1032,10 @@ index 0000000000000000000000000000000000000000..999f985053020769c71c558c256fd919
 +import io.papermc.paper.threadedregions.RegionizedServer;
 +import io.papermc.paper.threadedregions.TickRegionScheduler;
 +import io.papermc.paper.threadedregions.TickRegions;
++import java.util.List;
 +import java.util.concurrent.ConcurrentLinkedQueue;
 +import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicInteger;
 +import net.minecraft.network.protocol.game.ClientboundTickingStatePacket;
 +import net.minecraft.server.MinecraftServer;
 +import net.minecraft.server.level.ServerPlayer;
@@ -1056,6 +1058,10 @@ index 0000000000000000000000000000000000000000..999f985053020769c71c558c256fd919
 +    private long lastTickTimeEndNanos = UNSET;
 +
 +    private boolean runsGameElements = true;
++
++    // set once this state is retired, actions posted to it are then handed to the states replacing it
++    private volatile List<ScheduledHandleTickState> successors;
++    private final AtomicInteger forwarding = new AtomicInteger();
 +
 +    public ScheduledHandleTickState(final TickRegionScheduler.RegionScheduleHandle scheduleHandle) {
 +        this.scheduleHandle = scheduleHandle;
@@ -1111,8 +1117,29 @@ index 0000000000000000000000000000000000000000..999f985053020769c71c558c256fd919
 +        return tickSprint();
 +    }
 +
++    public static void carry(final ScheduledHandleTickState from, final List<ScheduledHandleTickState> into) {
++        for (final ScheduledHandleTickState state : into) {
++            if (!from.runsGameElements) state.postAction(new Action.Pause());
++            if (from.isSprinting()) state.postAction(new Action.ExtendSprint(from.tickCountToSprintTo - from.scheduleHandle.getCurrentTick()));
++        }
++        from.successors = into;
++        from.forwardActions();
++    }
++
 +    public void postAction(final Action action) {
 +        actionQueue.add(action);
++        if (successors != null) forwardActions();
++    }
++
++    private void forwardActions() {
++        // one thread forwards at a time, so actions reach the successors in the order they were posted
++        if (forwarding.getAndIncrement() != 0) return;
++        do {
++            Action action;
++            while ((action = actionQueue.poll()) != null) {
++                for (final ScheduledHandleTickState successor : successors) successor.postAction(action);
++            }
++        } while (forwarding.decrementAndGet() != 0);
 +    }
 +
 +    public void tickEnd(final long nanos) {
@@ -1142,6 +1169,15 @@ index 0000000000000000000000000000000000000000..999f985053020769c71c558c256fd919
 +
 +    private void play() {
 +        runsGameElements = true;
++    }
++
++    private void extendSprinting(final long howLongInTicks) {
++        if (howLongInTicks <= 0) return;
++        if (tickCountToSprintTo == UNSET) {
++            startSprinting(howLongInTicks);
++            return;
++        }
++        tickCountToSprintTo = Math.max(tickCountToSprintTo, scheduleHandle.getCurrentTick() + howLongInTicks);
 +    }
 +
 +    private void startSprinting(final long howLongInTicks) {
@@ -1201,6 +1237,13 @@ index 0000000000000000000000000000000000000000..999f985053020769c71c558c256fd919
 +            @Override
 +            public void apply(final ScheduledHandleTickState state) {
 +                state.startSprinting(howLongInTicks);
++            }
++        }
++
++        record ExtendSprint(long howLongInTicks) implements Action {
++            @Override
++            public void apply(final ScheduledHandleTickState state) {
++                state.extendSprinting(howLongInTicks);
 +            }
 +        }
 +
@@ -11402,7 +11445,7 @@ index 0000000000000000000000000000000000000000..2dc5c953ef2505d95fc8384d512b8fff
 +}
 diff --git a/io/papermc/paper/threadedregions/TickRegionScheduler.java b/io/papermc/paper/threadedregions/TickRegionScheduler.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..4f7fcf24563293faa7dea0eeeca64dda3dc4e071
+index 0000000000000000000000000000000000000000..bc66040a1943ffcadc1d3c19ba40f4f0ea036ef6
 --- /dev/null
 +++ b/io/papermc/paper/threadedregions/TickRegionScheduler.java
 @@ -0,0 +1,703 @@
@@ -11938,13 +11981,6 @@ index 0000000000000000000000000000000000000000..4f7fcf24563293faa7dea0eeeca64dda
 +
 +            final long cpuStart = MEASURE_CPU_TIME ? THREAD_MX_BEAN.getCurrentThreadCpuTime() : 0L;
 +            final long tickStart = System.nanoTime();
-+            // Canvas start - region threading
-+            final ScheduledHandleTickState tickState = getTickManager();
-+            final long deadlineFuture = tickState.tickStart(tickStart);
-+            // Canvas end - region threading
-+
-+            // use max(), don't assume that tickStart >= scheduledStart
-+            final long tickCount = Math.max(1L, this.tickSchedule.getPeriodsAhead(deadlineFuture, tickStart)); // Canvas - region threading
 +
 +            if (!this.tryMarkTicking()) {
 +                if (!this.cancelled.get()) {
@@ -11958,6 +11994,13 @@ index 0000000000000000000000000000000000000000..4f7fcf24563293faa7dea0eeeca64dda
 +                // region should be killed
 +                return false;
 +            }
++            // Canvas start - region threading
++            final ScheduledHandleTickState tickState = getTickManager();
++            final long deadlineFuture = tickState.tickStart(tickStart);
++            // Canvas end - region threading
++
++            // use max(), don't assume that tickStart >= scheduledStart
++            final long tickCount = Math.max(1L, this.tickSchedule.getPeriodsAhead(deadlineFuture, tickStart)); // Canvas - region threading
 +
 +            TickRegionScheduler.setTickTask(this);
 +            if (this.region != null) {
@@ -12110,10 +12153,10 @@ index 0000000000000000000000000000000000000000..4f7fcf24563293faa7dea0eeeca64dda
 +    }
 +}
 diff --git a/io/papermc/paper/threadedregions/TickRegions.java b/io/papermc/paper/threadedregions/TickRegions.java
-index 8424cf9d4617b4732d44cc460d25b04481068989..27882279f248cd8b3bf4cc243fa5386b0d9d9ef8 100644
+index 8424cf9d4617b4732d44cc460d25b04481068989..936b8e13932b796aaef879c0b3eb17d92b0fe40d 100644
 --- a/io/papermc/paper/threadedregions/TickRegions.java
 +++ b/io/papermc/paper/threadedregions/TickRegions.java
-@@ -1,10 +1,773 @@
+@@ -1,10 +1,777 @@
  package io.papermc.paper.threadedregions;
  
 -// placeholder class for Folia
@@ -12126,6 +12169,7 @@ index 8424cf9d4617b4732d44cc460d25b04481068989..27882279f248cd8b3bf4cc243fa5386b
 +import io.canvasmc.canvas.region.RegionThreadingTickManager;
 +import io.canvasmc.canvas.region.RegionTickData;
 +import io.canvasmc.canvas.region.WorldRegionizer;
++import io.canvasmc.canvas.threadedregions.ScheduledHandleTickState;
 +import io.canvasmc.canvas.threadedregions.ServerRegionTickManager;
 +import io.canvasmc.canvas.threadedregions.ticket.SaveAllTicket;
 +import io.canvasmc.canvas.threadedregions.ticket.TicketHolder;
@@ -12673,6 +12717,7 @@ index 8424cf9d4617b4732d44cc460d25b04481068989..27882279f248cd8b3bf4cc243fa5386b
 +                    data.hasPackets.setOpaque(true);
 +                }
 +            }
++            ScheduledHandleTickState.carry(this.tickHandle.getTickManager(), regions.stream().map((region) -> region.getData().tickHandle.getTickManager()).toList()); // Canvas - region threading
 +
 +            TickRegions.getScheduler().getSchedulerCallbacks().onRegionSplit(this, into, world); // Canvas - region profiler
 +            // generic regionized data
@@ -12741,6 +12786,7 @@ index 8424cf9d4617b4732d44cc460d25b04481068989..27882279f248cd8b3bf4cc243fa5386b
 +            // there's not really a great solution to the tick problem, no matter what it'll be messed up
 +            // we will pick the greatest time delay so that tps will not exceed TICK_RATE
 +            data.tickHandle.updateSchedulingToMax(this.tickHandle);
++            ScheduledHandleTickState.carry(this.tickHandle.getTickManager(), List.of(data.tickHandle.getTickManager())); // Canvas - region threading
 +            // just be lazy about this one, it's not very important
 +            if (this.hasPackets.getOpaque()) {
 +                data.hasPackets.setOpaque(true);
@@ -12784,6 +12830,7 @@ index 8424cf9d4617b4732d44cc460d25b04481068989..27882279f248cd8b3bf4cc243fa5386b
 +            ret.currentTick = this.currentTick;
 +            ret.lastTickStart = this.lastTickStart;
 +            ret.tickSchedule.setLastPeriod(this.tickSchedule.getLastPeriod());
++            ScheduledHandleTickState.carry(this.getTickManager(), List.of(ret.getTickManager())); // Canvas - region threading
 +            TickRegions.getScheduler().getSchedulerCallbacks().tryTransferPinningState(this, ret); // Canvas - region profiler
 +
 +            return ret;
