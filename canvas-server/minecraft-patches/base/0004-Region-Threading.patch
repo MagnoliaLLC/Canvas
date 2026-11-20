@@ -28047,10 +28047,10 @@ index 610882be379b667d8a2ac9a32b275c07e7444494..a4e7e3302521484e994c835656c554b8
      non-sealed interface Constant<Value> extends EnvironmentAttributeLayer<Value> {
          Value applyConstant(Value baseValue);
 diff --git a/net/minecraft/world/attribute/EnvironmentAttributeSystem.java b/net/minecraft/world/attribute/EnvironmentAttributeSystem.java
-index 1f0247d70b81bd1c1d5aecbd11694b61b7cedead..cd01db8bca8e410fcd8b2866cebc205034ed62f1 100644
+index 1f0247d70b81bd1c1d5aecbd11694b61b7cedead..8224ea8bd04db90d829fda3ccce80cec5d2ec938 100644
 --- a/net/minecraft/world/attribute/EnvironmentAttributeSystem.java
 +++ b/net/minecraft/world/attribute/EnvironmentAttributeSystem.java
-@@ -105,12 +105,45 @@ public class EnvironmentAttributeSystem implements EnvironmentAttributeReader {
+@@ -105,12 +105,53 @@ public class EnvironmentAttributeSystem implements EnvironmentAttributeReader {
          );
      }
  
@@ -28094,11 +28094,19 @@ index 1f0247d70b81bd1c1d5aecbd11694b61b7cedead..cd01db8bca8e410fcd8b2866cebc2050
  
      private <Value> EnvironmentAttributeSystem.@Nullable ValueSampler<Value> getValueSampler(final EnvironmentAttribute<Value> attribute) {
 -        return (EnvironmentAttributeSystem.ValueSampler<Value>)this.attributeSamplers.get(attribute);
++        // Canvas start - region threading
++        final io.papermc.paper.threadedregions.RegionizedWorldData worldData = io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData();
++        if ((worldData == null || worldData.world.environmentAttributes() != this) && !io.papermc.paper.threadedregions.RegionizedServer.isGlobalTickThread()) {
++            // the global samplers belong to the global region, anyone else reads from a copy
++            final EnvironmentAttributeSystem.ValueSampler<Value> sampler = (EnvironmentAttributeSystem.ValueSampler<Value>)this.attributeSamplers.get(attribute);
++            return sampler == null ? null : sampler.copy();
++        }
++        // Canvas end - region threading
 +        return (EnvironmentAttributeSystem.ValueSampler<Value>)this.getSamplers().get(attribute); // Folia - region threading
      }
  
      @Override
-@@ -232,6 +265,16 @@ public class EnvironmentAttributeSystem implements EnvironmentAttributeReader {
+@@ -232,6 +273,16 @@ public class EnvironmentAttributeSystem implements EnvironmentAttributeReader {
          private @Nullable Value cachedTickValue;
          private int cacheTickId;
  
