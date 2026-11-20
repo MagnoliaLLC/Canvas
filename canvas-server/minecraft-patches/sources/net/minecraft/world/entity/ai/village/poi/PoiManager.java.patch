@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/entity/ai/village/poi/PoiManager.java
 +++ b/net/minecraft/world/entity/ai/village/poi/PoiManager.java
-@@ -106,6 +_,17 @@
+@@ -107,6 +_,17 @@
          return Optional.empty();
      }
  
