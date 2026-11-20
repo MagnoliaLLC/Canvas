@@ -3010,10 +3010,10 @@ index 0000000000000000000000000000000000000000..4e92caea35cd65eb5ca7000350d76e06
 +import org.jspecify.annotations.NullMarked;
 diff --git a/io/canvasmc/canvas/threadedregions/scheduler/AffinitySchedulerThreadPool.java b/io/canvasmc/canvas/threadedregions/scheduler/AffinitySchedulerThreadPool.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..d5271e4f65173484c09a811f5e48896c76a784ac
+index 0000000000000000000000000000000000000000..d465de77239b5263bae31f7f996ced337a6e8ea7
 --- /dev/null
 +++ b/io/canvasmc/canvas/threadedregions/scheduler/AffinitySchedulerThreadPool.java
-@@ -0,0 +1,868 @@
+@@ -0,0 +1,878 @@
 +package io.canvasmc.canvas.threadedregions.scheduler;
 +
 +import ca.spottedleaf.common.util.TimeUtil;
@@ -3445,6 +3445,16 @@ index 0000000000000000000000000000000000000000..d5271e4f65173484c09a811f5e48896c
 +
 +            if (s != 0) {
 +                throw new IllegalStateException("Local queue must be drained before going idle. Currently " + s);
++            }
++        }
++        else {
++            // an idle runner would otherwise wait for this runner's next tick to steal queued work
++            for (int i = this.idleThreads.nextSetBit(0); i >= 0; i = this.idleThreads.nextSetBit(i + 1)) {
++                if (this.runners[i].linked == null) {
++                    final ScheduledState queued = runner.localQueue.pollEdf();
++                    if (queued != null) this.insertFresh(queued);
++                    break;
++                }
 +            }
 +        }
 +
