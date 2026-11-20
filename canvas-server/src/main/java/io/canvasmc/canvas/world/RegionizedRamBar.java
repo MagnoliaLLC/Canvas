@@ -4,6 +4,8 @@ import com.mojang.datafixers.util.Pair;
 import io.canvasmc.canvas.WorldConfig;
 import io.papermc.paper.threadedregions.commands.CommandUtil;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
@@ -13,8 +15,8 @@ import org.jetbrains.annotations.Contract;
 import org.jspecify.annotations.Nullable;
 
 public class RegionizedRamBar extends RegionResourceBar {
-    private static final ThreadLocal<DecimalFormat> VALUE_FORMAT = ThreadLocal.withInitial(() -> new DecimalFormat("#,##0.0"));
-    private static final ThreadLocal<DecimalFormat> PERCENT_FORMAT = ThreadLocal.withInitial(() -> new DecimalFormat("#,##0.0"));
+    private static final ThreadLocal<DecimalFormat> VALUE_FORMAT = ThreadLocal.withInitial(() -> new DecimalFormat("#,##0.0", DecimalFormatSymbols.getInstance(Locale.ROOT)));
+    private static final ThreadLocal<DecimalFormat> PERCENT_FORMAT = ThreadLocal.withInitial(() -> new DecimalFormat("#,##0.0", DecimalFormatSymbols.getInstance(Locale.ROOT)));
 
     private static final double BYTES_PER_MIB = 1024.0 * 1024.0;
     private static final String[] KEYS = {"used", "xmx", "percent"};

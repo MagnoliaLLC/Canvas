@@ -5,6 +5,7 @@ import java.io.FileReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import net.minecraft.util.Util;
 import org.jspecify.annotations.Nullable;
@@ -52,10 +53,10 @@ public class CpuInfoReport {
             cpus.add(new CpuInfo(cpu, core, socket, l1d, l1i, l2, l3));
         }
 
-        out.append(String.format("%-5s %-6s %-7s %s%n", "CPU", "CORE", "SOCKET", "L1d:L1i:L2:L3"));
+        out.append(String.format(Locale.ROOT, "%-5s %-6s %-7s %s%n", "CPU", "CORE", "SOCKET", "L1d:L1i:L2:L3"));
 
         for (final CpuInfo c : cpus) {
-            out.append(String.format("%-5d %-6d %-7d %s:%s:%s:%s%n",
+            out.append(String.format(Locale.ROOT, "%-5d %-6d %-7d %s:%s:%s:%s%n",
                 c.cpu(), c.core(), c.socket(), c.l1d(), c.l1i(), c.l2(), c.l3()));
         }
 
