@@ -26682,10 +26682,10 @@ index eea7dd596eb9ac75dee29d843d786493d44034f3..ff048f7b19e9560867eb7718d2b4eda8
              if (asyncEvent.getResult() != PlayerPreLoginEvent.Result.ALLOWED) {
                  event.disallow(asyncEvent.getResult(), asyncEvent.kickMessage()); // Paper - Adventure
 diff --git a/net/minecraft/server/network/config/PrepareSpawnTask.java b/net/minecraft/server/network/config/PrepareSpawnTask.java
-index f6601bc30fa37a309923ea9883b04233f83b2c0b..88c4d0225bdf1b69785568af237844461ace6d87 100644
+index f6601bc30fa37a309923ea9883b04233f83b2c0b..fcad2aa21ac49303c8a2115abc78e8860d47f144 100644
 --- a/net/minecraft/server/network/config/PrepareSpawnTask.java
 +++ b/net/minecraft/server/network/config/PrepareSpawnTask.java
-@@ -95,19 +95,47 @@ public class PrepareSpawnTask implements ConfigurationTask {
+@@ -95,19 +95,48 @@ public class PrepareSpawnTask implements ConfigurationTask {
                  spawnDataLevel = this.server.overworld();
              }
              ServerLevel spawnLevel;
@@ -26711,6 +26711,7 @@ index f6601bc30fa37a309923ea9883b04233f83b2c0b..88c4d0225bdf1b69785568af23784446
 +                // Canvas end - region threading
                      LOGGER.warn("Unknown respawn dimension {}, defaulting to overworld", resourceKey);
                      spawnLevel = spawnDataLevel;
++                    invalidPlayerWorld[0] = true; // Canvas - reset to main world spawn if no valid world is found
                  }
              }
 -            final ServerLevel finalSpawnLevel = spawnLevel;
@@ -26721,7 +26722,7 @@ index f6601bc30fa37a309923ea9883b04233f83b2c0b..88c4d0225bdf1b69785568af23784446
 +            if (obtainedWorldStageLock) spawnLevel.canvas$releaseWorldStageLock(); // Canvas - region threading
 +            // Folia start - region threading
 +            CompletableFuture<Vec3> spawnPosition = new java.util.concurrent.CompletableFuture<>();
-+            if (loadedPosition.position().isPresent()) {
++            if (loadedPosition.position().isPresent() && !invalidPlayerWorld[0]) { // Canvas - reset to main world spawn if no valid world is found
 +                spawnPosition.complete(loadedPosition.position().get());
 +            } else {
 +                ca.spottedleaf.concurrentutil.completable.CallbackCompletable<org.bukkit.Location> spawnComplete = new ca.spottedleaf.concurrentutil.completable.CallbackCompletable<>();
@@ -26738,7 +26739,7 @@ index f6601bc30fa37a309923ea9883b04233f83b2c0b..88c4d0225bdf1b69785568af23784446
              // Paper end - move logic in Entity to here, to use bukkit supplied world UUID & reset to main world spawn if no valid world is found
              Vec2 spawnAngle = loadedPosition.rotation().orElse(new Vec2(respawnData.yaw(), respawnData.pitch()));
              this.state = new PrepareSpawnTask.Preparing(spawnLevel, spawnPosition, spawnAngle);
-@@ -132,14 +160,42 @@ public class PrepareSpawnTask implements ConfigurationTask {
+@@ -132,14 +161,42 @@ public class PrepareSpawnTask implements ConfigurationTask {
          };
      }
  
@@ -26783,7 +26784,7 @@ index f6601bc30fa37a309923ea9883b04233f83b2c0b..88c4d0225bdf1b69785568af23784446
      public void keepAlive() {
          if (this.state instanceof PrepareSpawnTask.Ready ready) {
              ready.keepAlive();
-@@ -185,7 +241,7 @@ public class PrepareSpawnTask implements ConfigurationTask {
+@@ -185,7 +242,7 @@ public class PrepareSpawnTask implements ConfigurationTask {
              Vec3 spawnPosition = this.spawnPosition.join();
              if (this.chunkLoadFuture == null) {
                  // Paper start - PlayerSpawnLocationEvent
@@ -26792,7 +26793,7 @@ index f6601bc30fa37a309923ea9883b04233f83b2c0b..88c4d0225bdf1b69785568af23784446
                      ServerPlayer player;
                      if (PrepareSpawnTask.this.listener.connection.savedPlayerForLegacyEvents != null) {
                          player = PrepareSpawnTask.this.listener.connection.savedPlayerForLegacyEvents;
-@@ -259,14 +315,26 @@ public class PrepareSpawnTask implements ConfigurationTask {
+@@ -259,14 +316,26 @@ public class PrepareSpawnTask implements ConfigurationTask {
              this.spawnPosition = spawnPosition;
              this.spawnAngle = spawnAngle;
          }
@@ -26822,7 +26823,7 @@ index f6601bc30fa37a309923ea9883b04233f83b2c0b..88c4d0225bdf1b69785568af23784446
              // Paper start - configuration api - possibly use legacy saved server player instance
              ServerPlayer player;
              if (connection.savedPlayerForLegacyEvents != null) {
-@@ -281,6 +349,11 @@ public class PrepareSpawnTask implements ConfigurationTask {
+@@ -281,6 +350,11 @@ public class PrepareSpawnTask implements ConfigurationTask {
              }
              // Paper end - configuration api - possibly use legacy saved server player instance
              PrepareSpawnTask.this.listener.paperConnection.applyPendingEntityId(player); // Paper - internal entity id api - possibly override player network id if plugins used internal API to configure it.
