@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
-@@ -985,7 +_,7 @@
+@@ -986,7 +_,7 @@
          }
  
          // if (this instanceof ServerPlayer) this.handlePortal(); // CraftBukkit - Moved up to postTick // Folia - region threading - ONLY allow in postTick()
@@ -9,7 +9,7 @@
              this.spawnSprintParticle();
          }
  
-@@ -1020,7 +_,16 @@
+@@ -1021,7 +_,16 @@
  
          this.checkBelowWorld();
          if (!this.level().isClientSide()) {
@@ -26,7 +26,7 @@
          }
  
          this.firstTick = false;
-@@ -1373,8 +_,10 @@
+@@ -1374,8 +_,10 @@
                      }
                  }
  
@@ -37,7 +37,7 @@
              }
          }
      }
-@@ -1548,7 +_,7 @@
+@@ -1549,7 +_,7 @@
              int previousRemainingFireTicks = this.getRemainingFireTicks();
              this.checkInsideBlocks(movements, this.insideEffectCollector);
              this.insideEffectCollector.applyAndClear(this);
@@ -46,7 +46,7 @@
                  this.clearFire();
              }
  
-@@ -1645,13 +_,14 @@
+@@ -1646,13 +_,14 @@
      }
  
      protected BlockPos getOnPos(final float offset) {
@@ -63,7 +63,7 @@
              return (!(offset <= 0.5) || !belowState.is(BlockTags.FENCES))
                      && !belowState.is(BlockTags.WALLS)
                      && !(belowState.getBlock() instanceof FenceGateBlock)
-@@ -1911,8 +_,122 @@
+@@ -1912,8 +_,122 @@
          return SoundEvents.GENERIC_SPLASH;
      }
  
@@ -186,7 +186,7 @@
              LongSet visitedBlocks = this.visitedBlocks;
  
              for (Entity.Movement movement : movements) {
-@@ -1953,6 +_,11 @@
+@@ -1954,6 +_,11 @@
          boolean debugEntityBlockIntersections = this.level instanceof ServerLevel serverLevel
              && serverLevel.getServer().debugSubscribers().hasAnySubscriberFor(DebugSubscriptions.ENTITY_BLOCK_INTERSECTIONS);
          AtomicInteger iterations = new AtomicInteger();
@@ -198,7 +198,7 @@
          BlockGetter.forEachBlockIntersectedBetween(
              from,
              to,
-@@ -1966,13 +_,25 @@
+@@ -1967,13 +_,25 @@
                      return false;
                  }
  
@@ -230,7 +230,7 @@
                  if (state.isAir()) {
                      if (debugEntityBlockIntersections) {
                          this.debugBlockIntersection((ServerLevel)this.level(), blockIntersection.immutable(), false, false);
-@@ -1983,7 +_,7 @@
+@@ -1984,7 +_,7 @@
                      VoxelShape intersectShape = state.getEntityInsideCollisionShape(this.level(), blockIntersection, this);
                      boolean insideBlock = intersectShape == Shapes.block()
                          || this.collidedWithShapeMovingFrom(from, to, intersectShape.move(new Vec3(blockIntersection)).toAabbs());
@@ -239,7 +239,7 @@
                      if ((insideBlock || insideFluid) && visitedBlocks.add(blockIntersection.asLong())) {
                          if (insideBlock) {
                              try {
-@@ -2034,6 +_,7 @@
+@@ -2035,6 +_,7 @@
      }
  
      public boolean collidedWithFluid(final FluidState fluidState, final BlockPos blockPos, final Vec3 from, final Vec3 to) {
@@ -247,7 +247,7 @@
          AABB fluidAABB = fluidState.getAABB(this.level(), blockPos);
          return fluidAABB != null && this.collidedWithShapeMovingFrom(from, to, List.of(fluidAABB));
      }
-@@ -2293,6 +_,11 @@
+@@ -2294,6 +_,11 @@
      }
  
      protected boolean updateFluidInteraction() {
@@ -259,7 +259,7 @@
          boolean inAnyFluid = this.fluidInteraction.update(this, !this.isPushedByFluid());
          boolean inWater = this.fluidInteraction.isInFluid(FluidTags.WATER);
          boolean inLava = this.fluidInteraction.isInFluid(FluidTags.LAVA);
-@@ -2333,6 +_,7 @@
+@@ -2334,6 +_,7 @@
  
          float yt = Mth.floor(this.getY());
  
@@ -267,7 +267,7 @@
          for (int i = 0; i < 1.0F + this.dimensions.width() * 20.0F; i++) {
              double xo = (this.random.nextDouble() * 2.0 - 1.0) * this.dimensions.width();
              double zo = (this.random.nextDouble() * 2.0 - 1.0) * this.dimensions.width();
-@@ -2347,6 +_,7 @@
+@@ -2348,6 +_,7 @@
              double zo = (this.random.nextDouble() * 2.0 - 1.0) * this.dimensions.width();
              this.level().addParticle(ParticleTypes.SPLASH, this.getX() + xo, yt + 1.0F, this.getZ() + zo, movement.x, movement.y, movement.z);
          }
@@ -275,7 +275,7 @@
  
          this.gameEvent(GameEvent.SPLASH);
      }
-@@ -2527,8 +_,8 @@
+@@ -2528,8 +_,8 @@
      }
  
      public void push(final Entity entity) {
@@ -285,7 +285,7 @@
                  if (this.level.paperConfig().collisions.onlyPlayersCollide && !(entity instanceof ServerPlayer || this instanceof ServerPlayer)) return; // Paper - Collision option for requiring a player participant
                  // Paper start - Add EntityCollideWithEntity Event
                  if (io.papermc.paper.event.entity.EntityCollideWithEntityEvent.getHandlerList().getRegisteredListeners().length != 0 &&
-@@ -2552,16 +_,26 @@
+@@ -2553,16 +_,26 @@
                      xa *= 0.05F;
                      za *= 0.05F;
                      if (!this.isVehicle() && this.isPushable()) {
@@ -314,7 +314,7 @@
  
      public void push(final Vec3 impulse) {
          if (impulse.isFinite()) {
-@@ -3610,6 +_,7 @@
+@@ -3611,6 +_,7 @@
  
              this.passengers = ImmutableList.copyOf(newPassengers);
          }
@@ -322,7 +322,7 @@
      }
  
      // Paper start - Force entity dismount during teleportation
-@@ -3814,8 +_,7 @@
+@@ -3815,8 +_,7 @@
      }
  
      public boolean isOnFire() {
@@ -332,7 +332,7 @@
      }
  
      public boolean isPassenger() {
-@@ -3985,6 +_,16 @@
+@@ -3986,6 +_,16 @@
              newAmount = event.getAmount();
          }
  
@@ -349,7 +349,7 @@
          this.entityData.set(DATA_AIR_SUPPLY_ID, newAmount);
          // Paper end - EntityAirChangeEvent
      }
-@@ -4072,6 +_,7 @@
+@@ -4073,6 +_,7 @@
      }
  
      protected static void sendBubbleColumnParticles(final Level level, final BlockPos pos) {
@@ -357,7 +357,7 @@
          if (level instanceof ServerLevel serverLevel) {
              RandomSource random = level.getRandom();
  
-@@ -4359,6 +_,7 @@
+@@ -4360,6 +_,7 @@
                  }
  
                  curr.root.passengers = ImmutableList.copyOf(newPassengers);
@@ -365,7 +365,7 @@
              }
          }
  
-@@ -5806,6 +_,15 @@
+@@ -5818,6 +_,15 @@
          return true;
      }
  
@@ -381,7 +381,7 @@
      public void fixPassengerDesync() {
          if (this.isPassenger() || !this.isVehicle()) {
              return;
-@@ -6109,6 +_,7 @@
+@@ -6121,6 +_,7 @@
  
      public void placePortalTicket(final BlockPos ticketPosition) {
          if (this.level() instanceof ServerLevel serverLevel) {

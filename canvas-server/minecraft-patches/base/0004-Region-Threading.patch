@@ -28484,7 +28484,7 @@ index f1c57bc4310784999784d77678ea88912d6e41db..88b1130f5fdd78c53978e497922b3d69
                  && position.closerThan(input.position(), radius)
                  && (
 diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
-index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d712f0916 100644
+index f4d8b5287fb34d8ef37a233f58647ab979f69269..c7db34912e5bf8866908760de1d046db418c20de 100644
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
 @@ -172,7 +172,7 @@ public abstract class Entity
@@ -28496,7 +28496,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
      // Paper start - replace random
      private static final class RandomRandomSource extends ca.spottedleaf.moonrise.common.util.ThreadUnsafeRandom {
          public RandomRandomSource() {
-@@ -279,6 +279,61 @@ public abstract class Entity
+@@ -279,6 +279,62 @@ public abstract class Entity
      private Vec3 deltaMovement = Vec3.ZERO;
      private float yRot;
      private float xRot;
@@ -28515,6 +28515,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
 +
 +    private io.canvasmc.canvas.threadedregions.world.entities.@Nullable EntityRegionTransferState regionTransferState;
 +    private final Object transferStateLock = new Object();
++    public boolean canvas$placing;
 +
 +    public void setRegionTransferState(
 +        final io.canvasmc.canvas.threadedregions.world.entities.@Nullable EntityRegionTransferState newState
@@ -28558,7 +28559,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
      public float yRotO;
      public float xRotO;
      private AABB bb = INITIAL_AABB;
-@@ -336,9 +391,9 @@ public abstract class Entity
+@@ -336,9 +392,9 @@ public abstract class Entity
      protected UUID uuid = Mth.createInsecureUUID(this.random);
      protected String stringUUID = this.uuid.toString();
      private boolean hasGlowingTag;
@@ -28570,7 +28571,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
      private EntityDimensions dimensions;
      private float eyeHeight;
      public boolean isInPowderSnow;
-@@ -361,7 +416,7 @@ public abstract class Entity
+@@ -361,7 +417,7 @@ public abstract class Entity
      private CustomData customData = CustomData.EMPTY;
      // CraftBukkit start
      public boolean persist = true;
@@ -28579,7 +28580,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
      public boolean valid;
      public boolean inWorld = false;
      public boolean generation;
-@@ -552,6 +607,23 @@ public abstract class Entity
+@@ -552,6 +608,23 @@ public abstract class Entity
          }
      }
      // Paper end - optimise entity tracker
@@ -28603,7 +28604,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
  
      public Entity(final EntityType<?> type, final Level level) {
          this.type = type;
-@@ -610,12 +682,18 @@ public abstract class Entity
+@@ -610,12 +683,18 @@ public abstract class Entity
      }
  
      public final void unRide() {
@@ -28624,7 +28625,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
          }
      }
  
-@@ -706,7 +784,7 @@ public abstract class Entity
+@@ -706,7 +785,7 @@ public abstract class Entity
      public void resendPossiblyDesyncedEntityData(ServerPlayer player) {
          if (player.getBukkitEntity().canSee(this.getBukkitEntity())) {
              ServerLevel level = (ServerLevel) this.level();
@@ -28633,7 +28634,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
              if (tracker == null) {
                  return;
              }
-@@ -889,7 +967,7 @@ public abstract class Entity
+@@ -889,7 +968,7 @@ public abstract class Entity
      public void postTick() {
          // No clean way to break out of ticking once the entity has been copied to a new world, so instead we move the portalling later in the tick cycle
          if (!(this instanceof ServerPlayer) && this.isAlive()) { // Paper - don't attempt to teleport dead entities
@@ -28642,7 +28643,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
          }
      }
      // CraftBukkit end
-@@ -906,7 +984,7 @@ public abstract class Entity
+@@ -906,7 +985,7 @@ public abstract class Entity
              this.boardingCooldown--;
          }
  
@@ -28651,7 +28652,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
          if (this.canSpawnSprintParticle()) {
              this.spawnSprintParticle();
          }
-@@ -1151,6 +1229,17 @@ public abstract class Entity
+@@ -1151,6 +1230,17 @@ public abstract class Entity
          final Vec3 originalMovement = delta; // Paper - Expose pre-collision velocity
          ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread("Cannot move an entity off-main");
          if (this.noPhysics) {
@@ -28669,7 +28670,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
              this.setPos(this.getX() + delta.x, this.getY() + delta.y, this.getZ() + delta.z);
              this.recordMovement(moverType, delta);
              this.horizontalCollision = false;
-@@ -1161,8 +1250,8 @@ public abstract class Entity
+@@ -1161,8 +1251,8 @@ public abstract class Entity
              if (moverType == MoverType.PISTON) {
                  delta = this.limitPistonMovement(delta);
                  // Paper start - EAR 2
@@ -28680,7 +28681,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
                  // Paper end - EAR 2
                  if (delta.equals(Vec3.ZERO)) {
                      return;
-@@ -1185,6 +1274,17 @@ public abstract class Entity
+@@ -1185,6 +1275,17 @@ public abstract class Entity
              // Paper end
  
              delta = this.maybeBackOffFromEdge(delta, moverType);
@@ -28698,7 +28699,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
              Vec3 movement = this.collide(delta);
              double movementLength = movement.lengthSqr();
              if (movementLength > 1.0E-7 || delta.lengthSqr() - movementLength < 1.0E-7) {
-@@ -1200,6 +1300,18 @@ public abstract class Entity
+@@ -1200,6 +1301,18 @@ public abstract class Entity
  
                  Vec3 pos = this.position();
                  Vec3 newPosition = pos.add(movement);
@@ -28717,7 +28718,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
                  this.addMovementThisTick(new Entity.Movement(pos, newPosition, delta));
                  this.setPos(newPosition);
                  this.recordMovement(moverType, movement);
-@@ -1580,7 +1692,7 @@ public abstract class Entity
+@@ -1580,7 +1693,7 @@ public abstract class Entity
              return vec;
          }
  
@@ -28726,7 +28727,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
          if (currentGameTime != this.pistonDeltasGameTime) {
              Arrays.fill(this.pistonDeltas, 0.0);
              this.pistonDeltasGameTime = currentGameTime;
-@@ -1854,6 +1966,11 @@ public abstract class Entity
+@@ -1854,6 +1967,11 @@ public abstract class Entity
                      return false;
                  }
  
@@ -28738,7 +28739,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
                  iterations.set(iteration);
                  BlockState state = this.level().getBlockState(blockIntersection);
                  if (state.isAir()) {
-@@ -3382,6 +3499,7 @@ public abstract class Entity
+@@ -3382,6 +3500,7 @@ public abstract class Entity
          }
  
          if (force || this.canRide(entityToRide) && entityToRide.canAddPassenger(this)) {
@@ -28746,7 +28747,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
              // CraftBukkit start
              if (entityToRide.getBukkitEntity() instanceof org.bukkit.entity.Vehicle vehicle && this instanceof LivingEntity entered) {
                  org.bukkit.event.vehicle.VehicleEnterEvent event = new org.bukkit.event.vehicle.VehicleEnterEvent(vehicle, entered.getBukkitEntity());
-@@ -3403,15 +3521,17 @@ public abstract class Entity
+@@ -3403,15 +3522,17 @@ public abstract class Entity
                  return false;
              }
              // CraftBukkit end
@@ -28765,7 +28766,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
                  entityToRide.getIndirectPassengersStream()
                      .filter(e -> e instanceof ServerPlayer)
                      .forEach(player -> CriteriaTriggers.START_RIDING_TRIGGER.trigger((ServerPlayer)player));
-@@ -3428,8 +3548,14 @@ public abstract class Entity
+@@ -3428,8 +3549,14 @@ public abstract class Entity
      }
  
      public void ejectPassengers() {
@@ -28781,7 +28782,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
          }
      }
  
-@@ -3452,7 +3578,7 @@ public abstract class Entity
+@@ -3452,7 +3579,7 @@ public abstract class Entity
              if (!oldVehicle.removePassenger(this, suppressCancellation)) this.vehicle = oldVehicle; // CraftBukkit // Paper - Force entity dismount during teleportation
              Entity.RemovalReason removalReason = this.getRemovalReason();
              if (removalReason == null || removalReason.shouldDestroy()) {
@@ -28790,7 +28791,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
              }
          }
      }
-@@ -3497,6 +3623,7 @@ public abstract class Entity
+@@ -3497,6 +3624,7 @@ public abstract class Entity
              throw new IllegalStateException("Use x.stopRiding(y), not y.removePassenger(x)");
          }
          // CraftBukkit start
@@ -28798,7 +28799,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
          org.bukkit.craftbukkit.entity.CraftEntity craft = (org.bukkit.craftbukkit.entity.CraftEntity) passenger.getBukkitEntity().getVehicle();
          Entity orig = craft == null ? null : craft.getHandle();
          if (this.getBukkitEntity() instanceof org.bukkit.entity.Vehicle vehicle && passenger instanceof LivingEntity exited) {
-@@ -3523,6 +3650,7 @@ public abstract class Entity
+@@ -3523,6 +3651,7 @@ public abstract class Entity
              return false;
          }
          // CraftBukkit end
@@ -28806,7 +28807,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
          if (this.passengers.size() == 1 && this.passengers.get(0) == passenger) {
              this.passengers = ImmutableList.of();
          } else {
-@@ -3600,6 +3728,15 @@ public abstract class Entity
+@@ -3600,6 +3729,15 @@ public abstract class Entity
          return calculateViewQuaternion(this.getXRot(), this.getYRot());
      }
  
@@ -28822,7 +28823,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
      public Vec3 getHeadLookAngle() {
          return calculateViewVector(this.getXRot(), this.getYHeadRot());
      }
-@@ -3635,28 +3772,23 @@ public abstract class Entity
+@@ -3635,28 +3773,23 @@ public abstract class Entity
          }
      }
  
@@ -28855,7 +28856,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
      }
  
      public int getDimensionChangingDelay() {
-@@ -4141,12 +4273,20 @@ public abstract class Entity
+@@ -4141,12 +4274,20 @@ public abstract class Entity
      }
  
      public void restoreFrom(final Entity oldEntity) {
@@ -28876,7 +28877,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
          // Paper end - Forward CraftEntity in teleport command
          try (ProblemReporter.ScopedCollector reporter = new ProblemReporter.ScopedCollector(this.problemPath(), LOGGER)) {
              TagValueOutput entityData = TagValueOutput.createWithContext(reporter, oldEntity.registryAccess());
-@@ -4158,198 +4298,1801 @@ public abstract class Entity
+@@ -4158,198 +4299,1812 @@ public abstract class Entity
          this.portalProcess = oldEntity.portalProcess;
      }
  
@@ -29316,6 +29317,8 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
 +
 +                        final List<EntityTreeNode> fullTree = passengerTree.getFullTree();
 +                        for (final EntityTreeNode node : fullTree) {
++                            // a teleport set off by placing it would leave the placing half done
++                            node.root.canvas$placing = true;
 +                            node.root.placeSingleSync(originWorld, destination, node, teleportFlags, respawning); // Canvas - region threading
 +                        }
 +
@@ -29326,6 +29329,10 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
 +                        // invoke post dimension change now
 +                        for (final EntityTreeNode node : fullTree) {
 +                            node.root.postChangeDimension();
++                        }
++
++                        for (final EntityTreeNode node : fullTree) {
++                            node.root.canvas$placing = false;
 +                        }
 +                    } catch (final Throwable thrown) {
 +
@@ -29733,6 +29740,11 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
 +        final java.util.function.@Nullable Consumer<Entity> teleportComplete,
 +        final boolean callEvents
 +    ) {
++        // refused before any state is touched, as the state belongs to the teleport still placing the entity
++        if (this.canvas$placing) {
++            return AsyncTeleportResult.FAILURE;
++        }
++
 +        try {
 +            // we silence the catch to replicate what it is in Folia
 +            canvas$ensureCanTeleportAsync(destination, pos, teleportFlags);
@@ -30833,7 +30845,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
          this.clearMovementThisTick();
      }
  
-@@ -4370,6 +6113,12 @@ public abstract class Entity
+@@ -4370,6 +6125,12 @@ public abstract class Entity
          }
      }
  
@@ -30846,7 +30858,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
      protected void removeAfterChangingDimensions() {
          this.setRemoved(Entity.RemovalReason.CHANGED_DIMENSION, null); // CraftBukkit - add Bukkit remove cause
          if (this instanceof Leashable leashable && leashable.isLeashed()) { // Paper - only call if it is leashed
-@@ -4714,6 +6463,12 @@ public abstract class Entity
+@@ -4714,6 +6475,12 @@ public abstract class Entity
      }
  
      public void startSeenByPlayer(final ServerPlayer player) {
@@ -30859,7 +30871,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
      }
  
      public void stopSeenByPlayer(final ServerPlayer player) {
-@@ -4723,6 +6478,12 @@ public abstract class Entity
+@@ -4723,6 +6490,12 @@ public abstract class Entity
              new io.papermc.paper.event.player.PlayerUntrackEntityEvent(player.getBukkitEntity(), this.getBukkitEntity()).callEvent();
          }
          // Paper end - entity tracking events
@@ -30872,7 +30884,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
      }
  
      public float rotate(final Rotation rotation) {
-@@ -5130,7 +6891,10 @@ public abstract class Entity
+@@ -5130,7 +6903,10 @@ public abstract class Entity
              return;
          }
          // Paper end - Block invalid positions and bounding box
@@ -30884,7 +30896,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
              this.position = new Vec3(x, y, z);
              int fx = Mth.floor(x);
              int fy = Mth.floor(y);
-@@ -5161,7 +6925,7 @@ public abstract class Entity
+@@ -5161,7 +6937,7 @@ public abstract class Entity
          }
          // Paper start - Block invalid positions and bounding box; don't allow desync of pos and AABB
          // hanging has its own special logic
@@ -30893,7 +30905,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
              this.setBoundingBox(this.makeBoundingBox());
          }
          // Paper end - Block invalid positions and bounding box
-@@ -5236,6 +7000,7 @@ public abstract class Entity
+@@ -5236,6 +7012,7 @@ public abstract class Entity
              Util.logAndPauseIfInIde("Invalid entity rotation: " + yRot + ", discarding.");
          } else {
              this.yRot = yRot;
@@ -30901,7 +30913,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
          }
      }
  
-@@ -5248,6 +7013,7 @@ public abstract class Entity
+@@ -5248,6 +7025,7 @@ public abstract class Entity
              Util.logAndPauseIfInIde("Invalid entity rotation: " + xRot + ", discarding.");
          } else {
              this.xRot = Math.clamp(xRot % 360.0F, -90.0F, 90.0F);
@@ -30909,7 +30921,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
          }
      }
  
-@@ -5280,6 +7046,12 @@ public abstract class Entity
+@@ -5280,6 +7058,12 @@ public abstract class Entity
          return this.removalReason != null;
      }
  
@@ -30922,7 +30934,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
      public Entity.@Nullable RemovalReason getRemovalReason() {
          return this.removalReason;
      }
-@@ -5294,6 +7066,7 @@ public abstract class Entity
+@@ -5294,6 +7078,7 @@ public abstract class Entity
          // Paper end - rewrite chunk system
          org.bukkit.craftbukkit.event.CraftEventFactory.callEntityRemoveEvent(this, cause); // CraftBukkit
          final boolean alreadyRemoved = this.removalReason != null; // Paper - Folia schedulers
@@ -30930,7 +30942,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
          if (this.removalReason == null) {
              this.removalReason = reason;
              this.removeEventCause = cause; // Paper
-@@ -5322,6 +7095,10 @@ public abstract class Entity
+@@ -5322,6 +7107,10 @@ public abstract class Entity
          // Paper end
      }
  
@@ -30941,7 +30953,7 @@ index f4d8b5287fb34d8ef37a233f58647ab979f69269..575fba7ed352b40fa6c48cf1e43ae26d
      // Paper start - Folia schedulers
      /**
       * Invoked only when the entity is truly removed from the server, never to be added to any world.
-@@ -5333,7 +7110,7 @@ public abstract class Entity
+@@ -5333,7 +7122,7 @@ public abstract class Entity
      // Paper end - Folia schedulers
      // Paper start - optimise Folia entity scheduler
      public final void registerScheduler() {

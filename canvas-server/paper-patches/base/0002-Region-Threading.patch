@@ -3398,7 +3398,7 @@ index 000c5ea5d39d5ab6e5592012ab1cc7ee547505dc..ab2ee478c53923be85f5a6d4971bed5b
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
-index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..d4c509f82d20c1d7f989eb89f138510559f1ba78 100644
+index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..e349ad334595c28c921e26d002df1a9bd406e4fa 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 @@ -124,6 +124,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
@@ -3494,7 +3494,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..d4c509f82d20c1d7f989eb89f1385105
  
          if (entityTracker == null) {
              return;
-@@ -1202,27 +1215,97 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1202,27 +1215,104 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          location.checkFinite();
          Location locationClone = location.clone(); // clone so we don't need to worry about mutations after this call.
  
@@ -3557,6 +3557,13 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..d4c509f82d20c1d7f989eb89f1385105
 +        // Canvas end - region threading
 +
 +        if (org.bukkit.Bukkit.isOwnedByCurrentRegion(this)) {
++            // Canvas start - region threading
++            // refused before the state is touched, as it belongs to the teleport still placing the entity
++            if (this.getHandle().canvas$placing) {
++                ret.complete(Boolean.FALSE);
++                return ret;
++            }
++            // Canvas end - region threading
 +            setPluginTransferState(transferState); // Canvas - region threading
 +            run.accept(this.getHandle());
 +            return ret;
@@ -3610,7 +3617,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..d4c509f82d20c1d7f989eb89f1385105
      // Paper end - more teleport API / async chunk API
  
      private final org.bukkit.entity.Entity.Spigot spigot = new org.bukkit.entity.Entity.Spigot() {
-@@ -1294,8 +1377,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1294,8 +1384,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
  
      @Override
      public Set<org.bukkit.entity.Player> getTrackedPlayers() {
@@ -3620,7 +3627,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..d4c509f82d20c1d7f989eb89f1385105
          if (tracker == null) {
              return java.util.Collections.emptySet();
          }
-@@ -1416,10 +1498,12 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1416,10 +1505,12 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
      }
  
      public boolean considersEntityAsAlly0(final @NotNull org.bukkit.entity.Entity entity) {
@@ -3633,7 +3640,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..d4c509f82d20c1d7f989eb89f1385105
      }
  
      @Override
-@@ -1430,27 +1514,35 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1430,27 +1521,35 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
  
      @Override
      public @NotNull Map<Key, Predicate<org.bukkit.entity.Entity>> getAdditionalAlliedRules() {
