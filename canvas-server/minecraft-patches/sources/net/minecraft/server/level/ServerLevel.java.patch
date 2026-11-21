@@ -14,7 +14,7 @@
      }
  
      // Folia start - region threading
-@@ -859,6 +_,19 @@
+@@ -893,6 +_,19 @@
          return this.environmentAttributes;
      }
  
@@ -34,7 +34,7 @@
      @Deprecated
      @VisibleForTesting
      public EnvironmentAttributeSystem setEnvironmentAttributes(final EnvironmentAttributeSystem environmentAttributes) {
-@@ -1065,72 +_,78 @@
+@@ -1099,72 +_,78 @@
      // Paper start - optimise random ticking
      private final io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource simpleRandom = io.papermc.paper.threadedregions.util.SimpleThreadLocalRandomSource.INSTANCE; // Folia - region threading
  
@@ -158,7 +158,7 @@
      }
  
      public void tickThunder(final LevelChunk chunk) {
-@@ -1138,7 +_,7 @@
+@@ -1172,7 +_,7 @@
          boolean raining = this.isRaining();
          int minX = chunkPos.getMinBlockX();
          int minZ = chunkPos.getMinBlockZ();
@@ -167,7 +167,7 @@
              BlockPos pos = this.findLightningTargetAround(this.getBlockRandomPos(minX, 0, minZ, 15));
              if (this.isRainingAt(pos)) {
                  DifficultyInstance difficulty = this.getCurrentDifficultyAt(pos);
-@@ -1169,6 +_,15 @@
+@@ -1203,6 +_,15 @@
      public void tickPrecipitation(final BlockPos pos) {
          BlockPos topPos = this.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, pos);
          BlockPos belowPos = topPos.below();
@@ -183,7 +183,7 @@
          Biome biome = this.getBiome(topPos).value();
          if (biome.shouldFreeze(this, belowPos)) {
              org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockFormEvent(this, belowPos, Blocks.ICE.defaultBlockState(), Block.UPDATE_ALL, null); // CraftBukkit
-@@ -1252,10 +_,11 @@
+@@ -1286,10 +_,11 @@
                  int percentage = this.getGameRules().get(GameRules.PLAYERS_SLEEPING_PERCENTAGE);
                  Component message;
                  if (this.sleepStatus.areEnoughSleeping(percentage)) {
@@ -197,7 +197,7 @@
  
                  for (ServerPlayer player : this.players) {
                      player.sendOverlayMessage(message);
-@@ -1430,14 +_,14 @@
+@@ -1464,14 +_,14 @@
          io.papermc.paper.threadedregions.RegionizedServer.ensureGlobalTickThread("Cannot reset weather cycle async"); // Canvas - region threading
          WeatherData weatherData = this.getWeatherData();
          // CraftBukkit start
@@ -214,7 +214,7 @@
          // CraftBukkit start
          // If we stop due to everyone sleeping we should reset the weather duration to some other random value.
          // Not that everyone ever manages to get the whole server to sleep at the same time....
-@@ -1798,7 +_,7 @@
+@@ -1832,7 +_,7 @@
  
      public void unload(final LevelChunk levelChunk) {
          // Spigot start
@@ -223,7 +223,7 @@
              if (blockEntity instanceof net.minecraft.world.Container) {
                  // Paper start - this area looks like it can load chunks, change the behavior
                  // chests for example can apply physics to the world
-@@ -1853,7 +_,7 @@
+@@ -1887,7 +_,7 @@
                  .callEvent();
          }
          // Paper end - Add BlockBreakProgressUpdateEvent
@@ -232,7 +232,7 @@
              if (player.level() == this && player.getId() != id) {
                  double xd = blockPos.getX() - player.getX();
                  double yd = blockPos.getY() - player.getY();
-@@ -2912,6 +_,7 @@
+@@ -2946,6 +_,7 @@
  
          if (false) { TickingBlockEntity ticker = null; // Folia - region threading
              BlockPos blockPos = ticker.getPos();
@@ -240,7 +240,7 @@
              csvOutput.writeRow(blockPos.getX(), blockPos.getY(), blockPos.getZ(), ticker.getType());
          }
      }
-@@ -3091,6 +_,7 @@
+@@ -3125,6 +_,7 @@
  
      public boolean canSpreadFireAround(final BlockPos pos) {
          int spreadRadius = this.getGameRules().get(GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER);

@@ -1425,7 +1425,7 @@ index 21d8be83ab0a57941a9f7cc175900de50c6f1363..1c0ff62016b6d70567cf99cb76d6e269
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9901be4fb 100644
+index d3d2dd5fa44ace0c954821c1611906013b12020f..edaa87e53d9aca0fd17f68bc90e86caa819fb81f 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -289,7 +289,7 @@ public final class CraftServer implements Server {
@@ -1511,7 +1511,7 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
          Preconditions.checkState(this.console.getAllLevels().iterator().hasNext(), "Cannot create additional worlds on STARTUP");
          //Preconditions.checkState(!this.console.isIteratingOverLevels, "Cannot create a world while worlds are being ticked"); // Paper - Cat - Temp disable. We'll see how this goes.
          Preconditions.checkArgument(creator != null, "WorldCreator cannot be null");
-@@ -1296,6 +1331,127 @@ public final class CraftServer implements Server {
+@@ -1296,6 +1331,163 @@ public final class CraftServer implements Server {
  
          return serverLevel.getWorld();
      }
@@ -1563,26 +1563,35 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
 +            // are actively joining into this world, since they can be stuck
 +            // in limbo on login if they are joining an unloading world
 +
-+            if (!handle.canvas$joiningPlayers.isEmpty()) {
-+                callback.accept(io.canvasmc.canvas.WorldUnloadResult.FAIL_PLAYERS_JOINING);
-+                return;
-+            }
-+
 +            // we check every single player here, since if a player is cross-region teleporting
 +            // but in the same world, they get removed from ServerLevel#players, but we don't
 +            // change the level in ServerPlayer, so ServerPlayer is a safe place to check this
 +
-+            for (final net.minecraft.server.level.ServerPlayer player : console.getPlayerList().getPlayers()) {
-+                if (player.level() == handle) {
-+                    callback.accept(io.canvasmc.canvas.WorldUnloadResult.FAIL_PLAYERS_PRESENT);
-+                    return;
-+                }
++            final io.canvasmc.canvas.WorldUnloadResult refusal = canvas$playersRefusal(handle);
++            if (refusal != null) {
++                callback.accept(refusal);
++                return;
 +            }
 +
 +            // call unload async event
 +
 +            if (!new io.canvasmc.canvas.event.world.WorldUnloadAsyncEvent(handle.getWorld()).callEvent()) {
 +                callback.accept(io.canvasmc.canvas.WorldUnloadResult.FAIL_UNLOAD_EVENT);
++                return;
++            }
++
++            // a listener may have unloaded it already
++            if (handle.canvas$unloadTicket.isPresent()) {
++                callback.accept(io.canvasmc.canvas.WorldUnloadResult.FAIL_ALREADY_UNLOADING);
++                return;
++            }
++
++            // every way into the world reads this after marking the player it moves, so a second look finds who slipped past the first
++            handle.canvas$unloading = true;
++            final io.canvasmc.canvas.WorldUnloadResult lateRefusal = canvas$playersRefusal(handle);
++            if (lateRefusal != null) {
++                handle.canvas$unloading = false;
++                callback.accept(lateRefusal);
 +                return;
 +            }
 +
@@ -1616,7 +1625,8 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
 +                            }
 +                        }
 +
-+                        if (!hasAliveRegion) {
++                        // a stop halts every region, and a region that never ticked again is never marked
++                        if (!hasAliveRegion || io.papermc.paper.threadedregions.RegionShutdownThread.isShuttingDown()) {
 +                            break waiter;
 +                        }
 +                    }
@@ -1626,8 +1636,10 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
 +            );
 +
 +            // start shutdown thread
++            handle.canvas$unloadThread = worldShutdownThread;
 +            worldShutdownThread.start();
 +        } catch (final Throwable thrown) {
++            handle.canvas$unloading = handle.canvas$unloadTicket.isPresent();
 +            MinecraftServer.LOGGER.error("Failed to prepare unload for world", thrown);
 +            callback.accept(io.canvasmc.canvas.WorldUnloadResult.FAIL_UNKNOWN);
 +        } finally {
@@ -1635,11 +1647,35 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
 +        }
 +    }
 +
++    @Nullable
++    private io.canvasmc.canvas.WorldUnloadResult canvas$playersRefusal(final ServerLevel handle) {
++        if (!handle.canvas$joiningPlayers.isEmpty()) {
++            return io.canvasmc.canvas.WorldUnloadResult.FAIL_PLAYERS_JOINING;
++        }
++
++        // read in the order a respawn, a teleport and a portal write them, so one in between is not missed
++        for (final net.minecraft.server.level.ServerPlayer player : this.console.getPlayerList().getPlayers()) {
++            if (player.canvas$respawningInto == handle || player.level() == handle) {
++                return io.canvasmc.canvas.WorldUnloadResult.FAIL_PLAYERS_PRESENT;
++            }
++
++            // a player on the way here, or portaling out and still waiting in this world for its exit
++            final io.canvasmc.canvas.threadedregions.world.entities.EntityRegionTransferState transferState = player.getRegionTransferState();
++            if (
++                transferState != null && (transferState.getDestinationDimension() == handle
++                    || (transferState instanceof io.canvasmc.canvas.threadedregions.world.entities.EntityRegionTransferState.PortalStartTransferState && transferState.getOrigin().level() == handle))
++            ) {
++                return io.canvasmc.canvas.WorldUnloadResult.FAIL_PLAYERS_PRESENT;
++            }
++        }
++
++        return null;
++    }
 +    // Canvas end - region threading
  
      @Override
      public boolean unloadWorld(String name, boolean save) {
-@@ -1304,6 +1460,7 @@ public final class CraftServer implements Server {
+@@ -1304,6 +1496,7 @@ public final class CraftServer implements Server {
  
      @Override
      public boolean unloadWorld(World world, boolean save) {
@@ -1647,7 +1683,7 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
          //Preconditions.checkState(!this.console.isIteratingOverLevels, "Cannot unload a world while worlds are being ticked"); // Paper - Cat - Temp disable. We'll see how this goes.
          if (world == null) {
              return false;
-@@ -1439,20 +1596,19 @@ public final class CraftServer implements Server {
+@@ -1439,20 +1632,19 @@ public final class CraftServer implements Server {
      public boolean addRecipes(Iterable<Recipe> recipes) {
          org.spigotmc.AsyncCatcher.catchOp("Recipes Add");
          Preconditions.checkArgument(recipes != null, "recipes cannot be null");
@@ -1672,7 +1708,7 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
      }
  
      @Override
-@@ -1640,18 +1796,17 @@ public final class CraftServer implements Server {
+@@ -1640,18 +1832,17 @@ public final class CraftServer implements Server {
      @Override
      public boolean removeRecipes(Iterable<NamespacedKey> recipeKeys) {
          Preconditions.checkArgument(recipeKeys != null, "recipeKeys cannot be null");
@@ -1695,7 +1731,7 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
      }
  
      @Override
-@@ -2710,8 +2865,23 @@ public final class CraftServer implements Server {
+@@ -2710,8 +2901,23 @@ public final class CraftServer implements Server {
  
      @Override
      public double getAverageTickTime() {
@@ -1721,7 +1757,7 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
      }
  
      private final org.bukkit.Server.Spigot spigot = new org.bukkit.Server.Spigot() {
-@@ -2763,12 +2933,38 @@ public final class CraftServer implements Server {
+@@ -2763,12 +2969,38 @@ public final class CraftServer implements Server {
  
      @Override
      public void restart() {
@@ -1761,7 +1797,7 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
      }
  
      @Override
-@@ -2938,7 +3134,7 @@ public final class CraftServer implements Server {
+@@ -2938,7 +3170,7 @@ public final class CraftServer implements Server {
  
      @Override
      public int getCurrentTick() {
@@ -1770,7 +1806,7 @@ index d3d2dd5fa44ace0c954821c1611906013b12020f..7d42058c51787cb8a18344b9da0dc9f9
      }
  
      @Override
-@@ -2972,4 +3168,160 @@ public final class CraftServer implements Server {
+@@ -2972,4 +3204,160 @@ public final class CraftServer implements Server {
      public void allowPausing(final Plugin plugin, final boolean value) {
          this.console.addPluginAllowingSleep(plugin.getName(), value);
      }
@@ -3362,7 +3398,7 @@ index 000c5ea5d39d5ab6e5592012ab1cc7ee547505dc..ab2ee478c53923be85f5a6d4971bed5b
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
-index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..87aac8a6e4d95ac2065c8801eac8ecc40d4a2c4d 100644
+index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..d4c509f82d20c1d7f989eb89f138510559f1ba78 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 @@ -124,6 +124,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
@@ -3458,7 +3494,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..87aac8a6e4d95ac2065c8801eac8ecc4
  
          if (entityTracker == null) {
              return;
-@@ -1202,27 +1215,90 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1202,27 +1215,97 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
          location.checkFinite();
          Location locationClone = location.clone(); // clone so we don't need to worry about mutations after this call.
  
@@ -3509,7 +3545,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..87aac8a6e4d95ac2065c8801eac8ecc4
 +        // we have to create this early so that the call-trace is
 +        // properly created, or else we risk losing the caller
 +
-+        final io.canvasmc.canvas.threadedregions.world.entities.EntityRegionTransferState transferState =
++        final io.canvasmc.canvas.threadedregions.world.entities.EntityRegionTransferState.PluginTeleportAsyncState transferState =
 +            new io.canvasmc.canvas.threadedregions.world.entities.EntityRegionTransferState.PluginTeleportAsyncState(
 +                "api-fronted teleport async call" + (
 +                    // include this bit of debug since this can be called async from the entity context
@@ -3531,8 +3567,15 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..87aac8a6e4d95ac2065c8801eac8ecc4
 +            // Canvas start - region threading
 +            (newEntity) -> {
 +                // set the transfer state first, then teleport
-+                setPluginTransferState(transferState);
-+                run.accept(newEntity);
++                try {
++                    setPluginTransferState(new io.canvasmc.canvas.threadedregions.world.entities.EntityRegionTransferState.PluginTeleportAsyncState(
++                        transferState, new io.canvasmc.canvas.util.ServerLocation((net.minecraft.server.level.ServerLevel) newEntity.level(), newEntity.position(), newEntity.getYRot(), newEntity.getXRot())
++                    ));
++                    run.accept(newEntity);
++                } catch (final IllegalStateException thrown) {
++                    // thrown here it would fail the region tick
++                    ret.completeExceptionally(thrown);
++                }
 +            },
 +            // Canvas end - region threading
 +            // retired
@@ -3567,7 +3610,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..87aac8a6e4d95ac2065c8801eac8ecc4
      // Paper end - more teleport API / async chunk API
  
      private final org.bukkit.entity.Entity.Spigot spigot = new org.bukkit.entity.Entity.Spigot() {
-@@ -1294,8 +1370,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1294,8 +1377,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
  
      @Override
      public Set<org.bukkit.entity.Player> getTrackedPlayers() {
@@ -3577,7 +3620,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..87aac8a6e4d95ac2065c8801eac8ecc4
          if (tracker == null) {
              return java.util.Collections.emptySet();
          }
-@@ -1416,10 +1491,12 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1416,10 +1498,12 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
      }
  
      public boolean considersEntityAsAlly0(final @NotNull org.bukkit.entity.Entity entity) {
@@ -3590,7 +3633,7 @@ index 53d93ded4ce448d833861c10f6d4a7b9700f6b54..87aac8a6e4d95ac2065c8801eac8ecc4
      }
  
      @Override
-@@ -1430,27 +1507,35 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+@@ -1430,27 +1514,35 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
  
      @Override
      public @NotNull Map<Key, Predicate<org.bukkit.entity.Entity>> getAdditionalAlliedRules() {
