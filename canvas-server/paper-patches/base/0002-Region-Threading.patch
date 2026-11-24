@@ -42,10 +42,10 @@ comment ASAP.
 This list and description of the patch will be updated over time as new developments are made.
 
 diff --git a/src/main/java/ca/spottedleaf/moonrise/common/util/EntityUtil.java b/src/main/java/ca/spottedleaf/moonrise/common/util/EntityUtil.java
-index eae782750b6a2c1aa66074553faf0de8ea62cb59..da1a4ed81561a9978a7d19a384c2d066c5d6e2db 100644
+index 9dcf2e96f8cd6d85d207e02c67c3ca782e02555c..45c9cf94cdd9fddfdbc9c6397e95271447402d44 100644
 --- a/src/main/java/ca/spottedleaf/moonrise/common/util/EntityUtil.java
 +++ b/src/main/java/ca/spottedleaf/moonrise/common/util/EntityUtil.java
-@@ -28,6 +28,7 @@ public final class EntityUtil {
+@@ -25,6 +25,7 @@ public final class EntityUtil {
              + ",passenger_count=" + entity.getPassengers().size() + "}";
      }
  
@@ -3567,10 +3567,10 @@ index 331a3ccac263e0b3b7c4edb4033fed2a8ee7571a..3f646497c5cea72364d3d1083b225158
      }
  }
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftFishHook.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftFishHook.java
-index 82c742161a2c257c0fda227aec6634ad174a0cb0..1bc3005634dfb2e7cf6f40587c3a6a63b35978fc 100644
+index 9d0f87545d637a987cd349699f55b299f33d354b..9a7e5e44eea18be88722f208543a8502bccf20c0 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftFishHook.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftFishHook.java
-@@ -23,6 +23,7 @@ public class CraftFishHook extends CraftProjectile implements FishHook {
+@@ -26,6 +26,7 @@ public class CraftFishHook extends CraftProjectile implements FishHook {
  
      @Override
      public FishingHook getHandle() {

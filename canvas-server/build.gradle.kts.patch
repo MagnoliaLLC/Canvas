@@ -86,7 +86,7 @@
  dependencies {
 -    implementation(project(":paper-api"))
 +    implementation(projects.canvasApi)
-     implementation(platform("ca.spottedleaf.leafpile:bom:1.3.2"))
+     implementation(platform("ca.spottedleaf.leafpile:bom:1.3.3"))
      implementation("ca.spottedleaf.leafpile:common")
      implementation("ca.spottedleaf.leafpile:concurrentutil")
 @@ -123,6 +_,8 @@

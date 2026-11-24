@@ -391,10 +391,10 @@ index 78659864651362de4fc104cbeb3e2e9a31b101d9..9ef85f2f87f6812d5b308e807f4e189d
          final List<SectionToUnload> ret = new ArrayList<>();
  
 diff --git a/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/ChunkHolderManager.java b/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/ChunkHolderManager.java
-index e984597384eba6b8ac877f2803bdbed754ac7ba8..5a1c9be6fadf2ba2cf7d36aff2e00514738dfd1a 100644
+index 4b9b5b4cb02f28978a907cc8dc5ea612e7f077bf..365b33715227ed4ec42e646e51d22e19963d9ffb 100644
 --- a/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/ChunkHolderManager.java
 +++ b/ca/spottedleaf/moonrise/patches/chunk_system/scheduling/ChunkHolderManager.java
-@@ -83,30 +83,85 @@ public final class ChunkHolderManager {
+@@ -84,30 +84,85 @@ public final class ChunkHolderManager {
      private final ConcurrentChainedLong2ReferenceHashTable<NewChunkHolder> chunkHolders = ConcurrentChainedLong2ReferenceHashTable.createWithCapacity(ConcurrentChainedLong2ReferenceHashTable.defaultCapacity(), 0.25f);
      private final ServerLevel world;
      private final ChunkTaskScheduler taskScheduler;
@@ -495,7 +495,7 @@ index e984597384eba6b8ac877f2803bdbed754ac7ba8..5a1c9be6fadf2ba2cf7d36aff2e00514
  
      // mapping of counter id -> (mapping of pos->count)
      private final ConcurrentChainedLong2ReferenceHashTable<ConcurrentChainedLong2LongHashTable> ticketCounters = ConcurrentChainedLong2ReferenceHashTable.createWithCapacity(ConcurrentChainedLong2ReferenceHashTable.defaultCapacity(), 0.5f);
-@@ -193,8 +248,18 @@ public final class ChunkHolderManager {
+@@ -194,8 +249,18 @@ public final class ChunkHolderManager {
      }
  
      public void close(final boolean save, final boolean halt) {
@@ -515,7 +515,7 @@ index e984597384eba6b8ac877f2803bdbed754ac7ba8..5a1c9be6fadf2ba2cf7d36aff2e00514
              LOGGER.info("Waiting 60s for chunk system to halt for world '" + WorldUtil.getWorldName(this.world) + "'");
              if (!this.taskScheduler.halt(true, TimeUnit.SECONDS.toNanos(60L))) {
                  LOGGER.warn("Failed to halt generation/loading tasks for world '" + WorldUtil.getWorldName(this.world) + "'");
-@@ -204,9 +269,10 @@ public final class ChunkHolderManager {
+@@ -205,9 +270,10 @@ public final class ChunkHolderManager {
          }
  
          if (save) {
@@ -527,7 +527,7 @@ index e984597384eba6b8ac877f2803bdbed754ac7ba8..5a1c9be6fadf2ba2cf7d36aff2e00514
          MoonriseRegionFileIO.flush(this.world);
  
          if (halt) {
-@@ -228,28 +294,35 @@ public final class ChunkHolderManager {
+@@ -229,28 +295,35 @@ public final class ChunkHolderManager {
          }
  
          this.taskScheduler.setShutdown(true);
@@ -570,7 +570,7 @@ index e984597384eba6b8ac877f2803bdbed754ac7ba8..5a1c9be6fadf2ba2cf7d36aff2e00514
  
              holder.lastAutoSave = currentTick;
              if (holder.save(false) != null) {
-@@ -263,16 +336,53 @@ public final class ChunkHolderManager {
+@@ -264,16 +337,53 @@ public final class ChunkHolderManager {
  
          for (final NewChunkHolder holder : reschedule) {
              if (holder.getChunkStatus().isOrAfter(FullChunkStatus.FULL)) {
@@ -627,7 +627,7 @@ index e984597384eba6b8ac877f2803bdbed754ac7ba8..5a1c9be6fadf2ba2cf7d36aff2e00514
              if (emergency) {
                  LOGGER.info("Emergency saving all chunkholders for world '" + WorldUtil.getWorldName(this.world) + "'");
              } else {
-@@ -305,6 +415,12 @@ public final class ChunkHolderManager {
+@@ -306,6 +416,12 @@ public final class ChunkHolderManager {
          }
          for (int i = 0, len = holders.size(); i < len; ++i) {
              final NewChunkHolder holder = holders.get(i);
@@ -640,7 +640,7 @@ index e984597384eba6b8ac877f2803bdbed754ac7ba8..5a1c9be6fadf2ba2cf7d36aff2e00514
              try {
                  final NewChunkHolder.SaveStat saveStat = holder.save(shutdown);
                  if (saveStat != null) {
-@@ -340,7 +456,7 @@ public final class ChunkHolderManager {
+@@ -341,7 +457,7 @@ public final class ChunkHolderManager {
                  }
              }
          }
@@ -649,7 +649,7 @@ index e984597384eba6b8ac877f2803bdbed754ac7ba8..5a1c9be6fadf2ba2cf7d36aff2e00514
              MoonriseRegionFileIO.flush(this.world);
              try {
                  MoonriseRegionFileIO.flushRegionStorages(this.world);
-@@ -825,7 +941,13 @@ public final class ChunkHolderManager {
+@@ -826,7 +942,13 @@ public final class ChunkHolderManager {
      }
  
      public void tick() {
@@ -664,7 +664,7 @@ index e984597384eba6b8ac877f2803bdbed754ac7ba8..5a1c9be6fadf2ba2cf7d36aff2e00514
  
          final int sectionShift = ((ChunkSystemServerLevel)this.world).moonrise$getRegionChunkShift();
  
-@@ -834,7 +956,7 @@ public final class ChunkHolderManager {
+@@ -835,7 +957,7 @@ public final class ChunkHolderManager {
  
          Ticket[] removedList = new Ticket[4];
  
@@ -673,7 +673,7 @@ index e984597384eba6b8ac877f2803bdbed754ac7ba8..5a1c9be6fadf2ba2cf7d36aff2e00514
              final long sectionKey = iterator.nextLong();
  
              if (!this.sectionToChunkToExpireCount.containsKey(sectionKey)) {
-@@ -1168,21 +1290,53 @@ public final class ChunkHolderManager {
+@@ -1169,21 +1291,53 @@ public final class ChunkHolderManager {
          if (changedFullStatus.isEmpty()) {
              return;
          }
@@ -736,7 +736,7 @@ index e984597384eba6b8ac877f2803bdbed754ac7ba8..5a1c9be6fadf2ba2cf7d36aff2e00514
          ((ChunkSystemServerChunkCache)this.world.getChunkSource()).moonrise$chunkHolderUnload(holder);
          PlatformHooks.get().onChunkHolderDelete(this.world, holder.vanillaChunkHolder);
          this.chunkHolders.remove(CoordinateUtils.getChunkKey(holder.chunkX, holder.chunkZ));
-@@ -1196,7 +1350,7 @@ public final class ChunkHolderManager {
+@@ -1197,7 +1351,7 @@ public final class ChunkHolderManager {
              throw new IllegalStateException("Cannot unload chunks recursively");
          }
          final int sectionShift = this.unloadQueue.coordinateShift; // sectionShift <= lock shift
@@ -745,7 +745,7 @@ index e984597384eba6b8ac877f2803bdbed754ac7ba8..5a1c9be6fadf2ba2cf7d36aff2e00514
          int unloadCountTentative = 0;
          for (final ChunkUnloadQueue.SectionToUnload sectionRef : unloadSectionsForRegion) {
              final ChunkUnloadQueue.UnloadSection section
-@@ -1526,22 +1680,17 @@ public final class ChunkHolderManager {
+@@ -1527,22 +1681,17 @@ public final class ChunkHolderManager {
          return CURRENT_TICKET_UPDATE_SCHEDULING.get();
      }
  
@@ -776,7 +776,7 @@ index e984597384eba6b8ac877f2803bdbed754ac7ba8..5a1c9be6fadf2ba2cf7d36aff2e00514
  
          boolean ret = false;
  
-@@ -1557,9 +1706,7 @@ public final class ChunkHolderManager {
+@@ -1558,9 +1707,7 @@ public final class ChunkHolderManager {
              ret |= holder.handleFullStatusChange(changedFullStatus);
  
              if (!changedFullStatus.isEmpty()) {
@@ -29919,7 +29919,7 @@ index c756d28b396520264336832f17527981248556f3..4e150f4807c83e8f673b53e5e8b9e1da
                      }
                  }
 diff --git a/net/minecraft/world/entity/LivingEntity.java b/net/minecraft/world/entity/LivingEntity.java
-index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269abf4c475b 100644
+index 2650afb179868fdf8ddb60b3266245df937bbc61..f3d0341f03519f8646fac3a35442a5048d9c23cc 100644
 --- a/net/minecraft/world/entity/LivingEntity.java
 +++ b/net/minecraft/world/entity/LivingEntity.java
 @@ -277,7 +277,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
@@ -30030,7 +30030,7 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
                  waypointManager.trackWaypoint(this);
              } else {
                  waypointManager.untrackWaypoint(this);
-@@ -1549,7 +1586,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -1550,7 +1587,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
          boolean success = !blocked; // CraftBukkit - Ensure to return false if damage is blocked
          if (success) {
              this.lastDamageSource = source;
@@ -30039,7 +30039,7 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
  
              for (MobEffectInstance effect : this.getActiveEffects()) {
                  effect.onMobHurt(level, this, source, damage);
-@@ -1563,7 +1600,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -1564,7 +1601,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
              }
          }
  
@@ -30048,7 +30048,7 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
              CriteriaTriggers.PLAYER_HURT_ENTITY.trigger(sourcePlayer, this, source, originalDamage, damage, blocked);
          }
  
-@@ -1811,7 +1848,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -1812,7 +1849,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
      }
  
      public @Nullable DamageSource getLastDamageSource(final int damageSourceTimeout) {
@@ -30057,7 +30057,7 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
      }
  
      protected void playHurtSound(final DamageSource source) {
-@@ -1841,6 +1878,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -1842,6 +1879,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
      public List<Runnable> postDeathEventTasks = new java.util.ArrayList<>(); // Paper - after death event and death (no revive as converted entity in killedEntity)
  
      public void die(final DamageSource source) {
@@ -30065,7 +30065,7 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
          if (!this.isRemoved() && !this.dead) {
              Entity sourceEntity = source.getEntity();
              LivingEntity killer = this.getKillCredit();
-@@ -2574,7 +2612,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -2575,7 +2613,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
                          }
                      }
  
@@ -30074,7 +30074,7 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
                          CriteriaTriggers.PLAYER_HURT_ENTITY.trigger(sourcePlayer, this, source, originalDamage, dmg, true); // Paper - fix taken/dealt param order
                      }
  
-@@ -2593,10 +2631,10 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -2594,10 +2632,10 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
      }
  
      public @Nullable LivingEntity getKillCredit() {
@@ -30087,7 +30087,7 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
          }
      }
  
-@@ -2680,7 +2718,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -2681,7 +2719,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
          }
  
          this.lastDamageSource = source;
@@ -30096,7 +30096,7 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
      }
  
      @Override
-@@ -3797,7 +3835,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -3798,7 +3836,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
  
          this.pushEntities();
          // Paper start - Add EntityMoveEvent
@@ -30105,7 +30105,7 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
              if (this.xo != this.getX() || this.yo != this.getY() || this.zo != this.getZ() || this.yRotO != this.getYRot() || this.xRotO != this.getXRot()) {
                  Location from = new Location(this.level().getWorld(), this.xo, this.yo, this.zo, this.yRotO, this.xRotO);
                  Location to = new Location(this.level().getWorld(), this.getX(), this.getY(), this.getZ(), this.getYRot(), this.getXRot());
-@@ -4000,7 +4038,16 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -4001,7 +4039,16 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
  
      public void onItemPickup(final ItemEntity entity) {
          if (EntityReference.getEntity(entity.thrower, this.level()::getGlobalPlayerByUUID, Entity.class) instanceof ServerPlayer serverPlayer) { // Paper - check global player list where appropriate
@@ -30123,7 +30123,7 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
          }
      }
  
-@@ -4519,10 +4566,13 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -4520,10 +4567,13 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
          WorldBorder worldBorder = level.getWorldBorder();
          Vec3 clamped = worldBorder.clampVec3ToBound(xx, y, zz);
          BlockPos.MutableBlockPos pos = BlockPos.containing(clamped).mutable();
@@ -30139,7 +30139,7 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
                  if (state.is(BlockTags.ENTITIES_CAN_TELEPORT_TO)) {
                      return this.checkPositionAndTeleport(clamped.x, y, clamped.z, showParticles, isInvalidPosition, state, level, cause); // Paper - teleport cause API
                  }
-@@ -4549,30 +4599,26 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -4550,30 +4600,26 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
          }
  
          AABB aabb = this.makeBoundingBox(new Vec3(xx, y, zz));
@@ -30184,7 +30184,7 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
                  if (showParticles) {
                      level.broadcastEntityEvent(this, EntityEvent.TELEPORT);
                  }
-@@ -4654,6 +4700,11 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -4655,6 +4701,11 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
      }
  
      public boolean startSleeping(final BlockPos bedPosition) {
@@ -30196,7 +30196,7 @@ index ba6ed2dbe8677a71c70f24bdecf16b1ab575c223..2abeafb587baa078f455103392fd269a
          BlockState blockState = this.level().getBlockState(bedPosition);
          if (blockState.getBlock() instanceof AbstractBedBlock bedBlock) {
              OptionalDouble sleepHeight = bedBlock.getSleepHeight(blockState, this.level(), bedPosition);
-@@ -4722,6 +4773,11 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+@@ -4723,6 +4774,11 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
                  this.setXRot(0.0F);
              }
          });
@@ -31679,10 +31679,10 @@ index 5b61c20fcac6825a1891c674870f40074eff22d3..c7b4988a2ece7549a7af5647673ecf9a
              if (this.attachedToEntity != null) {
                  Vec3 handAngle;
 diff --git a/net/minecraft/world/entity/projectile/FishingHook.java b/net/minecraft/world/entity/projectile/FishingHook.java
-index adc1017a4f35e0457c780c100bba3326c17a7de9..04f28704a76d399d713acb918dd7d58a63a2432d 100644
+index 5e979910d13fcb9d1dd456663c837b5fec979164..1ea59a7548f14df2a896cce9e36f2f2f2bb8815b 100644
 --- a/net/minecraft/world/entity/projectile/FishingHook.java
 +++ b/net/minecraft/world/entity/projectile/FishingHook.java
-@@ -208,7 +208,7 @@ public class FishingHook extends Projectile {
+@@ -209,7 +209,7 @@ public class FishingHook extends Projectile {
              } else {
                  if (this.currentState == FishingHook.FishHookState.HOOKED_IN_ENTITY) {
                      if (this.hookedIn != null) {
@@ -31691,7 +31691,7 @@ index adc1017a4f35e0457c780c100bba3326c17a7de9..04f28704a76d399d713acb918dd7d58a
                              )
                           {
                              this.setPos(this.hookedIn.getX(), this.hookedIn.getY(0.8), this.hookedIn.getZ());
-@@ -271,6 +271,11 @@ public class FishingHook extends Projectile {
+@@ -272,6 +272,11 @@ public class FishingHook extends Projectile {
      }
  
      private boolean shouldStopFishing(final Player owner) {
@@ -31703,7 +31703,7 @@ index adc1017a4f35e0457c780c100bba3326c17a7de9..04f28704a76d399d713acb918dd7d58a
          if (owner.canInteractWithLevel()) {
              ItemStack selectedItem = owner.getMainHandItem();
              ItemStack selectedItemOffHand = owner.getOffhandItem();
-@@ -611,10 +616,18 @@ public class FishingHook extends Projectile {
+@@ -612,10 +617,18 @@ public class FishingHook extends Projectile {
  
      @Override
      public void remove(final Entity.RemovalReason reason, final org.bukkit.event.entity.EntityRemoveEvent.@Nullable Cause cause) { // CraftBukkit - add Bukkit remove cause
